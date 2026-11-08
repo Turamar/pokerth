@@ -42,7 +42,8 @@ class ConfigFile;
 struct SimOptions
 {
 	SimOptions()
-		: players(6), startCash(1000), smallBlind(10), raiseEveryHands(8), maxHands(200), seed(0) {}
+		: players(6), startCash(1000), smallBlind(10), raiseEveryHands(8), maxHands(200),
+		  seed(0), runs(1) {}
 
 	int players;
 	int startCash;
@@ -54,6 +55,10 @@ struct SimOptions
 	int maxHands;
 	// 0 means "pick a random seed and report it", anything else is reproducible.
 	unsigned long long seed;
+	// How many independent games to play. Runs 2..n use seed+1, seed+2, ... and
+	// are aggregated into one report - a single game says very little about a
+	// bot, a few hundred say a lot.
+	int runs;
 };
 
 /* What one seat did over the run. The engine collects the opponent statistics
@@ -62,7 +67,7 @@ struct SimSeatStats
 {
 	SimSeatStats()
 		: seat(0), hands(0), vpip(0), pfr(0), aggressive(0), passive(0), handsWon(0),
-		  chipsWon(0), chips(0), bustedAtHand(-1) {}
+		  chipsWon(0), chips(0), bustedAtHand(-1), busts(0) {}
 
 	int seat;
 	std::string name;
@@ -75,6 +80,7 @@ struct SimSeatStats
 	long long chipsWon;
 	long long chips;      // stack at the end of the run
 	int bustedAtHand;     // hand in which the stack went to zero, -1 if never
+	int busts;            // how often the seat lost all chips (over several runs)
 };
 
 struct SimReport

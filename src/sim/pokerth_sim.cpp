@@ -31,7 +31,7 @@
 
 /* pokerth_sim - headless bot/game simulator.
  *
- * Plays a game with nothing but computer players and prints what they did:
+ * Plays games with nothing but computer players and prints what they did:
  * VPIP, PFR, aggression, wins, chips. No window, no server, no network - the
  * same engine and the same LocalEngineFactory the local game uses, only with a
  * GUI that does not show anything (see simguiinterface.h).
@@ -42,7 +42,9 @@
  * tables the tournament needs later on.
  *
  * Usage: pokerth_sim [--players N] [--stack N] [--sb N] [--hands N]
- *                    [--raise-every N] [--seed N] [--json FILE] [--quiet]
+ *                    [--raise-every N] [--seed N] [--runs N] [--json FILE]
+ *                    [--quiet]
+ *        pokerth_sim --state-selftest DIR
  */
 
 #include "simdriver.h"
@@ -52,8 +54,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <random>
-#include <sstream>
 #include <string>
+#include <vector>
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -84,12 +86,14 @@ void printUsage()
 		"  --hands N         stop after N hands at the latest (default 200)\n"
 		"  --raise-every N   double the blinds every N hands (default 8, 0 = never)\n"
 		"  --seed N          seed for cards and AI decisions (default: random, reported)\n"
+		"  --runs N          play N independent games and aggregate them (default 1);\n"
+		"                    game number i uses seed+i\n"
 		"  --json FILE       write the report as JSON to FILE\n"
 		"  --quiet           only the summary line, no table\n"
 		"  --state-selftest DIR\n"
 		"                    check the state store in DIR instead of simulating\n"
 		"\n"
-		"The run stops earlier than --hands as soon as one seat holds all the chips.\n");
+		"One game stops earlier than --hands as soon as a seat holds all the chips.\n");
 }
 
 bool parseNumber(const char *value, long long &out)
@@ -108,7 +112,98 @@ double percentage(long long value, long long total)
 	return total > 0 ? 100.0 * static_cast<double>(value) / static_cast<double>(total) : 0.0;
 }
 
-void printReport(const SimReport &report)
+// All games of one invocation, summed per seat. VPIP and PFR are added up as
+// counts, not averaged as percentages: a seat that busted after ten hands must
+// not weigh as much as one that played three hundred.
+struct SimTotals
+{
+	SimTotals() : runs(0), finishedRuns(0), hands(0), steps(0), elapsedMs(0) {}
+
+	int runs;
+	int finishedRuns;
+	long long hands;
+	long long steps;
+	long long elapsedMs;
+	vector<SimSeatStats> seats;
+};
+
+void accumulate(SimTotals &totals, const SimReport &report)
+{
+	totals.runs++;
+	if(report.finished) totals.finishedRuns++;
+	totals.hands += report.handsPlayed;
+	totals.steps += report.steps;
+	totals.elapsedMs += report.elapsedMs;
+
+	if(totals.seats.size() < report.seats.size()) {
+		totals.seats.resize(report.seats.size());
+	}
+	for(size_t i = 0; i < report.seats.size(); i++) {
+		const SimSeatStats &source = report.seats[i];
+		SimSeatStats &target = totals.seats[i];
+		target.seat = source.seat;
+		target.name = source.name;
+		target.hands += source.hands;
+		target.vpip += source.vpip;
+		target.pfr += source.pfr;
+		target.aggressive += source.aggressive;
+		target.passive += source.passive;
+		target.handsWon += source.handsWon;
+		target.chipsWon += source.chipsWon;
+		target.busts += source.busts;
+		// chips and bustedAtHand describe a single game, not a series.
+	}
+}
+
+void formatAggression(const SimSeatStats &seat, char *buffer, size_t size)
+{
+	if(seat.passive > 0) {
+		snprintf(buffer, size, "%.2f",
+				 static_cast<double>(seat.aggressive) / static_cast<double>(seat.passive));
+	} else if(seat.aggressive > 0) {
+		snprintf(buffer, size, "inf");
+	} else {
+		snprintf(buffer, size, "0.00");
+	}
+}
+
+void printSeatTable(const vector<SimSeatStats> &seats, bool detailed)
+{
+	if(detailed) {
+		printf("\n%-6s %7s %7s %7s %7s %7s %8s %7s\n",
+			   "seat", "hands", "VPIP%", "PFR%", "AF", "won", "chips", "busted");
+	} else {
+		printf("\n%-6s %8s %7s %7s %7s %7s %7s\n",
+			   "seat", "hands", "VPIP%", "PFR%", "AF", "won", "busts");
+	}
+	for(size_t i = 0; i < seats.size(); i++) {
+		const SimSeatStats &seat = seats[i];
+		char aggression[16];
+		formatAggression(seat, aggression, sizeof(aggression));
+
+		if(detailed) {
+			char busted[16];
+			if(seat.bustedAtHand >= 0) {
+				snprintf(busted, sizeof(busted), "%d", seat.bustedAtHand);
+			} else {
+				snprintf(busted, sizeof(busted), "-");
+			}
+			printf("%-6s %7lld %7.1f %7.1f %7s %7lld %8lld %7s\n",
+				   seat.name.c_str(), seat.hands,
+				   percentage(seat.vpip, seat.hands),
+				   percentage(seat.pfr, seat.hands),
+				   aggression, seat.handsWon, seat.chips, busted);
+		} else {
+			printf("%-6s %8lld %7.1f %7.1f %7s %7lld %7d\n",
+				   seat.name.c_str(), seat.hands,
+				   percentage(seat.vpip, seat.hands),
+				   percentage(seat.pfr, seat.hands),
+				   aggression, seat.handsWon, seat.busts);
+		}
+	}
+}
+
+void printSingleRun(const SimReport &report)
 {
 	printf("\n");
 	printf("seed %llu, %d hands, %lld engine steps, %lld ms (%.1f ms/hand), %d seats left\n",
@@ -120,44 +215,30 @@ void printReport(const SimReport &report)
 	} else {
 		printf("stopped after the hand limit\n");
 	}
-
-	printf("\n%-6s %7s %7s %7s %7s %7s %8s %10s\n",
-		   "seat", "hands", "VPIP%", "PFR%", "AF", "won", "chips", "busted");
-	for(size_t i = 0; i < report.seats.size(); i++) {
-		const SimSeatStats &seat = report.seats[i];
-		char aggression[16];
-		if(seat.passive > 0) {
-			snprintf(aggression, sizeof(aggression), "%.2f",
-					 static_cast<double>(seat.aggressive) / static_cast<double>(seat.passive));
-		} else if(seat.aggressive > 0) {
-			snprintf(aggression, sizeof(aggression), "inf");
-		} else {
-			snprintf(aggression, sizeof(aggression), "0.00");
-		}
-		char busted[16];
-		if(seat.bustedAtHand >= 0) {
-			snprintf(busted, sizeof(busted), "%d", seat.bustedAtHand);
-		} else {
-			snprintf(busted, sizeof(busted), "-");
-		}
-		printf("%-6s %7lld %7.1f %7.1f %7s %7lld %8lld %10s\n",
-			   seat.name.c_str(), seat.hands,
-			   percentage(seat.vpip, seat.hands),
-			   percentage(seat.pfr, seat.hands),
-			   aggression, seat.handsWon, seat.chips, busted);
-	}
+	printSeatTable(report.seats, true);
 }
 
-bool writeJson(const string &fileName, const SimReport &report, const SimOptions &options)
+void printTotals(const SimTotals &totals, const SimOptions &options)
+{
+	printf("\n");
+	printf("%d game(s) from seed %llu, %d seat(s), %d decided, %lld hands, %lld engine steps\n",
+		   totals.runs, options.seed, options.players, totals.finishedRuns, totals.hands, totals.steps);
+	printf("%lld ms total (%.1f ms per game, %.2f ms per hand)\n",
+		   totals.elapsedMs,
+		   totals.runs > 0 ? static_cast<double>(totals.elapsedMs) / totals.runs : 0.0,
+		   totals.hands > 0 ? static_cast<double>(totals.elapsedMs) / static_cast<double>(totals.hands) : 0.0);
+	printSeatTable(totals.seats, false);
+}
+
+bool writeJson(const string &fileName, const SimTotals &totals, const SimOptions &options)
 {
 	QJsonObject root;
-	root[QStringLiteral("seed")] = static_cast<qint64>(report.seed);
-	root[QStringLiteral("handsPlayed")] = report.handsPlayed;
-	root[QStringLiteral("engineSteps")] = static_cast<qint64>(report.steps);
-	root[QStringLiteral("elapsedMs")] = static_cast<qint64>(report.elapsedMs);
-	root[QStringLiteral("playersLeft")] = report.playersLeft;
-	root[QStringLiteral("finished")] = report.finished;
-	root[QStringLiteral("winner")] = QString::fromStdString(report.winner);
+	root[QStringLiteral("seed")] = static_cast<qint64>(options.seed);
+	root[QStringLiteral("runs")] = totals.runs;
+	root[QStringLiteral("finishedRuns")] = totals.finishedRuns;
+	root[QStringLiteral("hands")] = static_cast<qint64>(totals.hands);
+	root[QStringLiteral("engineSteps")] = static_cast<qint64>(totals.steps);
+	root[QStringLiteral("elapsedMs")] = static_cast<qint64>(totals.elapsedMs);
 
 	QJsonObject setup;
 	setup[QStringLiteral("players")] = options.players;
@@ -168,8 +249,8 @@ bool writeJson(const string &fileName, const SimReport &report, const SimOptions
 	root[QStringLiteral("setup")] = setup;
 
 	QJsonArray seats;
-	for(size_t i = 0; i < report.seats.size(); i++) {
-		const SimSeatStats &seat = report.seats[i];
+	for(size_t i = 0; i < totals.seats.size(); i++) {
+		const SimSeatStats &seat = totals.seats[i];
 		QJsonObject entry;
 		entry[QStringLiteral("seat")] = seat.seat;
 		entry[QStringLiteral("name")] = QString::fromStdString(seat.name);
@@ -180,23 +261,23 @@ bool writeJson(const string &fileName, const SimReport &report, const SimOptions
 		entry[QStringLiteral("passive")] = static_cast<qint64>(seat.passive);
 		entry[QStringLiteral("handsWon")] = static_cast<qint64>(seat.handsWon);
 		entry[QStringLiteral("chipsWon")] = static_cast<qint64>(seat.chipsWon);
-		entry[QStringLiteral("chips")] = static_cast<qint64>(seat.chips);
-		entry[QStringLiteral("bustedAtHand")] = seat.bustedAtHand;
+		entry[QStringLiteral("busts")] = seat.busts;
 		seats.append(entry);
 	}
 	root[QStringLiteral("seats")] = seats;
 
-	QFile file(QString::fromStdString(fileName));
-	const QFileInfo info(QString::fromStdString(fileName));
+	const QString path = QString::fromStdString(fileName);
+	const QFileInfo info(path);
 	if(!info.absolutePath().isEmpty()) {
 		QDir().mkpath(info.absolutePath());
 	}
+
+	QFile file(path);
 	if(!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
 		fprintf(stderr, "pokerth_sim: cannot write '%s'\n", fileName.c_str());
 		return false;
 	}
-	const QByteArray json = QJsonDocument(root).toJson(QJsonDocument::Indented);
-	file.write(json);
+	file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
 	file.close();
 	return true;
 }
@@ -242,6 +323,22 @@ bool runStateSelfTest(const QString &directory)
 	const QDateTime createdBefore = loaded.createdAt;
 	check(store.save(loaded, error), QStringLiteral("second save (%1)").arg(error));
 
+	// Show what actually ends up on disk - the format is part of the contract
+	// with the next version of this file.
+	{
+		QFile stored(store.filePath());
+		if(stored.open(QIODevice::ReadOnly)) {
+			printf("  ---- stored state ----\n");
+			const QList<QByteArray> lines = stored.readAll().split('\n');
+			for(int i = 0; i < lines.size(); i++) {
+				if(!lines.at(i).trimmed().isEmpty()) {
+					printf("  %s\n", lines.at(i).constData());
+				}
+			}
+			printf("  ----------------------\n");
+		}
+	}
+
 	GameState::PlayerProfile reloaded;
 	check(store.load(reloaded, error), QStringLiteral("load after the second save (%1)").arg(error));
 	check(reloaded.balance == 75, QStringLiteral("the balance survives a save/load round trip"));
@@ -278,6 +375,10 @@ bool runStateSelfTest(const QString &directory)
 	check(!store.load(ignored, error), QStringLiteral("a file from a newer version is rejected"));
 	check(QFileInfo(store.filePath()).size() == sizeBefore,
 		  QStringLiteral("the file from a newer version is left untouched"));
+
+	// Do not leave a damaged test directory behind.
+	QFile::remove(store.filePath());
+	QFile::remove(store.filePath() + QStringLiteral(".corrupt"));
 
 	printf("  %d failure(s)\n", failures);
 	return failures == 0;
@@ -342,10 +443,17 @@ int main(int argc, char *argv[])
 			options.raiseEveryHands = static_cast<int>(number);
 		} else if(strcmp(arg, "--seed") == 0) {
 			options.seed = static_cast<unsigned long long>(number);
+		} else if(strcmp(arg, "--runs") == 0) {
+			options.runs = static_cast<int>(number);
 		} else {
 			fprintf(stderr, "pokerth_sim: unknown option '%s' (see --help)\n", arg);
 			return 2;
 		}
+	}
+
+	if(options.runs < 1) {
+		fprintf(stderr, "pokerth_sim: --runs must be at least 1\n");
+		return 2;
 	}
 
 	if(options.seed == 0) {
@@ -370,21 +478,34 @@ int main(int argc, char *argv[])
 
 	ConfigFile config(argv[0], true);
 
-	SimReport report;
+	SimTotals totals;
+	SimReport lastReport;
 	string error;
-	if(!runSimulation(&config, options, report, error)) {
-		fprintf(stderr, "pokerth_sim: %s\n", error.c_str());
-		return 1;
+	for(int run = 0; run < options.runs; run++) {
+		SimOptions runOptions = options;
+		runOptions.seed = options.seed + static_cast<unsigned long long>(run);
+
+		SimReport report;
+		if(!runSimulation(&config, runOptions, report, error)) {
+			fprintf(stderr, "pokerth_sim: game %d: %s\n", run + 1, error.c_str());
+			return 1;
+		}
+		accumulate(totals, report);
+		lastReport = report;
 	}
 
 	if(!quiet) {
-		printReport(report);
+		if(options.runs == 1) {
+			printSingleRun(lastReport);
+		} else {
+			printTotals(totals, options);
+		}
 	} else {
-		printf("%d hands, %d seats left, %lld ms, seed %llu\n",
-			   report.handsPlayed, report.playersLeft, report.elapsedMs, report.seed);
+		printf("%d game(s), %lld hands, %lld ms, seed %llu\n",
+			   totals.runs, totals.hands, totals.elapsedMs, options.seed);
 	}
 
-	if(!jsonFile.empty() && !writeJson(jsonFile, report, options)) {
+	if(!jsonFile.empty() && !writeJson(jsonFile, totals, options)) {
 		return 1;
 	}
 

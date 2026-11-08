@@ -96,6 +96,7 @@ void collectHandResult(const boost::shared_ptr<Game> &game, SimReport &report)
 		}
 		if(stats.chips <= 0 && stats.bustedAtHand < 0) {
 			stats.bustedAtHand = report.handsPlayed;
+			stats.busts++;
 		}
 	}
 }
