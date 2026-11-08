@@ -52,54 +52,69 @@
  * WalletHandler (a QObject for QML), the state on disk is a StateDocument.
  *
  * A cash table plays 1:1, i.e. the chips at the table are money - one cent per
- * chip. The rules below are the ones documented in PLAN.md; the thresholds that
- * are still open there (rebuy threshold) have concrete numbers here and are
- * re-checked with the simulator.
+ * chip. The ladder, its gates and the rebuy are the numbers documented in
+ * PLAN.md section 2.
  */
 namespace PlayerState
 {
 
-// The numbers of the single player economy.
-struct BankRules
+/* The cash ladder (PLAN.md section 2).
+ *
+ * A cash table of a lower limit is not "the same game with less money": it is
+ * the step the player stands on, and the balance decides which steps are open.
+ * The gate of a limit is a bankroll of ten maximal buy-ins, i.e. 1000 big
+ * blinds; below that the limit is shown but not offered.
+ *
+ * The engine derives the big blind from the small one (2*SB, see
+ * localberopreflop), so a limit is one number in cents.
+ */
+const qint64 MinBuyInBB = 20;
+const qint64 MaxBuyInBB = 100;
+const qint64 GateBB = 1000;
+
+struct CashLimit
 {
-	BankRules()
-		: bigBlind(200), minBuyInBB(20), maxBuyInBB(100), shortStackMinBB(5),
-		  rebuyAmount(2000), rebuyBelow(4000), rebuyCooldownSec(60 * 60) {}
+	const char *key;     // "nl2" - stored in the session, never shown
+	const char *label;   // "$0.01/$0.02" - what the interface shows
+	qint64 smallBlind;   // cents
 
-	// The cash table plays money as chips, so one cent is one chip (see
-	// StartingBalance for why). This is the table of the top limit of the
-	// ladder - blinds of 100/200 cents, i.e. 1/2 in dollars - and the smaller
-	// limits are the same rules with smaller blinds.
-	qint64 bigBlind;
-	qint64 minBuyInBB;
-	qint64 maxBuyInBB;
-	// Below the regular minimum buy-in the rest of the balance is allowed, but
-	// never less than this - otherwise the rebuy (20 dollars) could not buy a
-	// seat and the player would be locked out of the game for good.
-	qint64 shortStackMinBB;
-
-	qint64 rebuyAmount;
-	// A rebuy is offered while the balance is below this.
-	qint64 rebuyBelow;
-	qint64 rebuyCooldownSec;
-
-	qint64 smallBlind() const
+	qint64 bigBlind() const
 	{
-		return bigBlind / 2;
+		return smallBlind * 2;
 	}
 	qint64 minBuyIn() const
 	{
-		return minBuyInBB * bigBlind;
+		return bigBlind() * MinBuyInBB;
 	}
 	qint64 maxBuyIn() const
 	{
-		return maxBuyInBB * bigBlind;
+		return bigBlind() * MaxBuyInBB;
 	}
-	qint64 shortBuyIn() const
+	// The bankroll that opens this limit: 1000 BB.
+	qint64 gate() const
 	{
-		return shortStackMinBB * bigBlind;
+		return bigBlind() * GateBB;
+	}
+	bool unlocked(qint64 balance) const
+	{
+		return balance >= gate();
 	}
 };
+
+int cashLimitCount();
+const CashLimit &cashLimit(int index);
+// The limit of a stored key. An unknown or empty key - a session written before
+// the ladder existed - reads as the top limit, which is the table it was played
+// on: there was only one.
+const CashLimit &cashLimitByKey(const QString &key);
+int cashLimitIndex(const QString &key);
+// How many limits the balance opens; 0 means the balance is below the bottom.
+int unlockedCashLimits(qint64 balance);
+const char *cashLimitList();
+
+// The rebuy tops the balance up to the gate of the bottom limit once per
+// cooldown, and never while sitting at a table.
+const qint64 RebuyCooldownSec = 60 * 60;
 
 class Wallet
 {
@@ -127,15 +142,16 @@ public:
 	bool atTable() const;
 	const CashSession &cashSession() const;
 
-	// Checks a buy-in against the balance and the table limits. On refusal the
-	// reason is a short diagnostic text - the UI phrases its own message; this
-	// one goes into the log and lastError.
-	bool canSitDown(qint64 buyIn, const BankRules &rules, QString *reason = nullptr) const;
-	// The buy-in a fresh page should offer: as deep as the balance allows.
-	qint64 suggestedBuyIn(const BankRules &rules) const;
+	// Checks a buy-in against the balance and the limits of the chosen limit.
+	// On refusal the reason is a short diagnostic text - the UI phrases its own
+	// message; this one goes into the log and lastError.
+	bool canSitDown(qint64 buyIn, const CashLimit &limit, QString *reason = nullptr) const;
+	// The buy-in a fresh page should offer: as deep as the limit and the
+	// balance allow.
+	qint64 suggestedBuyIn(const CashLimit &limit) const;
 
 	// Takes the money out of the balance and opens the session.
-	bool sitDown(qint64 buyIn, const BankRules &rules, const QDateTime &now);
+	bool sitDown(qint64 buyIn, const CashLimit &limit, const QDateTime &now);
 	// Keeps the stack of the last finished hand up to date (crash safety).
 	void updateStack(qint64 stack);
 	// Ends the session: the stack goes back into the balance. Returns the stack.
@@ -147,11 +163,14 @@ public:
 	void recordHand(bool won);
 
 	// ── rebuy ────────────────────────────────────────────────────────────────
-	// Only while the balance is low and the cooldown has passed; not at a
-	// table. secondsLeft (if given) is how long the cooldown still runs.
-	bool rebuyAvailable(const BankRules &rules, const QDateTime &now,
+	// Only while the balance is below the bottom gate and the cooldown has
+	// passed; not at a table. secondsLeft (if given) is how long the cooldown
+	// still runs.
+	bool rebuyAvailable(const QDateTime &now,
 						qint64 *secondsLeft = nullptr, QString *reason = nullptr) const;
-	bool takeRebuy(const BankRules &rules, const QDateTime &now);
+	// Tops the balance up to the bottom gate. amount (if given) is what was
+	// added.
+	bool takeRebuy(const QDateTime &now, qint64 *amount = nullptr);
 
 private:
 	StateDocument m_document;

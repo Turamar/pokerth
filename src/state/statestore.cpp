@@ -62,6 +62,7 @@ const char *KeyProfile = "profile";
 const char *KeyCash = "cashTable";
 const char *KeyCashBuyIn = "buyIn";
 const char *KeyCashStack = "stack";
+const char *KeyCashLimit = "limit";
 const char *KeyCashStartedAt = "startedAt";
 const char *KeyName = "name";
 const char *KeyBalance = "balance";
@@ -137,6 +138,7 @@ QJsonObject cashToJson(const CashSession &cash)
 	QJsonObject object;
 	object[QLatin1String(KeyCashBuyIn)] = static_cast<double>(cash.buyIn);
 	object[QLatin1String(KeyCashStack)] = static_cast<double>(cash.stack);
+	object[QLatin1String(KeyCashLimit)] = cash.limit;
 	object[QLatin1String(KeyCashStartedAt)] = toIso(cash.startedAt);
 	return object;
 }
@@ -146,6 +148,7 @@ CashSession cashFromJson(const QJsonObject &object)
 	CashSession cash;
 	cash.buyIn = static_cast<qint64>(object.value(QLatin1String(KeyCashBuyIn)).toDouble());
 	cash.stack = static_cast<qint64>(object.value(QLatin1String(KeyCashStack)).toDouble());
+	cash.limit = object.value(QLatin1String(KeyCashLimit)).toString();
 	cash.startedAt = fromIso(object.value(QLatin1String(KeyCashStartedAt)).toString());
 	if(cash.stack < 0) {
 		cash.stack = 0;

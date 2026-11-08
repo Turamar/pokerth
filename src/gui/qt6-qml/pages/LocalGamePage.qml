@@ -12,6 +12,12 @@ import "../components"
 // buy-in leaves the wallet when the table starts and comes back - as the stack
 // that is left - when it is left. The blinds are fixed and never raised, which
 // is what makes it a cash table and not a tournament.
+//
+// The ladder: every limit is a step, and the balance decides which steps are
+// open. A limit opens at a bankroll of 1000 BB (ten maximal buy-ins), so the
+// bottom step opens at $20 - that is where the ladder starts. Moving up is a
+// result of winning, not of a choice in a menu, which is why a locked limit is
+// shown but not offered.
 Rectangle {
     id: localGamePagePage
     objectName: "localGamePage"
@@ -25,26 +31,44 @@ Rectangle {
     property int cashBalance: Wallet ? Wallet.balance : 0
     property string errorText: ""
 
-    readonly property int bigBlind: Wallet ? Wallet.bigBlind : 2
-    readonly property int bbMin: Wallet ? Wallet.minBuyIn : 40
-    readonly property int bbMax: Wallet ? Wallet.maxBuyIn : 200
-    readonly property int bbShort: Wallet ? Wallet.shortBuyIn : 10
-    // Below the regular minimum the rest of the balance is a legal (short) buy-in.
-    readonly property int buyInMin: cashBalance >= bbMin ? bbMin : bbShort
-    readonly property int buyInMax: Math.max(buyInMin, Math.min(bbMax, cashBalance))
-    readonly property bool canSit: cashBalance >= buyInMin
+    // Which step of the ladder is selected; the default is the highest one the
+    // balance opens.
+    property int selectedLimit: -1
 
-    function defaultBuyIn() {
-        if (cashBalance <= 0)
-            return buyInMin
-        var wanted = Math.min(bbMax, cashBalance)
-        // Whole big blinds, never below the minimum this balance allows.
-        wanted = wanted - (wanted % bigBlind)
-        return Math.max(buyInMin, wanted)
+    readonly property var limits: Wallet ? Wallet.limits : []
+    readonly property var currentLimit: (selectedLimit >= 0 && selectedLimit < limits.length)
+                                        ? limits[selectedLimit] : null
+    readonly property bool canSit: currentLimit !== null && currentLimit.unlocked
+    readonly property int bottomGate: limits.length > 0 ? limits[0].gate : 0
+    readonly property int bigBlind: currentLimit ? currentLimit.bigBlind : 0
+
+    // The buy-in is chosen in big blinds - 20 to 100, the breadth every limit
+    // has - so that the field never shows cents. The money is the stack times
+    // the big blind of the limit.
+    readonly property int buyInBBMin: 20
+    readonly property int buyInBBMax: currentLimit
+        ? Math.max(buyInBBMin,
+                   Math.min(100, Math.floor(cashBalance / currentLimit.bigBlind)))
+        : buyInBBMin
+
+    // The deepest stack the balance allows is what the page offers.
+    function defaultBuyInBB() {
+        return localGamePagePage.buyInBBMax
     }
 
-    function stackInBB(chips) {
-        return bigBlind > 0 ? Math.round(chips / bigBlind) : 0
+    function buyInChips(bigBlinds) {
+        return localGamePagePage.currentLimit
+                ? bigBlinds * localGamePagePage.currentLimit.bigBlind : 0
+    }
+
+    // The highest open step: that is where the player stands in the ladder.
+    function bestLimit() {
+        var best = -1
+        for (var i = 0; i < localGamePagePage.limits.length; ++i) {
+            if (localGamePagePage.limits[i].unlocked)
+                best = i
+        }
+        return best
     }
 
     // Default button of the page: Enter sits down, no matter which field
@@ -57,10 +81,13 @@ Rectangle {
     // because the focus would otherwise fizzle out during the stack animation.
     StackView.onActivated: {
         cashBalance = Wallet ? Wallet.balance : 0
-        buyIn.value = localGamePagePage.defaultBuyIn()
+        selectedLimit = bestLimit()
+        buyIn.value = defaultBuyInBB()
         errorText = ""
         Qt.callLater(startGameButton.forceActiveFocus)
     }
+
+    onSelectedLimitChanged: buyIn.value = defaultBuyInBB()
 
     // Ace's Help (GuideOverlay): the fields a tour step outlines (label + control).
     function guideTarget(key) {
@@ -150,6 +177,11 @@ Rectangle {
                     Layout.fillWidth: true
                     title: qsTr("Tisch-Einstellungen")
 
+                    ButtonGroup {
+                        id: limitGroup
+                        exclusive: true
+                    }
+
                     GridLayout {
                         anchors.left: parent.left
                         anchors.right: parent.right
@@ -157,30 +189,74 @@ Rectangle {
                         columnSpacing: 12
                         rowSpacing: 10
 
+                        // --- The step of the ladder ---
+                        Label {
+                            id: limitLabel
+                            Layout.columnSpan: 2
+                            Layout.fillWidth: true
+                            text: qsTr("Limit (Blinds, ab wie viel Guthaben):")
+                            color: Config.StaticData.palette.secondary.col200
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Repeater {
+                            model: localGamePagePage.limits
+
+                            delegate: RadioButton {
+                                id: limitOption
+                                Layout.columnSpan: 2
+                                Layout.fillWidth: true
+                                enabled: modelData.unlocked
+                                ButtonGroup.group: limitGroup
+                                onClicked: localGamePagePage.selectedLimit = index
+                                // A Binding, not a plain expression: clicking a
+                                // button writes "checked" itself, and that would
+                                // break the expression for the rest of the page.
+                                Binding {
+                                    target: limitOption
+                                    property: "checked"
+                                    value: localGamePagePage.selectedLimit === index
+                                    restoreMode: Binding.RestoreNone
+                                }
+                                text: modelData.label
+                                      + "  ·  " + qsTr("Buy-in %1–%2")
+                                        .arg(Wallet.money(modelData.minBuyIn))
+                                        .arg(Wallet.money(modelData.maxBuyIn))
+                                      + "  ·  " + (modelData.unlocked
+                                                   ? qsTr("offen")
+                                                   : qsTr("ab %1").arg(Wallet.money(modelData.gate)))
+                            }
+                        }
+
                         // --- Buy-in (the stack he sits down with) ---
                         Label {
                             id: buyInLabel
-                            text: qsTr("Buy-in:")
+                            text: qsTr("Buy-in (Big Blinds):")
                             color: Config.StaticData.palette.secondary.col200
                             Layout.fillWidth: true
                         }
                         CustomSpinBox {
                             id: buyIn
-                            from: localGamePagePage.buyInMin
-                            to: localGamePagePage.buyInMax
-                            stepSize: 10
-                            value: localGamePagePage.defaultBuyIn()
+                            from: localGamePagePage.buyInBBMin
+                            to: localGamePagePage.buyInBBMax
+                            stepSize: 5
+                            enabled: localGamePagePage.canSit
+                            value: localGamePagePage.defaultBuyInBB()
                             onValueModified: localGamePagePage.errorText = ""
                         }
 
                         // What the chosen stack means at this table.
                         Label {
+                            id: blindsNote
                             Layout.columnSpan: 2
                             Layout.fillWidth: true
-                            text: qsTr("%1 Big Blinds (%2 Blind, %3)")
-                                  .arg(localGamePagePage.stackInBB(buyIn.value))
-                                  .arg(Wallet ? Wallet.money(Wallet.smallBlind) : "–")
-                                  .arg(Wallet ? Wallet.money(localGamePagePage.bigBlind) : "–")
+                            text: localGamePagePage.currentLimit
+                                  ? qsTr("%1 Big Blinds = %2 · Blinds %3 / %4, keine Erhöhung")
+                                    .arg(buyIn.value)
+                                    .arg(Wallet ? Wallet.money(localGamePagePage.buyInChips(buyIn.value)) : "–")
+                                    .arg(Wallet ? Wallet.money(localGamePagePage.currentLimit.smallBlind) : "–")
+                                    .arg(Wallet ? Wallet.money(localGamePagePage.currentLimit.bigBlind) : "–")
+                                  : ""
                             color: Config.StaticData.palette.secondary.col400
                             font.pixelSize: Config.Theme.fontSizeCaption
                             wrapMode: Text.WordWrap
@@ -204,19 +280,6 @@ Rectangle {
                             }
                         }
 
-                        // --- Blinds (fixed, as on every cash table) ---
-                        Label {
-                            id: blindsNote
-                            Layout.columnSpan: 2
-                            Layout.fillWidth: true
-                            text: qsTr("Blinds: %1 / %2, keine Erhöhung - wie an einem Cash-Tisch üblich.")
-                                  .arg(Wallet ? Wallet.money(Wallet.smallBlind) : "–")
-                                  .arg(Wallet ? Wallet.money(localGamePagePage.bigBlind) : "–")
-                            color: Config.StaticData.palette.secondary.col300
-                            font.pixelSize: Config.Theme.fontSizeCaption
-                            wrapMode: Text.WordWrap
-                        }
-
                         // --- Spielgeschwindigkeit ---
                         Label {
                             id: gameSpeedLabel
@@ -236,12 +299,15 @@ Rectangle {
                     }
                 }
 
-                // No money, no seat.
+                // No money, no seat: the bottom step of the ladder needs its gate.
                 AppLabel {
                     Layout.fillWidth: true
                     visible: !localGamePagePage.canSit
-                    text: qsTr("Nicht genug Guthaben für einen Platz: mindestens %1 nötig.")
-                          .arg(Wallet ? Wallet.money(localGamePagePage.buyInMin) : "–")
+                    text: qsTr("Kein offenes Limit: für die unterste Stufe sind %1 nötig "
+                               "(Guthaben jetzt %2). Ein Rebuy auf der Guthaben-Seite füllt "
+                               "bis dahin auf.")
+                          .arg(Wallet ? Wallet.money(localGamePagePage.bottomGate) : "–")
+                          .arg(Wallet ? Wallet.money(localGamePagePage.cashBalance) : "–")
                     color: Config.Theme.colorDanger
                     font.pixelSize: Config.Theme.fontSizeCaption
                     wrapMode: Text.WordWrap
@@ -280,15 +346,17 @@ Rectangle {
                             if (mainStackView.currentItem
                                     && mainStackView.currentItem.objectName === "gamePage")
                                 return
-                            if (!GameTable.startCashGame(numPlayers.value, buyIn.value,
-                                                         Wallet.smallBlind)) {
+                            if (!GameTable.startCashGame(numPlayers.value,
+                                                         localGamePagePage.buyInChips(buyIn.value),
+                                                         localGamePagePage.selectedLimit)) {
                                 // The bank refused (balance changed meanwhile):
                                 // show why, and refresh what the page displays.
                                 localGamePagePage.errorText =
                                         qsTr("Der Platz konnte nicht gekauft werden: %1")
                                         .arg(Wallet.lastError)
                                 localGamePagePage.cashBalance = Wallet.balance
-                                buyIn.value = localGamePagePage.defaultBuyIn()
+                                localGamePagePage.selectedLimit = localGamePagePage.bestLimit()
+                                buyIn.value = localGamePagePage.defaultBuyInBB()
                                 return
                             }
                             mainStackView.push("GamePage.qml")

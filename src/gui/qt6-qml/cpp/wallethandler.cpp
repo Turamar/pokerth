@@ -7,8 +7,7 @@
 
 #include <QDebug>
 #include <QTimer>
-
-using PlayerState::BankRules;
+#include <QVariantMap>
 
 WalletHandler::WalletHandler(const QString &directory, QObject *parent)
 	: QObject(parent)
@@ -18,11 +17,6 @@ WalletHandler::WalletHandler(const QString &directory, QObject *parent)
 	m_clock->setInterval(1000);
 	connect(m_clock, &QTimer::timeout, this, &WalletHandler::refresh);
 	open();
-}
-
-BankRules WalletHandler::rules() const
-{
-	return BankRules();
 }
 
 int WalletHandler::balance() const
@@ -99,44 +93,54 @@ int WalletHandler::tableBuyIn() const
 	return static_cast<int>(m_wallet->cashSession().buyIn);
 }
 
-int WalletHandler::bigBlind() const
+QString WalletHandler::tableLimit() const
 {
-	return static_cast<int>(rules().bigBlind);
+	if(!m_wallet->atTable()) {
+		return QString();
+	}
+	return QString::fromLatin1(PlayerState::cashLimitByKey(m_wallet->cashSession().limit).label);
 }
 
-int WalletHandler::smallBlind() const
+int WalletHandler::tableLimitIndex() const
 {
-	return static_cast<int>(rules().smallBlind());
+	if(!m_wallet->atTable()) {
+		return -1;
+	}
+	const int index = PlayerState::cashLimitIndex(m_wallet->cashSession().limit);
+	// A session stored before the ladder existed has no key: it was played on
+	// the only table there was, the top one.
+	return index >= 0 ? index : PlayerState::cashLimitCount() - 1;
 }
 
-int WalletHandler::minBuyIn() const
+// What the page needs to draw the ladder: one map per limit, cheapest first.
+QVariantList WalletHandler::limits() const
 {
-	return static_cast<int>(rules().minBuyIn());
+	QVariantList list;
+	const qint64 balanceNow = m_wallet->balance();
+	for(int i = 0; i < PlayerState::cashLimitCount(); ++i) {
+		const PlayerState::CashLimit &limit = PlayerState::cashLimit(i);
+		QVariantMap entry;
+		entry[QStringLiteral("key")] = QString::fromLatin1(limit.key);
+		entry[QStringLiteral("label")] = QString::fromLatin1(limit.label);
+		entry[QStringLiteral("smallBlind")] = static_cast<int>(limit.smallBlind);
+		entry[QStringLiteral("bigBlind")] = static_cast<int>(limit.bigBlind());
+		entry[QStringLiteral("minBuyIn")] = static_cast<int>(limit.minBuyIn());
+		entry[QStringLiteral("maxBuyIn")] = static_cast<int>(limit.maxBuyIn());
+		entry[QStringLiteral("gate")] = static_cast<int>(limit.gate());
+		entry[QStringLiteral("unlocked")] = limit.unlocked(balanceNow);
+		list.append(entry);
+	}
+	return list;
 }
 
-int WalletHandler::maxBuyIn() const
+int WalletHandler::unlockedLimits() const
 {
-	return static_cast<int>(rules().maxBuyIn());
+	return PlayerState::unlockedCashLimits(m_wallet->balance());
 }
 
-int WalletHandler::shortBuyIn() const
+int WalletHandler::rebuyTarget() const
 {
-	return static_cast<int>(rules().shortBuyIn());
-}
-
-int WalletHandler::suggestedBuyIn() const
-{
-	return static_cast<int>(m_wallet->suggestedBuyIn(rules()));
-}
-
-int WalletHandler::rebuyAmount() const
-{
-	return static_cast<int>(rules().rebuyAmount);
-}
-
-int WalletHandler::rebuyBelow() const
-{
-	return static_cast<int>(rules().rebuyBelow);
+	return static_cast<int>(PlayerState::StartingBalance);
 }
 
 bool WalletHandler::canRebuy() const
@@ -165,14 +169,20 @@ void WalletHandler::setPlayerName(const QString &name)
 	emit profileChanged();
 }
 
-bool WalletHandler::sitDown(qint64 buyIn)
+bool WalletHandler::sitDown(qint64 buyIn, int limitIndex)
 {
+	if(limitIndex < 0 || limitIndex >= PlayerState::cashLimitCount()) {
+		fail(QStringLiteral("there is no such limit"));
+		return false;
+	}
+	const PlayerState::CashLimit &limit = PlayerState::cashLimit(limitIndex);
+
 	QString reason;
-	if(!m_wallet->canSitDown(buyIn, rules(), &reason)) {
+	if(!m_wallet->canSitDown(buyIn, limit, &reason)) {
 		fail(reason);
 		return false;
 	}
-	if(!m_wallet->sitDown(buyIn, rules(), QDateTime::currentDateTimeUtc())) {
+	if(!m_wallet->sitDown(buyIn, limit, QDateTime::currentDateTimeUtc())) {
 		fail(QStringLiteral("buy-in refused"));
 		return false;
 	}
@@ -211,12 +221,13 @@ void WalletHandler::leaveTable(qint64 stack)
 
 bool WalletHandler::rebuy()
 {
+	const QDateTime now = QDateTime::currentDateTimeUtc();
 	QString reason;
-	if(!m_wallet->rebuyAvailable(rules(), QDateTime::currentDateTimeUtc(), nullptr, &reason)) {
+	if(!m_wallet->rebuyAvailable(now, nullptr, &reason)) {
 		fail(reason);
 		return false;
 	}
-	if(!m_wallet->takeRebuy(rules(), QDateTime::currentDateTimeUtc())) {
+	if(!m_wallet->takeRebuy(now)) {
 		fail(QStringLiteral("rebuy refused"));
 		return false;
 	}
@@ -231,7 +242,7 @@ bool WalletHandler::rebuy()
 void WalletHandler::refresh()
 {
 	qint64 left = 0;
-	const bool available = m_wallet->rebuyAvailable(rules(), QDateTime::currentDateTimeUtc(), &left);
+	const bool available = m_wallet->rebuyAvailable(QDateTime::currentDateTimeUtc(), &left);
 	const int leftSeconds = static_cast<int>(left);
 	if(leftSeconds != m_rebuySecondsLeft || available != m_canRebuy) {
 		m_canRebuy = available;
@@ -283,10 +294,10 @@ void WalletHandler::open()
 	const qint64 interruptedStack = m_wallet->cashSession().stack;
 	const qint64 interruptedBuyIn = m_wallet->cashSession().buyIn;
 	if(m_wallet->recoverInterruptedSession(QDateTime::currentDateTimeUtc())) {
-		m_notice = tr("Interrupted cash table session: $%1 of the $%2 buy-in went back "
+		m_notice = tr("Interrupted cash table session: %1 of the %2 buy-in went back "
 					  "into your balance.")
-				   .arg(interruptedStack)
-				   .arg(interruptedBuyIn);
+				   .arg(money(static_cast<int>(interruptedStack)))
+				   .arg(money(static_cast<int>(interruptedBuyIn)));
 		qInfo() << "Wallet: replaced an interrupted cash session,"
 				<< interruptedStack << "of" << interruptedBuyIn << "returned";
 	}

@@ -124,7 +124,7 @@ Rectangle {
 
                         CustomButton {
                             Layout.fillWidth: true
-                            text: qsTr("Rebuy %1 nehmen").arg(Wallet ? Wallet.money(Wallet.rebuyAmount) : "")
+                            text: qsTr("Rebuy bis %1 aufstocken").arg(Wallet ? Wallet.money(Wallet.rebuyTarget) : "")
                             enabled: Wallet ? Wallet.canRebuy : false
                             onClicked: Wallet.rebuy()
                         }
@@ -138,16 +138,16 @@ Rectangle {
                                 if (!Wallet)
                                     return ""
                                 if (Wallet.canRebuy)
-                                    return qsTr("Das Guthaben ist unter %1 – du kannst %2 nachlegen.")
-                                           .arg(Wallet.money(Wallet.rebuyBelow))
-                                           .arg(Wallet.money(Wallet.rebuyAmount))
+                                    return qsTr("Das Guthaben liegt unter %1 – der Rebuy füllt es "
+                                                "bis %1 wieder auf.")
+                                           .arg(Wallet.money(Wallet.rebuyTarget))
                                 if (Wallet.atTable)
                                     return qsTr("Nicht am Tisch möglich – verlasse zuerst das Spiel.")
                                 if (Wallet.rebuySecondsLeft > 0)
                                     return qsTr("Nächster Rebuy in %1.")
                                            .arg(walletPage.remainingText(Wallet.rebuySecondsLeft))
                                 return qsTr("Der Rebuy wird angeboten, wenn das Guthaben unter %1 liegt.")
-                                       .arg(Wallet.money(Wallet.rebuyBelow))
+                                       .arg(Wallet.money(Wallet.rebuyTarget))
                             }
                         }
                     }

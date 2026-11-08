@@ -91,6 +91,10 @@ struct CashSession
 	qint64 buyIn;
 	// Chips in front of the player as of the last finished hand.
 	qint64 stack;
+	// Which limit of the cash ladder the table is played at (see wallet.h).
+	// Empty for a session written before the ladder existed - it then reads as
+	// the top limit, which was the only table there was.
+	QString limit;
 
 	QDateTime startedAt;
 
@@ -114,9 +118,10 @@ struct StateDocument
  * finest unit that can be dealt. Everything that is money - the balance, a
  * buy-in, a stack - is cents; only the display is in dollars.
  *
- * 10000 is $100.00, the starting balance of a new profile.
+ * 2000 is $20.00: exactly the gate of the bottom limit (1000 BB of 0.01/0.02),
+ * so a new profile starts where the ladder starts and has to play its way up.
  */
-const qint64 StartingBalance = 10000;
+const qint64 StartingBalance = 2000;
 
 class StateStore
 {

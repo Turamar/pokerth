@@ -9,6 +9,7 @@
 #include <QDateTime>
 #include <QObject>
 #include <QString>
+#include <QVariantList>
 
 #include <memory>
 
@@ -50,16 +51,19 @@ class WalletHandler : public QObject
 	Q_PROPERTY(bool atTable READ atTable NOTIFY tableChanged)
 	Q_PROPERTY(int tableStack READ tableStack NOTIFY tableChanged)
 	Q_PROPERTY(int tableBuyIn READ tableBuyIn NOTIFY tableChanged)
+	Q_PROPERTY(QString tableLimit READ tableLimit NOTIFY tableChanged)
+	Q_PROPERTY(int tableLimitIndex READ tableLimitIndex NOTIFY tableChanged)
 
-	Q_PROPERTY(int bigBlind READ bigBlind CONSTANT)
-	Q_PROPERTY(int smallBlind READ smallBlind CONSTANT)
-	Q_PROPERTY(int minBuyIn READ minBuyIn CONSTANT)
-	Q_PROPERTY(int maxBuyIn READ maxBuyIn CONSTANT)
-	Q_PROPERTY(int shortBuyIn READ shortBuyIn CONSTANT)
-	Q_PROPERTY(int suggestedBuyIn READ suggestedBuyIn NOTIFY balanceChanged)
+	// The cash ladder, cheapest first. Every entry is a map: key, label (the
+	// blinds as the player reads them), smallBlind, bigBlind, minBuyIn,
+	// maxBuyIn, gate and unlocked - the last one says whether the balance is
+	// high enough to sit down there (PLAN.md section 2).
+	Q_PROPERTY(QVariantList limits READ limits NOTIFY balanceChanged)
+	// How many limits the balance opens; 0 means "no seat at all".
+	Q_PROPERTY(int unlockedLimits READ unlockedLimits NOTIFY balanceChanged)
 
-	Q_PROPERTY(int rebuyAmount READ rebuyAmount CONSTANT)
-	Q_PROPERTY(int rebuyBelow READ rebuyBelow CONSTANT)
+	// The rebuy tops the balance up to this - the gate of the bottom limit.
+	Q_PROPERTY(int rebuyTarget READ rebuyTarget CONSTANT)
 	Q_PROPERTY(bool canRebuy READ canRebuy NOTIFY rebuyChanged)
 	Q_PROPERTY(int rebuySecondsLeft READ rebuySecondsLeft NOTIFY rebuyChanged)
 	Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
@@ -69,8 +73,9 @@ public:
 	explicit WalletHandler(const QString &directory, QObject *parent = nullptr);
 
 	// ── what the GameHandler uses ────────────────────────────────────────────
-	// Takes the buy-in out of the balance. False if it is not allowed right now.
-	bool sitDown(qint64 buyIn);
+	// Takes the buy-in out of the balance and remembers the limit of the table.
+	// False if it is not allowed right now.
+	bool sitDown(qint64 buyIn, int limitIndex);
 	// Keeps the stack current; called at the end of every hand.
 	void noteHandFinished(qint64 stack, bool won);
 	// Back to the lobby: the stack returns into the balance.
@@ -100,14 +105,11 @@ public:
 	bool atTable() const;
 	int tableStack() const;
 	int tableBuyIn() const;
-	int bigBlind() const;
-	int smallBlind() const;
-	int minBuyIn() const;
-	int maxBuyIn() const;
-	int shortBuyIn() const;
-	int suggestedBuyIn() const;
-	int rebuyAmount() const;
-	int rebuyBelow() const;
+	QString tableLimit() const;
+	int tableLimitIndex() const;
+	QVariantList limits() const;
+	int unlockedLimits() const;
+	int rebuyTarget() const;
 	bool canRebuy() const;
 	int rebuySecondsLeft() const;
 	QString lastError() const;
@@ -126,7 +128,6 @@ private:
 	void save();
 	void emitAll();
 	void fail(const QString &message);
-	PlayerState::BankRules rules() const;
 
 	std::unique_ptr<PlayerState::StateStore> m_store;
 	std::unique_ptr<PlayerState::Wallet> m_wallet;

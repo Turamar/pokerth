@@ -35,6 +35,70 @@
 namespace PlayerState
 {
 
+namespace
+{
+
+/* The ladder (PLAN.md section 2), cheapest first. Every limit has the shape the
+ * engine needs - the big blind is twice the small one - so a limit is one
+ * number. "$20 opens the micro limit" is what the ladder was built around:
+ * 2000 cents is 1000 BB of 0.01/0.02.
+ */
+const CashLimit LADDER[] = {
+	{ "nl2",   "$0.01/$0.02", 1 },
+	{ "nl4",   "$0.02/$0.04", 2 },
+	{ "nl10",  "$0.05/$0.10", 5 },
+	{ "nl50",  "$0.25/$0.50", 25 },
+	{ "nl200", "$1/$2", 100 }
+};
+const int LadderSize = static_cast<int>(sizeof(LADDER) / sizeof(LADDER[0]));
+
+}
+
+int cashLimitCount()
+{
+	return LadderSize;
+}
+
+const CashLimit &cashLimit(int index)
+{
+	if(index < 0 || index >= LadderSize) {
+		return LADDER[0];
+	}
+	return LADDER[index];
+}
+
+int cashLimitIndex(const QString &key)
+{
+	for(int i = 0; i < LadderSize; ++i) {
+		if(key == QLatin1String(LADDER[i].key)) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+const CashLimit &cashLimitByKey(const QString &key)
+{
+	const int index = cashLimitIndex(key);
+	return index >= 0 ? LADDER[index] : LADDER[LadderSize - 1];
+}
+
+int unlockedCashLimits(qint64 balance)
+{
+	int count = 0;
+	for(int i = 0; i < LadderSize; ++i) {
+		if(LADDER[i].unlocked(balance)) {
+			count = i + 1;
+		}
+	}
+	return count;
+}
+
+const char *cashLimitList()
+{
+	return "nl2, nl4, nl10, nl50, nl200";
+}
+
 Wallet::Wallet()
 	: m_document(StateStore::newDocument(QString()))
 {
@@ -80,7 +144,7 @@ const CashSession &Wallet::cashSession() const
 	return m_document.cash;
 }
 
-bool Wallet::canSitDown(qint64 buyIn, const BankRules &rules, QString *reason) const
+bool Wallet::canSitDown(qint64 buyIn, const CashLimit &limit, QString *reason) const
 {
 	QString why;
 	bool ok = false;
@@ -89,15 +153,16 @@ bool Wallet::canSitDown(qint64 buyIn, const BankRules &rules, QString *reason) c
 		why = QStringLiteral("already sitting at a table");
 	} else if(buyIn <= 0) {
 		why = QStringLiteral("the buy-in has to be positive");
+	} else if(!limit.unlocked(m_document.profile.balance)) {
+		// The gate comes first: with too small a bankroll the buy-in bounds are
+		// not the interesting part of the refusal.
+		why = QStringLiteral("the bankroll is too small for this limit");
 	} else if(buyIn > m_document.profile.balance) {
 		why = QStringLiteral("the balance does not cover this buy-in");
-	} else if(buyIn > rules.maxBuyIn()) {
+	} else if(buyIn > limit.maxBuyIn()) {
 		why = QStringLiteral("above the table maximum");
-	} else if(m_document.profile.balance >= rules.minBuyIn() && buyIn < rules.minBuyIn()) {
-		// Regular rules: no deliberately short stacks while the money lasts.
+	} else if(buyIn < limit.minBuyIn()) {
 		why = QStringLiteral("below the table minimum");
-	} else if(m_document.profile.balance < rules.minBuyIn() && buyIn < rules.shortBuyIn()) {
-		why = QStringLiteral("below the minimum for a short stack");
 	} else {
 		ok = true;
 	}
@@ -108,29 +173,30 @@ bool Wallet::canSitDown(qint64 buyIn, const BankRules &rules, QString *reason) c
 	return ok;
 }
 
-qint64 Wallet::suggestedBuyIn(const BankRules &rules) const
+qint64 Wallet::suggestedBuyIn(const CashLimit &limit) const
 {
 	const qint64 balanceNow = m_document.profile.balance;
-	qint64 buyIn = balanceNow >= rules.minBuyIn() ? rules.minBuyIn() : balanceNow;
-	if(balanceNow >= rules.minBuyIn()) {
-		buyIn = balanceNow < rules.maxBuyIn() ? balanceNow : rules.maxBuyIn();
-	}
+	qint64 buyIn = balanceNow < limit.maxBuyIn() ? balanceNow : limit.maxBuyIn();
 	// Whole big blinds only - the table's stack should match its blinds.
-	if(rules.bigBlind > 0) {
-		buyIn -= buyIn % rules.bigBlind;
+	buyIn -= buyIn % limit.bigBlind();
+	if(buyIn < limit.minBuyIn()) {
+		// A balance that cannot afford the minimum is still offered as a whole,
+		// so that the page can say how much is missing.
+		buyIn = balanceNow - (balanceNow % limit.bigBlind());
 	}
-	return buyIn;
+	return buyIn > 0 ? buyIn : 0;
 }
 
-bool Wallet::sitDown(qint64 buyIn, const BankRules &rules, const QDateTime &now)
+bool Wallet::sitDown(qint64 buyIn, const CashLimit &limit, const QDateTime &now)
 {
-	if(!canSitDown(buyIn, rules)) {
+	if(!canSitDown(buyIn, limit)) {
 		return false;
 	}
 	m_document.profile.balance -= buyIn;
 	m_document.cash = CashSession();
 	m_document.cash.buyIn = buyIn;
 	m_document.cash.stack = buyIn;
+	m_document.cash.limit = QLatin1String(limit.key);
 	m_document.cash.startedAt = now;
 	return true;
 }
@@ -172,7 +238,7 @@ void Wallet::recordHand(bool won)
 	}
 }
 
-bool Wallet::rebuyAvailable(const BankRules &rules, const QDateTime &now,
+bool Wallet::rebuyAvailable(const QDateTime &now,
 							qint64 *secondsLeft, QString *reason) const
 {
 	QString why;
@@ -181,12 +247,12 @@ bool Wallet::rebuyAvailable(const BankRules &rules, const QDateTime &now,
 
 	if(m_document.cash.active()) {
 		why = QStringLiteral("not while sitting at a table");
-	} else if(m_document.profile.balance >= rules.rebuyBelow) {
-		why = QStringLiteral("the balance is above the rebuy threshold");
+	} else if(m_document.profile.balance >= StartingBalance) {
+		why = QStringLiteral("the balance is at the floor already");
 	} else if(m_document.profile.lastRebuyAt.isValid()) {
 		const qint64 elapsed = m_document.profile.lastRebuyAt.secsTo(now);
-		if(elapsed < rules.rebuyCooldownSec) {
-			left = rules.rebuyCooldownSec - elapsed;
+		if(elapsed < RebuyCooldownSec) {
+			left = RebuyCooldownSec - elapsed;
 			why = QStringLiteral("the cooldown is still running");
 		} else {
 			available = true;
@@ -204,13 +270,17 @@ bool Wallet::rebuyAvailable(const BankRules &rules, const QDateTime &now,
 	return available;
 }
 
-bool Wallet::takeRebuy(const BankRules &rules, const QDateTime &now)
+bool Wallet::takeRebuy(const QDateTime &now, qint64 *amount)
 {
-	if(!rebuyAvailable(rules, now)) {
+	if(!rebuyAvailable(now)) {
 		return false;
 	}
-	m_document.profile.balance += rules.rebuyAmount;
+	const qint64 added = StartingBalance - m_document.profile.balance;
+	m_document.profile.balance = StartingBalance;
 	m_document.profile.lastRebuyAt = now;
+	if(amount) {
+		*amount = added;
+	}
 	return true;
 }
 

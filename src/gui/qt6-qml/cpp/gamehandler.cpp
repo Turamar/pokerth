@@ -2167,26 +2167,31 @@ void GameHandler::showMyCards()
 
 // A cash table (PLAN.md section 2): the player pays the buy-in out of the
 // balance and everybody at the table - the player and the bots alike - starts
-// with that stack. Money and chips are 1:1 here.
+// with that stack. Money and chips are 1:1 here, one cent per chip.
 //
-// The engine gives every seat the same starting stack (Session::startLocalGame
-// builds the players from the GameData), so the stack of the bots cannot be set
-// per seat yet; they buy in for what the player brought. A cash table also
-// keeps its blinds: no interval doubling, nothing to raise.
-bool GameHandler::startCashGame(int players, int buyIn, int smallBlind)
+// The limit decides the blinds and the bankroll the table needs; the caller
+// passes its index (see wallet.h). The engine gives every seat the same starting
+// stack (Session::startLocalGame builds the players from the GameData), so the
+// stack of the bots cannot be set per seat yet; they buy in for what the player
+// brought. A cash table also keeps its blinds: no interval doubling, nothing to
+// raise.
+bool GameHandler::startCashGame(int players, int buyIn, int limitIndex)
 {
 	if (!m_session)
 		return false;
 	if (isLocalGameRunning())
 		return false;
+	if (limitIndex < 0 || limitIndex >= PlayerState::cashLimitCount())
+		return false;
 
 	const int seatCount = qBound(2, players, 10);
-	const int blind = qBound(1, smallBlind, 1000);
+	const PlayerState::CashLimit &limit = PlayerState::cashLimit(limitIndex);
+	const int blind = static_cast<int>(limit.smallBlind);
 
 	// The money leaves the balance before the engine is touched. If the game
 	// cannot be started afterwards, it goes straight back.
 	if (m_wallet) {
-		if (!m_wallet->sitDown(buyIn))
+		if (!m_wallet->sitDown(buyIn, limitIndex))
 			return false;
 	}
 

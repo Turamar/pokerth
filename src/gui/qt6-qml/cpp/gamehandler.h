@@ -230,7 +230,7 @@ public:
 	// the balance, all seats start with that stack and the blinds stay where
 	// they are (a cash table does not raise them). False if the game could not
 	// be started - the buy-in is returned in that case.
-	Q_INVOKABLE bool startCashGame(int players, int buyIn, int smallBlind);
+	Q_INVOKABLE bool startCashGame(int players, int buyIn, int limitIndex);
 	Q_INVOKABLE void endLocalGame();
 	Q_INVOKABLE bool isLocalGameRunning() const;
 	// The chips in front of the player (seat 0) right now.
