@@ -40,15 +40,16 @@ namespace
 
 /* The ladder (PLAN.md section 2), cheapest first. Every limit has the shape the
  * engine needs - the big blind is twice the small one - so a limit is one
- * number. "$20 opens the micro limit" is what the ladder was built around:
- * 2000 cents is 1000 BB of 0.01/0.02.
+ * number plus the bankroll it asks for. The bottom step needs only a seat:
+ * "$20 opens the micro limit" is where the ladder becomes comfortable, but
+ * losing one buy-in there must not lock the player out of the game.
  */
 const CashLimit LADDER[] = {
-	{ "nl2",   "$0.01/$0.02", 1 },
-	{ "nl4",   "$0.02/$0.04", 2 },
-	{ "nl10",  "$0.05/$0.10", 5 },
-	{ "nl50",  "$0.25/$0.50", 25 },
-	{ "nl200", "$1/$2", 100 }
+	{ "nl2",   "$0.01/$0.02", 1,   MinBuyInBB },
+	{ "nl4",   "$0.02/$0.04", 2,   GateBB },
+	{ "nl10",  "$0.05/$0.10", 5,   GateBB },
+	{ "nl50",  "$0.25/$0.50", 25,  GateBB },
+	{ "nl200", "$1/$2", 100, GateBB }
 };
 const int LadderSize = static_cast<int>(sizeof(LADDER) / sizeof(LADDER[0]));
 
@@ -249,6 +250,10 @@ bool Wallet::rebuyAvailable(const QDateTime &now,
 		why = QStringLiteral("not while sitting at a table");
 	} else if(m_document.profile.balance >= StartingBalance) {
 		why = QStringLiteral("the balance is at the floor already");
+	} else if(unlockedCashLimits(m_document.profile.balance) == 0) {
+		// No seat is open anywhere: waiting out a cooldown with no game to play
+		// would leave the player with nothing to do.
+		available = true;
 	} else if(m_document.profile.lastRebuyAt.isValid()) {
 		const qint64 elapsed = m_document.profile.lastRebuyAt.secsTo(now);
 		if(elapsed < RebuyCooldownSec) {

@@ -598,13 +598,25 @@ bool runStateSelfTest(const QString &directory)
 		check(!rebuying.rebuyAvailable(now.addSecs(PlayerState::RebuyCooldownSec + 1)),
 			  QStringLiteral("a balance at the floor gets no rebuy"));
 
+		// With no seat open anywhere the cooldown does not apply - there would be
+		// nothing to play while waiting.
+		rebuying.document().profile.balance = limit.minBuyIn() - 1;
+		check(rebuying.rebuyAvailable(now, &secondsLeft),
+			  QStringLiteral("a balance that cannot buy a seat rebuys without waiting"));
+
 		// The ladder: the bankroll opens the steps, not the buy-in.
+		check(PlayerState::unlockedCashLimits(limit.minBuyIn()) == 1,
+			  QStringLiteral("a seat's worth opens the bottom limit (%1)")
+			  .arg(PlayerState::unlockedCashLimits(limit.minBuyIn())));
+		check(PlayerState::unlockedCashLimits(limit.minBuyIn() - 1) == 0,
+			  QStringLiteral("below the minimum buy-in nothing is open (%1)")
+			  .arg(PlayerState::unlockedCashLimits(limit.minBuyIn() - 1)));
 		check(PlayerState::unlockedCashLimits(20 * D) == 1,
 			  QStringLiteral("$20 opens exactly the bottom limit (%1)")
 			  .arg(PlayerState::unlockedCashLimits(20 * D)));
-		check(PlayerState::unlockedCashLimits(20 * D - 1) == 0,
-			  QStringLiteral("a cent below the bottom gate opens nothing (%1)")
-			  .arg(PlayerState::unlockedCashLimits(20 * D - 1)));
+		check(PlayerState::unlockedCashLimits(40 * D) == 2,
+			  QStringLiteral("$40 opens the second limit as well (%1)")
+			  .arg(PlayerState::unlockedCashLimits(40 * D)));
 		check(PlayerState::unlockedCashLimits(PlayerState::StartingBalance) >= 1,
 			  QStringLiteral("the starting balance opens at least one limit (%1)")
 			  .arg(PlayerState::unlockedCashLimits(PlayerState::StartingBalance)));
@@ -615,10 +627,15 @@ bool runStateSelfTest(const QString &directory)
 		check(allowed, QStringLiteral("$20 is enough for the bottom limit (%1)").arg(reason));
 		allowed = small.canSitDown(higher.minBuyIn(), higher, &reason);
 		check(!allowed, QStringLiteral("$20 does not open the second limit (%1)").arg(reason));
+		// Losing a buy-in at the bottom must not lock the player out: the step
+		// stays open down to the minimum buy-in.
 		small.document().profile.balance = 20 * D - 1;
 		allowed = small.canSitDown(limit.minBuyIn(), limit, &reason);
-		check(!allowed, QStringLiteral("one cent below the gate closes the bottom limit (%1)")
+		check(allowed, QStringLiteral("a dollar short of the gate still plays the bottom step (%1)")
 			  .arg(reason));
+		small.document().profile.balance = limit.minBuyIn() - 1;
+		allowed = small.canSitDown(limit.minBuyIn(), limit, &reason);
+		check(!allowed, QStringLiteral("below the minimum buy-in no seat is sold (%1)").arg(reason));
 	}
 
 	// A file from version 1 (no cash table) still loads.

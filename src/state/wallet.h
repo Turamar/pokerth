@@ -77,6 +77,13 @@ struct CashLimit
 	const char *key;     // "nl2" - stored in the session, never shown
 	const char *label;   // "$0.01/$0.02" - what the interface shows
 	qint64 smallBlind;   // cents
+	// The bankroll the step needs, in big blinds of this limit.
+	//
+	// Every step above the bottom asks for GateBB (ten maximal buy-ins). The
+	// bottom step asks only for a seat (MinBuyInBB): closing it would mean "you
+	// cannot play at all", and losing one buy-in at the lowest limit must not
+	// do that - the player then sits down shorter instead of waiting.
+	qint64 gateBB;
 
 	qint64 bigBlind() const
 	{
@@ -90,14 +97,17 @@ struct CashLimit
 	{
 		return bigBlind() * MaxBuyInBB;
 	}
-	// The bankroll that opens this limit: 1000 BB.
 	qint64 gate() const
 	{
-		return bigBlind() * GateBB;
+		return bigBlind() * gateBB;
 	}
 	bool unlocked(qint64 balance) const
 	{
 		return balance >= gate();
+	}
+	bool bottom() const
+	{
+		return gateBB < GateBB;
 	}
 };
 
