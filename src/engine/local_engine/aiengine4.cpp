@@ -280,12 +280,13 @@ AiDecision decidePreflop(const AiSituation& s, const AiPersonality& p, const Met
 
 		/* The opponent model also says how tight the table is, and a table that
 		 * folds its way out is the cheapest place to steal from: the blinds pay
-		 * before anybody has a hand. Against a loose table the width is a value
-		 * question, not a steal, so it is left alone.
+		 * before anybody has a hand. Twenty percent is the width of an ordinary
+		 * tight-aggressive game, so nothing changes at a normal table -- only a
+		 * table that folds more than that is worth attacking.
 		 */
 		double openPercent = p.openPercent[positionBucket(s)];
-		if(s.opponentVpipPercent >= 0 && s.opponentVpipPercent < 25) {
-			const double tightness = (25.0 - s.opponentVpipPercent) / 25.0;
+		if(s.opponentVpipPercent >= 0 && s.opponentVpipPercent < 20) {
+			const double tightness = (20.0 - s.opponentVpipPercent) / 20.0;
 			openPercent *= 1.0 + 0.6 * tightness * p.adaptation;
 		}
 
