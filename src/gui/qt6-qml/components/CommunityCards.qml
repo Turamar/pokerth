@@ -208,7 +208,7 @@ Item {
             }
             AppText {
                 anchors.verticalCenter: parent.verticalCenter
-                text: "$" + (GameTable ? GameTable.totalPot : 0)
+                text: Wallet ? Wallet.money(GameTable ? GameTable.totalPot : 0) : ""
                 color: Config.Theme.colorAccent
                 font.pixelSize: 11
                 font.bold: true

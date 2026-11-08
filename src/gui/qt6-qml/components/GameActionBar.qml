@@ -187,11 +187,14 @@ Item {
     // no longer valid → neutral labels without an amount. Only at the start of a round
     // (new values from computeCallAndRaiseAmounts) do amounts appear again.
     readonly property string checkCallText: (GameTable === null || !actionsArmed) ? callWord
-        : (canCheck ? checkWord : callWord + _amountSep + "$" + GameTable.callAmount)
+        : (canCheck ? checkWord
+                    : callWord + _amountSep + (Wallet ? Wallet.money(GameTable.callAmount) : ""))
     readonly property string betRaiseText: {
         if (GameTable === null || !actionsArmed) return raiseWord
         var word = (!isPreflop && canCheck) ? betWord : raiseWord
-        return raiseAvailable ? (word + _amountSep + "$" + raiseAmount) : word
+        return raiseAvailable
+                ? (word + _amountSep + (Wallet ? Wallet.money(raiseAmount) : ""))
+                : word
     }
 
     // ── The preselection: note an action before your own turn ──

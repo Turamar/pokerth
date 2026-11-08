@@ -196,7 +196,8 @@ SeatBox {
                 color: Config.Theme.colorAccent
                 font.pixelSize: 12
                 font.bold: true
-                text: root.seatData && root.seatData.name !== "" ? "$" + root.seatData.stack : ""
+                text: root.seatData && root.seatData.name !== ""
+                      ? (Wallet ? Wallet.money(root.seatData.stack) : "") : ""
             }
         }
 
@@ -257,7 +258,8 @@ SeatBox {
                 color: Config.Theme.colorAccent
                 font.pixelSize: 15
                 font.bold: true
-                text: root.seatData && root.seatData.name !== "" ? "$" + root.seatData.stack : ""
+                text: root.seatData && root.seatData.name !== ""
+                      ? (Wallet ? Wallet.money(root.seatData.stack) : "") : ""
             }
         }
 

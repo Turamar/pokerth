@@ -51,10 +51,10 @@
  * simulator and the self test can exercise it cheaply. The client wraps it in
  * WalletHandler (a QObject for QML), the state on disk is a StateDocument.
  *
- * A cash table plays 1:1, i.e. the chips at the table are dollars. The rules
- * below are the ones documented in PLAN.md; the thresholds that are still open
- * there (rebuy threshold) have concrete numbers here and are re-checked with
- * the simulator.
+ * A cash table plays 1:1, i.e. the chips at the table are money - one cent per
+ * chip. The rules below are the ones documented in PLAN.md; the thresholds that
+ * are still open there (rebuy threshold) have concrete numbers here and are
+ * re-checked with the simulator.
  */
 namespace PlayerState
 {
@@ -63,12 +63,13 @@ namespace PlayerState
 struct BankRules
 {
 	BankRules()
-		: bigBlind(2), minBuyInBB(20), maxBuyInBB(100), shortStackMinBB(5),
-		  rebuyAmount(20), rebuyBelow(40), rebuyCooldownSec(60 * 60) {}
+		: bigBlind(200), minBuyInBB(20), maxBuyInBB(100), shortStackMinBB(5),
+		  rebuyAmount(2000), rebuyBelow(4000), rebuyCooldownSec(60 * 60) {}
 
-	// The cash table plays "money" as chips, so a dollar is one chip. The
-	// engine needs integral blinds, and the smallest sane big blind is 2 - that
-	// is what sets the scale: 20-100 BB is a buy-in of 40-200 dollars.
+	// The cash table plays money as chips, so one cent is one chip (see
+	// StartingBalance for why). This is the table of the top limit of the
+	// ladder - blinds of 100/200 cents, i.e. 1/2 in dollars - and the smaller
+	// limits are the same rules with smaller blinds.
 	qint64 bigBlind;
 	qint64 minBuyInBB;
 	qint64 maxBuyInBB;

@@ -137,7 +137,7 @@ Rectangle {
                         }
                         Item { Layout.fillWidth: true }
                         AppLabel {
-                            text: "$" + localGamePagePage.cashBalance
+                            text: Wallet ? Wallet.money(localGamePagePage.cashBalance) : "–"
                             color: Config.StaticData.palette.secondary.col100
                             font.bold: true
                             font.pixelSize: 18
@@ -177,10 +177,10 @@ Rectangle {
                         Label {
                             Layout.columnSpan: 2
                             Layout.fillWidth: true
-                            text: qsTr("%1 Big Blinds ($%2 Blind, $%3)")
+                            text: qsTr("%1 Big Blinds (%2 Blind, %3)")
                                   .arg(localGamePagePage.stackInBB(buyIn.value))
-                                  .arg(Wallet ? Wallet.smallBlind : 1)
-                                  .arg(localGamePagePage.bigBlind)
+                                  .arg(Wallet ? Wallet.money(Wallet.smallBlind) : "–")
+                                  .arg(Wallet ? Wallet.money(localGamePagePage.bigBlind) : "–")
                             color: Config.StaticData.palette.secondary.col400
                             font.pixelSize: Config.Theme.fontSizeCaption
                             wrapMode: Text.WordWrap
@@ -209,9 +209,9 @@ Rectangle {
                             id: blindsNote
                             Layout.columnSpan: 2
                             Layout.fillWidth: true
-                            text: qsTr("Blinds: $%1 / $%2, keine Erhöhung - wie an einem Cash-Tisch üblich.")
-                                  .arg(Wallet ? Wallet.smallBlind : 1)
-                                  .arg(localGamePagePage.bigBlind)
+                            text: qsTr("Blinds: %1 / %2, keine Erhöhung - wie an einem Cash-Tisch üblich.")
+                                  .arg(Wallet ? Wallet.money(Wallet.smallBlind) : "–")
+                                  .arg(Wallet ? Wallet.money(localGamePagePage.bigBlind) : "–")
                             color: Config.StaticData.palette.secondary.col300
                             font.pixelSize: Config.Theme.fontSizeCaption
                             wrapMode: Text.WordWrap
@@ -240,8 +240,8 @@ Rectangle {
                 AppLabel {
                     Layout.fillWidth: true
                     visible: !localGamePagePage.canSit
-                    text: qsTr("Nicht genug Guthaben für einen Platz: mindestens $%1 nötig.")
-                          .arg(localGamePagePage.buyInMin)
+                    text: qsTr("Nicht genug Guthaben für einen Platz: mindestens %1 nötig.")
+                          .arg(Wallet ? Wallet.money(localGamePagePage.buyInMin) : "–")
                     color: Config.Theme.colorDanger
                     font.pixelSize: Config.Theme.fontSizeCaption
                     wrapMode: Text.WordWrap

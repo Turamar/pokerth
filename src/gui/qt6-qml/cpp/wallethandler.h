@@ -77,6 +77,11 @@ public:
 	void leaveTable(qint64 stack);
 
 	// ── QML ──────────────────────────────────────────────────────────────────
+	// Money as the player reads it: cents in, "$0.40" out, cents left off when
+	// they are zero. Every amount shown in the interface goes through here -
+	// money is stored in cents (see statestore.h) and must never leak as a
+	// number into a label.
+	Q_INVOKABLE QString money(int cents) const;
 	Q_INVOKABLE bool rebuy();
 	// Re-reads clock dependent state (the rebuy cooldown).
 	Q_INVOKABLE void refresh();

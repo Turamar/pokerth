@@ -49,9 +49,12 @@ namespace
 {
 
 // 1: profile only.
-// 2: the cash table session was added (see CashSession). Files of version 1 are
-//    still read - they simply have no session - and are written back as 2.
-const int SchemaVersion = 2;
+// 2: the cash table session was added (see CashSession).
+// 3: money is cents instead of whole dollars (see StartingBalance): the bottom
+//    of the cash ladder has a two cent big blind. Files of version 1 and 2 are
+//    still read - their amounts are scaled up by a hundred - and are written
+//    back as 3.
+const int SchemaVersion = 3;
 const char *StateFileName = "state.json";
 
 const char *KeySchemaVersion = "schemaVersion";
@@ -79,6 +82,17 @@ QDateTime fromIso(const QString &text)
 {
 	if(text.isEmpty()) return QDateTime();
 	return QDateTime::fromString(text, Qt::ISODate).toUTC();
+}
+
+/* Files of version 2 and older kept whole dollars. Only the money is scaled -
+ * the balance and the stack at the table - never the counters, and a stack of
+ * zero stays zero.
+ */
+void scaleMoney(StateDocument &document, qint64 factor)
+{
+	document.profile.balance *= factor;
+	document.cash.buyIn *= factor;
+	document.cash.stack *= factor;
 }
 
 QJsonObject profileToJson(const PlayerProfile &profile)
@@ -223,10 +237,13 @@ bool StateStore::load(StateDocument &document, QString &error) const
 		return false;
 	}
 
-	// Version 1 has no cash session; it reads as "not at a table" and is written
-	// back as version 2 on the next save.
+	// Version 1 has no cash session; it reads as "not at a table". Version 2 and
+	// older keep dollars, this version keeps cents.
 	document.profile = profileFromJson(root.value(QLatin1String(KeyProfile)).toObject());
 	document.cash = cashFromJson(root.value(QLatin1String(KeyCash)).toObject());
+	if(version < 3) {
+		scaleMoney(document, 100);
+	}
 	return true;
 }
 

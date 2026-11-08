@@ -158,7 +158,8 @@ SeatBox {
                     color: Config.Theme.colorAccent
                     font.pixelSize: 15
                     font.bold: true
-                    text: root.seatData ? "$" + root.seatData.stack : "$0"
+                    text: root.seatData
+                          ? (Wallet ? Wallet.money(root.seatData.stack) : "") : ""
                 }
             }
 
@@ -203,7 +204,8 @@ SeatBox {
                     color: Config.Theme.colorAccent
                     font.pixelSize: 15
                     font.bold: true
-                    text: root.seatData ? "$" + root.seatData.stack : "$0"
+                    text: root.seatData
+                          ? (Wallet ? Wallet.money(root.seatData.stack) : "") : ""
                 }
             }
         }

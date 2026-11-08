@@ -485,8 +485,10 @@ bool runStateSelfTest(const QString &directory)
 
 	// ── The bank: buy-in, stack, leaving, rebuy ─────────────────────────────
 	{
+		// Money is cents (see StartingBalance); the test reasons in dollars.
+		const qint64 D = 100;
 		const PlayerState::BankRules rules;
-		printf("  bank rules: blinds %lld/%lld, buy-in %lld-%lld, rebuy %lld below %lld every %lld s\n",
+		printf("  bank rules: blinds %lld/%lld cents, buy-in %lld-%lld, rebuy %lld below %lld every %lld s\n",
 			   static_cast<long long>(rules.smallBlind()), static_cast<long long>(rules.bigBlind),
 			   static_cast<long long>(rules.minBuyIn()), static_cast<long long>(rules.maxBuyIn()),
 			   static_cast<long long>(rules.rebuyAmount), static_cast<long long>(rules.rebuyBelow),
@@ -496,8 +498,10 @@ bool runStateSelfTest(const QString &directory)
 		check(wallet.balance() == PlayerState::StartingBalance,
 			  QStringLiteral("an empty wallet starts with the starting balance"));
 
-		// 100 dollars is above the minimum, so the whole balance is offered.
-		check(wallet.suggestedBuyIn(rules) == 100,
+		const qint64 start = wallet.balance();
+		const qint64 minBuyIn = rules.minBuyIn();
+		// The whole balance is above the minimum, so it is what is offered.
+		check(wallet.suggestedBuyIn(rules) == start,
 			  QStringLiteral("the suggested buy-in is the balance, capped (%1)")
 			  .arg(wallet.suggestedBuyIn(rules)));
 
@@ -509,12 +513,14 @@ bool runStateSelfTest(const QString &directory)
 		allowed = wallet.canSitDown(rules.minBuyIn(), rules, &reason);
 		check(allowed, QStringLiteral("the minimum buy-in is accepted"));
 
-		// Sit down with 40: the money leaves the balance and becomes a stack.
+		// Sit down with the minimum: the money leaves the balance and becomes a
+		// stack.
 		const QDateTime now = QDateTime::currentDateTimeUtc();
-		const bool satDown = wallet.sitDown(rules.minBuyIn(), rules, now);
+		const bool satDown = wallet.sitDown(minBuyIn, rules, now);
 		check(satDown, QStringLiteral("sitting down takes the buy-in"));
-		check(wallet.balance() == 60, QStringLiteral("the balance drops by the buy-in (%1)").arg(wallet.balance()));
-		check(wallet.atTable() && wallet.cashSession().stack == 40,
+		check(wallet.balance() == start - minBuyIn,
+			  QStringLiteral("the balance drops by the buy-in (%1)").arg(wallet.balance()));
+		check(wallet.atTable() && wallet.cashSession().stack == minBuyIn,
 			  QStringLiteral("the stack at the table equals the buy-in"));
 		allowed = wallet.canSitDown(10, rules, &reason);
 		check(!allowed, QStringLiteral("a second table is refused (%1)").arg(reason));
@@ -538,54 +544,55 @@ bool runStateSelfTest(const QString &directory)
 		check(ok, QStringLiteral("load with a cash session (%1)").arg(error));
 		check(reopened.cash.active() && reopened.cash.stack == 55,
 			  QStringLiteral("the stack at the table survives a save/load round trip"));
-		check(reopened.cash.buyIn == 40, QStringLiteral("the buy-in survives as well"));
+		check(reopened.cash.buyIn == minBuyIn, QStringLiteral("the buy-in survives as well"));
 
 		// A crash leaves the session on disk: the next start returns the stack.
 		PlayerState::Wallet recovered(reopened);
 		check(recovered.recoverInterruptedSession(now),
 			  QStringLiteral("an interrupted session is recovered"));
 		check(!recovered.atTable(), QStringLiteral("the recovered session is closed"));
-		check(recovered.balance() == 60 + 55,
+		check(recovered.balance() == start - minBuyIn + 55,
 			  QStringLiteral("the last known stack went back into the balance (%1)")
 			  .arg(recovered.balance()));
 
 		// Leaving the table normally does the same.
 		PlayerState::Wallet leaving;
-		check(leaving.sitDown(40, rules, now), QStringLiteral("sit down again"));
+		check(leaving.sitDown(minBuyIn, rules, now), QStringLiteral("sit down again"));
 		leaving.updateStack(30);
 		const qint64 returned = leaving.standUp(now);
 		check(returned == 30, QStringLiteral("standing up returns the stack (%1)").arg(returned));
-		check(leaving.balance() == 90, QStringLiteral("the balance is 60 + 30 (%1)").arg(leaving.balance()));
+		check(leaving.balance() == start - minBuyIn + 30,
+			  QStringLiteral("the balance is what was left plus the stack (%1)").arg(leaving.balance()));
 		check(!leaving.atTable(), QStringLiteral("no session is left after standing up"));
 
 		// The rebuy: only with a low balance, once per cooldown.
 		PlayerState::Wallet rebuying;
-		rebuying.document().profile.balance = 30;
+		rebuying.document().profile.balance = 30 * D;
 		qint64 secondsLeft = 0;
 		check(rebuying.rebuyAvailable(rules, now, &secondsLeft),
 			  QStringLiteral("a low balance may rebuy"));
 		check(rebuying.takeRebuy(rules, now), QStringLiteral("the rebuy is paid out"));
-		check(rebuying.balance() == 30 + rules.rebuyAmount,
+		check(rebuying.balance() == 30 * D + rules.rebuyAmount,
 			  QStringLiteral("the balance grows by the rebuy (%1)").arg(rebuying.balance()));
-		rebuying.document().profile.balance = 10;
+		rebuying.document().profile.balance = 10 * D;
 		check(!rebuying.rebuyAvailable(rules, now, &secondsLeft),
 			  QStringLiteral("the cooldown blocks a second rebuy"));
 		check(secondsLeft > 0 && secondsLeft <= rules.rebuyCooldownSec,
 			  QStringLiteral("the cooldown reports the remaining time (%1 s)").arg(secondsLeft));
 		check(rebuying.rebuyAvailable(rules, now.addSecs(rules.rebuyCooldownSec + 1)),
 			  QStringLiteral("after the cooldown the rebuy is available again"));
-		rebuying.document().profile.balance = 100;
+		rebuying.document().profile.balance = 100 * D;
 		check(!rebuying.rebuyAvailable(rules, now.addSecs(rules.rebuyCooldownSec + 1)),
 			  QStringLiteral("a healthy balance gets no rebuy"));
 
 		// Short stack: with less than the minimum buy-in the rest is still enough.
 		PlayerState::Wallet shortStack;
-		shortStack.document().profile.balance = 20;
-		check(!shortStack.canSitDown(rules.minBuyIn(), rules),
+		shortStack.document().profile.balance = 20 * D;
+		check(!shortStack.canSitDown(minBuyIn, rules),
 			  QStringLiteral("a short balance cannot pay the regular minimum"));
-		allowed = shortStack.canSitDown(20, rules, &reason);
+		allowed = shortStack.canSitDown(20 * D, rules, &reason);
 		check(allowed, QStringLiteral("a short balance may buy in for the rest (%1)").arg(reason));
-		check(shortStack.suggestedBuyIn(rules) == 20,
+		check(shortStack.suggestedBuyIn(rules) == 20 * D,
 			  QStringLiteral("the suggestion is the balance (%1)").arg(shortStack.suggestedBuyIn(rules)));
 	}
 
@@ -599,8 +606,29 @@ bool runStateSelfTest(const QString &directory)
 		PlayerState::StateDocument migrated;
 		ok = store.load(migrated, error);
 		check(ok, QStringLiteral("a version 1 file is still read (%1)").arg(error));
-		check(migrated.profile.balance == 42, QStringLiteral("its balance survives"));
+		check(migrated.profile.balance == 42 * 100,
+			  QStringLiteral("its balance survives, scaled from dollars to cents (%1)")
+			  .arg(migrated.profile.balance));
 		check(!migrated.cash.active(), QStringLiteral("it has no cash session"));
+	}
+
+	// A file from version 2 (dollars) still loads: the money is scaled.
+	{
+		QFile older(store.filePath());
+		if(older.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			older.write("{\"schemaVersion\": 2, \"profile\": {\"name\": \"Old\", \"balance\": 60},"
+						" \"cashTable\": {\"buyIn\": 40, \"stack\": 55}}");
+			older.close();
+		}
+		PlayerState::StateDocument migrated;
+		ok = store.load(migrated, error);
+		check(ok, QStringLiteral("a version 2 file is still read (%1)").arg(error));
+		check(migrated.profile.balance == 6000,
+			  QStringLiteral("its balance is scaled from dollars to cents (%1)")
+			  .arg(migrated.profile.balance));
+		check(migrated.cash.active() && migrated.cash.buyIn == 4000 && migrated.cash.stack == 5500,
+			  QStringLiteral("its stack at the table is scaled too (%1 / %2)")
+			  .arg(migrated.cash.buyIn).arg(migrated.cash.stack));
 	}
 
 	// A corrupt file has to be set aside, not overwritten.

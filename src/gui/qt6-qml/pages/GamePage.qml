@@ -2053,9 +2053,10 @@ Rectangle {
             // back into the balance when this popup opens.
             AppLabel {
                 Layout.fillWidth: true
-                text: (gameOverPopup.netResult >= 0 ? "+$" : "-$")
-                      + Math.abs(gameOverPopup.netResult)
-                      + "  ·  " + qsTr("Guthaben: $%1").arg(Wallet ? Wallet.balance : 0)
+                text: (gameOverPopup.netResult >= 0 ? "+" : "")
+                      + (Wallet ? Wallet.money(gameOverPopup.netResult) : "")
+                      + "  ·  " + qsTr("Guthaben: %1")
+                        .arg(Wallet ? Wallet.money(Wallet.balance) : "–")
                 color: gameOverPopup.netResult >= 0
                        ? Config.StaticData.chartColor(0, true)
                        : Config.Theme.colorDanger

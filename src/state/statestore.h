@@ -108,8 +108,15 @@ struct StateDocument
 	CashSession cash;
 };
 
-// Starting balance of a new profile (PLAN.md section 2).
-const qint64 StartingBalance = 100;
+/* Money is stored in cents (PLAN.md section 2). The reason is the bottom of
+ * the cash ladder: a micro limit plays a cent as its small blind, the engine
+ * derives the big blind from it and needs integral blinds, so a cent is the
+ * finest unit that can be dealt. Everything that is money - the balance, a
+ * buy-in, a stack - is cents; only the display is in dollars.
+ *
+ * 10000 is $100.00, the starting balance of a new profile.
+ */
+const qint64 StartingBalance = 10000;
 
 class StateStore
 {

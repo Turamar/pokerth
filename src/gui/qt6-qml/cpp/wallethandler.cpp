@@ -30,6 +30,25 @@ int WalletHandler::balance() const
 	return static_cast<int>(m_wallet->balance());
 }
 
+// Money is cents (see statestore.h) and this is the only place that turns it
+// into what the player reads. The cents are left off when they are zero, so a
+// dollar amount does not grow a needless tail, and they are always two digits
+// otherwise - the bottom of the cash ladder plays cents.
+QString WalletHandler::money(int cents) const
+{
+	const bool negative = cents < 0;
+	const qint64 value = negative ? -static_cast<qint64>(cents) : cents;
+	const qint64 dollars = value / 100;
+	const qint64 rest = value % 100;
+
+	QString text = QString::number(dollars);
+	if(rest != 0) {
+		text += QLatin1Char('.');
+		text += QStringLiteral("%1").arg(rest, 2, 10, QLatin1Char('0'));
+	}
+	return (negative ? QStringLiteral("-$") : QStringLiteral("$")) + text;
+}
+
 QString WalletHandler::playerName() const
 {
 	return m_wallet->name();

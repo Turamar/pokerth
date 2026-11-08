@@ -576,7 +576,7 @@ ApplicationWindow {
                         }
                         AppText {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: Wallet ? ("$" + Wallet.balance) : ""
+                            text: Wallet ? Wallet.money(Wallet.balance) : ""
                             color: walletArea.containsMouse
                                 ? Config.StaticData.palette.secondary.col100
                                 : Config.StaticData.palette.secondary.col200

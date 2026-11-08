@@ -79,7 +79,7 @@ Rectangle {
 
                         AppLabel {
                             Layout.fillWidth: true
-                            text: Wallet ? ("$" + Wallet.balance) : "–"
+                            text: Wallet ? Wallet.money(Wallet.balance) : "–"
                             color: Config.StaticData.palette.secondary.col100
                             font.pixelSize: 32
                             font.bold: true
@@ -124,7 +124,7 @@ Rectangle {
 
                         CustomButton {
                             Layout.fillWidth: true
-                            text: qsTr("Rebuy $%1 nehmen").arg(Wallet ? Wallet.rebuyAmount : 20)
+                            text: qsTr("Rebuy %1 nehmen").arg(Wallet ? Wallet.money(Wallet.rebuyAmount) : "")
                             enabled: Wallet ? Wallet.canRebuy : false
                             onClicked: Wallet.rebuy()
                         }
@@ -138,15 +138,16 @@ Rectangle {
                                 if (!Wallet)
                                     return ""
                                 if (Wallet.canRebuy)
-                                    return qsTr("Das Guthaben ist unter $%1 – du kannst $%2 nachlegen.")
-                                           .arg(Wallet.rebuyBelow).arg(Wallet.rebuyAmount)
+                                    return qsTr("Das Guthaben ist unter %1 – du kannst %2 nachlegen.")
+                                           .arg(Wallet.money(Wallet.rebuyBelow))
+                                           .arg(Wallet.money(Wallet.rebuyAmount))
                                 if (Wallet.atTable)
                                     return qsTr("Nicht am Tisch möglich – verlasse zuerst das Spiel.")
                                 if (Wallet.rebuySecondsLeft > 0)
                                     return qsTr("Nächster Rebuy in %1.")
                                            .arg(walletPage.remainingText(Wallet.rebuySecondsLeft))
-                                return qsTr("Der Rebuy wird angeboten, wenn das Guthaben unter $%1 liegt.")
-                                       .arg(Wallet.rebuyBelow)
+                                return qsTr("Der Rebuy wird angeboten, wenn das Guthaben unter %1 liegt.")
+                                       .arg(Wallet.money(Wallet.rebuyBelow))
                             }
                         }
                     }
