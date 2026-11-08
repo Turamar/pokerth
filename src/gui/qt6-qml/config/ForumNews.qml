@@ -40,8 +40,12 @@ QtObject {
     readonly property int maxPosts: 40
     readonly property int maxReadIds: 120
 
-    // Bound by pokerth.qml to Parameters.showForumNews – off = no fetch.
-    property bool enabled: true
+    // OFF in this fork: the single-player build has no network (PLAN.md, section 1).
+    // The feed used to be bound to Parameters.showForumNews from pokerth.qml; that
+    // binding is gone together with the newspaper icon in the top bar, and the
+    // parameter is dead. Hard-wired off so that a stale stored value cannot bring
+    // the request back.
+    property bool enabled: false
 
     // Posts, deduplicated by topic (see _dedup).
     property var posts: []

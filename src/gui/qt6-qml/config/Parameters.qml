@@ -23,12 +23,15 @@ Settings {
     // without the free seat (the boxes move up).
     property bool keepEmptySeats: true
 
-    property bool showCommunityContent: true
+    // Community/ranking and forum news are network features; this fork is a
+    // single-player build (PLAN.md, section 1), so both are off. The UI entries
+    // are gone as well (start page, top bar, settings).
+    property bool showCommunityContent: false
 
     // Forum news (newspaper icon in the top bar with a counter of unread posts,
     // list + post view). Independent of the community content: the forum is the
     // official PokerTH site, not BBC/WEC.
-    property bool showForumNews: true
+    property bool showForumNews: false
 
     // Preselected ranking source ("pokerth" | "bbc" | "wec") for table info and
     // player stats when community content is active. For the selection see

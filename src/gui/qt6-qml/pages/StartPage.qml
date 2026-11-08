@@ -18,7 +18,7 @@ Rectangle {
     // Initial focus on the main action – as when opening a dialog. Qt.callLater,
     // because the focus would otherwise fizzle out during the stack animation.
     // Without a focus reason there is no focus frame; it appears on the first Tab.
-    StackView.onActivated: Qt.callLater(internetGameButton.forceActiveFocus)
+    StackView.onActivated: Qt.callLater(localGameButton.forceActiveFocus)
 
     // Ace's Help (GuideOverlay): the controls a tip outlines.
     function guideTarget(key) {
@@ -49,7 +49,10 @@ Rectangle {
     readonly property real minButtonHeight: 36
     readonly property real boxBudget: height - Config.Theme.margin * 2 - footerReserve
 
-    readonly property int buttonCount: Config.Parameters.showCommunityContent ? 6 : 5
+    // Single-player build (PLAN.md, section 1): the start screen offers nothing
+    // but the local game – no internet game, no network game, no ranking/forum
+    // and no log viewer.
+    readonly property int buttonCount: 1
 
     // The non-shrinking part of the box: inner margins + row spacings.
     function chromeHeight(rows) {
@@ -163,57 +166,12 @@ Rectangle {
                         rowSpacing: startPage.innerSpacing
 
                         CustomButton {
-                            id: internetGameButton
-                            text: qsTr("Internetspiel")
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: startPage.buttonHeight
-                            onClicked: mainStackView.push("ServerConnectionDialog.qml")
-                        }
-
-                        CustomButton {
+                            id: localGameButton
                             text: qsTr("Lokales Spiel starten")
                             Layout.fillWidth: true
                             Layout.preferredWidth: 100
                             Layout.preferredHeight: startPage.buttonHeight
                             onClicked: mainStackView.push("LocalGamePage.qml")
-                        }
-
-                        CustomButton {
-                            text: qsTr("Netzwerkspiel erstellen")
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: startPage.buttonHeight
-                            onClicked: mainStackView.push("NetworkGameCreatePage.qml")
-                        }
-
-                        CustomButton {
-                            text: qsTr("Netzwerkspiel beitreten")
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: startPage.buttonHeight
-                            onClicked: mainStackView.push("NetworkGameEnterPage.qml")
-                        }
-
-                        CustomButton {
-                            text: qsTr("Community / Ranking")
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: startPage.buttonHeight
-                            visible: Config.Parameters.showCommunityContent
-                            // Via the same toggle as the globe → the remembered
-                            // ranking state is restored.
-                            onClicked: mainWindow.toggleTopBarSection(
-                                "pages/CommunityRankingPage.qml",
-                                mainWindow.rankingSectionPages, true)
-                        }
-
-                        CustomButton {
-                            text: qsTr("Logs")
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: 100
-                            Layout.preferredHeight: startPage.buttonHeight
-                            onClicked: mainStackView.push("LogsPage.qml")
                         }
                     }
                 }
