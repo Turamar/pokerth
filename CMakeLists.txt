@@ -119,6 +119,7 @@ set(POKERTH_LIB_SRC
     src/engine/game.cpp 
     src/playerdata.cpp 
     src/config/configfile.cpp 
+    src/state/statestore.cpp
     src/engine/boardinterface.cpp 
     src/engine/enginefactory.cpp 
     src/engine/handinterface.cpp 
@@ -208,6 +209,7 @@ target_include_directories(pokerth_lib PUBLIC
     src/net
     src/config
     src/core
+    src/state
     src/third_party/websocketpp)
 
 target_link_libraries(pokerth_lib PUBLIC Boost::iostreams Boost::random Boost::thread Boost::filesystem Boost::program_options)

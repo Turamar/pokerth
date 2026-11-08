@@ -224,15 +224,24 @@ bool runSimulation(ConfigFile *config, const SimOptions &options, SimReport &rep
 		handFinished = false;
 		long long steps = 0;
 		// Every pump() runs one engine step, which may queue further steps.
-		while(gui.pump()) {
-			if(++steps > MaxStepsPerHand) {
-				ostringstream oss;
-				oss << "hand " << hand << ": more than " << MaxStepsPerHand
-					<< " engine steps without the pot being distributed";
-				error = oss.str();
-				return false;
+		// A LocalException from the engine ends the run with a readable message
+		// instead of an abort: in a headless run there is no GUI to show it.
+		try {
+			while(gui.pump()) {
+				if(++steps > MaxStepsPerHand) {
+					ostringstream oss;
+					oss << "hand " << hand << ": more than " << MaxStepsPerHand
+						<< " engine steps without the pot being distributed";
+					error = oss.str();
+					return false;
+				}
+				report.steps++;
 			}
-			report.steps++;
+		} catch(const exception &e) {
+			ostringstream oss;
+			oss << "hand " << hand << ": engine error: " << e.what();
+			error = oss.str();
+			return false;
 		}
 		if(!handFinished) {
 			ostringstream oss;

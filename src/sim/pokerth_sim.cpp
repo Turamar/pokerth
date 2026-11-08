@@ -56,13 +56,17 @@
 #include <string>
 
 #include <QCoreApplication>
+#include <QDateTime>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QString>
 
 #include <configfile.h>
+#include <statestore.h>
 
 using namespace std;
 
@@ -82,6 +86,8 @@ void printUsage()
 		"  --seed N          seed for cards and AI decisions (default: random, reported)\n"
 		"  --json FILE       write the report as JSON to FILE\n"
 		"  --quiet           only the summary line, no table\n"
+		"  --state-selftest DIR\n"
+		"                    check the state store in DIR instead of simulating\n"
 		"\n"
 		"The run stops earlier than --hands as soon as one seat holds all the chips.\n");
 }
@@ -181,6 +187,10 @@ bool writeJson(const string &fileName, const SimReport &report, const SimOptions
 	root[QStringLiteral("seats")] = seats;
 
 	QFile file(QString::fromStdString(fileName));
+	const QFileInfo info(QString::fromStdString(fileName));
+	if(!info.absolutePath().isEmpty()) {
+		QDir().mkpath(info.absolutePath());
+	}
 	if(!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
 		fprintf(stderr, "pokerth_sim: cannot write '%s'\n", fileName.c_str());
 		return false;
@@ -191,12 +201,95 @@ bool writeJson(const string &fileName, const SimReport &report, const SimOptions
 	return true;
 }
 
+/* Self test of the state store: money and counters have to survive a restart,
+ * and a damaged or too new file must never be overwritten silently. Runs
+ * without a GUI and without Qt application state, so it can be part of a build
+ * check. */
+bool runStateSelfTest(const QString &directory)
+{
+	int failures = 0;
+	auto check = [&failures](bool condition, const QString &message) {
+		printf("  %s %s\n", condition ? "ok  " : "FAIL", message.toUtf8().constData());
+		if(!condition) failures++;
+	};
+
+	GameState::StateStore store(directory);
+	QString error;
+	printf("state store: %s\n", store.filePath().toUtf8().constData());
+
+	// A leftover of an earlier run must not confuse the test.
+	QFile::remove(store.filePath());
+	QFile::remove(store.filePath() + QStringLiteral(".corrupt"));
+	check(!store.exists(), QStringLiteral("a fresh directory has no state file"));
+
+	GameState::PlayerProfile profile = GameState::StateStore::newProfile(QStringLiteral("SelfTest"));
+	check(profile.balance == GameState::StartingBalance,
+		  QStringLiteral("a new profile starts with the starting balance"));
+	check(store.save(profile, error), QStringLiteral("first save (%1)").arg(error));
+	check(store.exists(), QStringLiteral("the state file exists after the first save"));
+
+	GameState::PlayerProfile loaded;
+	check(store.load(loaded, error), QStringLiteral("load after the first save (%1)").arg(error));
+	check(loaded.name == profile.name, QStringLiteral("the name survives"));
+	check(loaded.balance == profile.balance, QStringLiteral("the balance survives"));
+	check(loaded.createdAt.isValid(), QStringLiteral("the creation time is set"));
+
+	// Change everything a session changes, then read it back.
+	loaded.balance = 75;
+	loaded.handsPlayed = 3;
+	loaded.handsWon = 1;
+	loaded.lastRebuyAt = QDateTime::currentDateTimeUtc();
+	const QDateTime createdBefore = loaded.createdAt;
+	check(store.save(loaded, error), QStringLiteral("second save (%1)").arg(error));
+
+	GameState::PlayerProfile reloaded;
+	check(store.load(reloaded, error), QStringLiteral("load after the second save (%1)").arg(error));
+	check(reloaded.balance == 75, QStringLiteral("the balance survives a save/load round trip"));
+	check(reloaded.handsPlayed == 3 && reloaded.handsWon == 1,
+		  QStringLiteral("the counters survive a save/load round trip"));
+	check(reloaded.lastRebuyAt.isValid(), QStringLiteral("the rebuy time survives"));
+	check(reloaded.createdAt == createdBefore,
+		  QStringLiteral("the creation time is not touched by saving"));
+
+	// A corrupt file has to be set aside, not overwritten.
+	{
+		QFile broken(store.filePath());
+		if(broken.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			broken.write("{ this is not json");
+			broken.close();
+		}
+	}
+	GameState::PlayerProfile ignored;
+	check(!store.load(ignored, error), QStringLiteral("a corrupt file is rejected"));
+	check(QFile::exists(store.filePath() + QStringLiteral(".corrupt")),
+		  QStringLiteral("the corrupt file is kept as state.json.corrupt"));
+	check(!store.exists(), QStringLiteral("no state file is left after the corrupt one"));
+	check(!store.load(ignored, error), QStringLiteral("loading without a state file fails"));
+
+	// A file of a newer version is not ours to touch.
+	{
+		QFile newer(store.filePath());
+		if(newer.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			newer.write("{\"schemaVersion\": 99, \"profile\": {}}");
+			newer.close();
+		}
+	}
+	const qint64 sizeBefore = QFileInfo(store.filePath()).size();
+	check(!store.load(ignored, error), QStringLiteral("a file from a newer version is rejected"));
+	check(QFileInfo(store.filePath()).size() == sizeBefore,
+		  QStringLiteral("the file from a newer version is left untouched"));
+
+	printf("  %d failure(s)\n", failures);
+	return failures == 0;
+}
+
 }
 
 int main(int argc, char *argv[])
 {
 	SimOptions options;
 	string jsonFile;
+	string stateSelfTestDir;
 	bool quiet = false;
 
 	// Parse before QCoreApplication exists so that nothing can strip our
@@ -220,6 +313,12 @@ int main(int argc, char *argv[])
 
 		if(strcmp(arg, "--json") == 0) {
 			jsonFile = value;
+			i++;
+			continue;
+		}
+
+		if(strcmp(arg, "--state-selftest") == 0) {
+			stateSelfTestDir = value;
 			i++;
 			continue;
 		}
@@ -262,6 +361,12 @@ int main(int argc, char *argv[])
 	// EngineVersion and friends from the config.
 	QCoreApplication app(argc, argv);
 	QCoreApplication::setApplicationName(QStringLiteral("pokerth_sim"));
+
+	if(!stateSelfTestDir.empty()) {
+		const bool passed = runStateSelfTest(QString::fromStdString(stateSelfTestDir));
+		printf("\nstate self test: %s\n", passed ? "PASS" : "FAILED");
+		return passed ? 0 : 1;
+	}
 
 	ConfigFile config(argv[0], true);
 
