@@ -214,6 +214,20 @@ jobs:
           QML_DIR="$ROOT/Qt/$QT_VERSION/gcc_64/qml"
           test -x "$LINT"
           "$LINT" --version
+
+          # A gate that never fails is worse than no gate: prove on a file that is
+          # broken on purpose that syntax errors really come out as errors.
+          BAD="$ROOT/qmllint-selftest.qml"
+          printf 'import QtQuick\n\nItem {\n    text: qsTr("first" "second")\n}\n' > "$BAD"
+          if "$LINT" -I "$QML_DIR" "$BAD" 2>&1 | grep -q ': Error:'; then
+            echo "selftest: a broken file is reported as an error: ok"
+          else
+            echo "selftest: the linter did not report a broken file - the gate is blind"
+            "$LINT" -I "$QML_DIR" "$BAD" || true
+            exit 1
+          fi
+          rm -f "$BAD"
+
           LOG="$ROOT/qmllint.log"
           : > "$LOG"
           COUNT=0
@@ -224,6 +238,7 @@ jobs:
           echo "linted $COUNT file(s)"
           WARNINGS=$(grep -c ': Warning:' "$LOG" || true)
           echo "warnings: $WARNINGS"
+          grep ': Warning:' "$LOG" | head -n 20 || true
           if grep -q ': Error:' "$LOG"; then
             echo "=== QML errors ==="
             grep ': Error:' "$LOG"
