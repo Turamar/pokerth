@@ -44,7 +44,7 @@
  * Usage: pokerth_sim [--players N] [--stack N] [--sb N] [--hands N]
  *                    [--raise-every N] [--seed N] [--runs N] [--json FILE]
  *                    [--profile P | --strength S | --archetype A | --mixed]
- *                    [--seat-profiles L]
+ *                    [--seat-profiles L] [--field F]
  *                    [--scale-open F] [--scale-3bet F] [--scale-call F]
  *                    [--scale-raise F] [--scale-cbet F] [--margin F] [--quiet]
  *        pokerth_sim --state-selftest DIR
@@ -100,6 +100,9 @@ void printUsage()
 		"  --seat-profiles L one profile per seat, comma separated, e.g.\n"
 		"                    'novice/balanced,novice/tag,pro/tag,elite/tag';\n"
 		"                    the last entry repeats for the remaining seats\n"
+		"  --field F         a reference field of human-like opponents: micro,\n"
+		"                    low or mid; the first seat then plays the profile\n"
+		"                    given above (the hero), the rest play the field\n"
 		"  --mixed           every seat draws its own profile - the mixture the\n"
 		"                    client uses (default)\n"
 		"  --scale-open F    multiply the opening ranges by F (calibration)\n"
@@ -248,6 +251,21 @@ double bigBlindsPer100(const SimSeatStats &seat, int smallBlind)
 	return 100.0 * seat.netChips / (static_cast<double>(seat.hands) * bigBlind);
 }
 
+// Has to be printed with every run of a field: the targets are what makes the
+// measured field meaningful, not decoration.
+void printFieldHeader(const SimOptions &options)
+{
+	if(options.fieldProfiles.empty()) return;
+
+	BotPopulationTarget target;
+	if(BotProfile::populationTarget(options.fieldName, target)) {
+		printf("\nfield %s (%s): published pool VPIP %.0f%%, PFR %.0f%%, 3B %.0f%%\n",
+			   target.name, target.description, target.vpip, target.pfr, target.threeBet);
+	}
+	printf("seat 1 plays the hero (%s), seats 2..%d play the field\n",
+		   options.profile.label().c_str(), options.players);
+}
+
 void printSeatTable(const vector<SimSeatStats> &seats, bool detailed, int smallBlind)
 {
 	printf("\n%-6s %-14s %8s %7s %7s %6s %6s %8s %6s %7s\n",
@@ -327,6 +345,9 @@ bool writeJson(const string &fileName, const SimTotals &totals, const SimOptions
 	setup[QStringLiteral("smallBlind")] = options.smallBlind;
 	setup[QStringLiteral("raiseEveryHands")] = options.raiseEveryHands;
 	setup[QStringLiteral("maxHands")] = options.maxHands;
+	setup[QStringLiteral("field")] = QString::fromStdString(options.fieldName);
+	setup[QStringLiteral("hero")] =
+			options.fieldProfiles.empty() ? QString() : QString::fromStdString(options.profile.label());
 	root[QStringLiteral("setup")] = setup;
 
 	QJsonArray seats;
@@ -693,6 +714,18 @@ int main(int argc, char *argv[])
 			continue;
 		}
 
+		if(strcmp(arg, "--field") == 0) {
+			if(!BotProfile::parsePopulation(value, options.fieldProfiles)) {
+				fprintf(stderr, "pokerth_sim: unknown field '%s' (%s)\n",
+						value, BotProfile::populationList());
+				return 2;
+			}
+			options.fieldName = value;
+			options.mixedProfiles = false;
+			i++;
+			continue;
+		}
+
 		if(strcmp(arg, "--scale-open") == 0 || strcmp(arg, "--scale-3bet") == 0
 				|| strcmp(arg, "--scale-call") == 0 || strcmp(arg, "--scale-raise") == 0
 				|| strcmp(arg, "--scale-cbet") == 0 || strcmp(arg, "--margin") == 0) {
@@ -746,6 +779,23 @@ int main(int argc, char *argv[])
 		return 2;
 	}
 
+	// A field and a seat list describe the same seats in different ways; playing
+	// both would silently ignore one of them, so refuse instead.
+	if(!options.fieldProfiles.empty() && !options.seatProfiles.empty()) {
+		fprintf(stderr, "pokerth_sim: --field and --seat-profiles are exclusive\n");
+		return 2;
+	}
+
+	// A diagnostic style is an instrument: one seat of it next to the opponents
+	// it punishes. A table of five of them measures nothing.
+	if(options.fieldProfiles.empty() && options.seatProfiles.empty()
+			&& !options.mixedProfiles && BotProfile::isDiagnostic(options.profile.archetype)) {
+		fprintf(stderr, "pokerth_sim: '%s' is a diagnostic style, "
+				"give it one seat with --seat-profiles\n",
+				BotProfile::archetypeName(options.profile.archetype));
+		return 2;
+	}
+
 	if(options.seed == 0) {
 		// Report the seed of a non-reproducible run as well, so that anything
 		// interesting can be repeated exactly.
@@ -790,6 +840,7 @@ int main(int argc, char *argv[])
 		} else {
 			printTotals(totals, options);
 		}
+		printFieldHeader(options);
 	} else {
 		printf("%d game(s), %lld hands, %lld ms, seed %llu\n",
 			   totals.runs, totals.hands, totals.elapsedMs, options.seed);

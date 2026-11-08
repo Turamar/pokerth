@@ -33,6 +33,7 @@
 #define BOTPROFILE_H
 
 #include <string>
+#include <vector>
 
 #include "aiengine4.h"
 
@@ -49,6 +50,13 @@
  * (AiPersonality) and nothing else knows about it. That keeps the engine free
  * of names and the table of numbers in one place, where it can be calibrated
  * with the simulator (see CHANGELOG.md for the measured values).
+ *
+ * Two more things live here because they are made of the same numbers:
+ *  - a reference field of human-like opponents (the "population" tables), so
+ *    that a win rate can be compared with a real pool instead of only with
+ *    other bots;
+ *  - the diagnostic styles ("exploit-*"), which price one leak of one style.
+ *    They are never dealt at a table by the random mixture.
  */
 enum BotStrength {
 	BOT_STRENGTH_NOVICE = 0,
@@ -65,7 +73,39 @@ enum BotArchetype {
 	BOT_ARCHETYPE_NIT,
 	BOT_ARCHETYPE_CALLER,
 	BOT_ARCHETYPE_BALANCED,
+	/* Diagnostic styles. They answer one question each -- "how much does this
+	 * leak cost?" -- and are never dealt by the random mixture (weight 0).
+	 */
+	BOT_ARCHETYPE_EXPLOIT_NIT,
+	BOT_ARCHETYPE_EXPLOIT_CALLER,
+	BOT_ARCHETYPE_EXPLOIT_MANIAC,
 	BOT_ARCHETYPE_COUNT
+};
+
+/* A field of human-like opponents. The simulator puts the hero in one seat and
+ * these opponents in the others; the win rate against such a field is the only
+ * figure in this project that has an outside reference (published HUD
+ * statistics of a real pool), so the tables below carry those targets.
+ */
+enum BotPopulation {
+	BOT_POPULATION_MICRO = 0,
+	BOT_POPULATION_LOW,
+	BOT_POPULATION_MID,
+	BOT_POPULATION_COUNT
+};
+
+/* What a field is supposed to look like, in the terms a HUD uses. The numbers
+ * are published population averages for the stake, not our own measurements:
+ * they exist so that a measured field can be compared with them.
+ */
+struct BotPopulationTarget {
+	const char *name;
+	const char *description;
+	double vpip;
+	double pfr;
+	double threeBet;
+
+	BotPopulationTarget() : name(""), description(""), vpip(0.0), pfr(0.0), threeBet(0.0) {}
 };
 
 struct BotProfile {
@@ -84,7 +124,15 @@ struct BotProfile {
 	static const char *strengthName(BotStrength strength);
 	static const char *archetypeName(BotArchetype archetype);
 	static const char *strengthList();
+	// Every style the parser accepts, diagnostic ones included.
 	static const char *archetypeList();
+	static bool isDiagnostic(BotArchetype archetype);
+
+	// "micro", "low", "mid": the opponents of a reference field, five of them.
+	static const char *populationList();
+	static const char *populationName(BotPopulation population);
+	static bool populationTarget(const std::string &text, BotPopulationTarget &out);
+	static bool parsePopulation(const std::string &text, std::vector<BotProfile> &seats);
 
 	static bool parseStrength(const std::string &text, BotStrength &out);
 	static bool parseArchetype(const std::string &text, BotArchetype &out);

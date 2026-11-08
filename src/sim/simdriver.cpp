@@ -77,11 +77,18 @@ int playersWithCash(const boost::shared_ptr<Game> &game)
 	return count;
 }
 
-/* Which strength and style a seat plays. A list of profiles wins over the single
- * profile; seats beyond the list repeat the last entry.
+/* Which strength and style a seat plays. A field wins over everything: the
+ * first seat is the hero, the rest are the field's opponents. Otherwise a list
+ * of profiles wins over the single profile; seats beyond the list repeat the
+ * last entry.
  */
 BotProfile profileForSeat(const SimOptions &options, int seat)
 {
+	if(!options.fieldProfiles.empty()) {
+		if(seat == 0) return options.profile;
+		const size_t index = std::min(static_cast<size_t>(seat - 1), options.fieldProfiles.size() - 1);
+		return options.fieldProfiles[index];
+	}
 	if(options.mixedProfiles) return BotProfile::randomForSeat();
 	if(!options.seatProfiles.empty()) {
 		const size_t index = std::min(static_cast<size_t>(seat), options.seatProfiles.size() - 1);

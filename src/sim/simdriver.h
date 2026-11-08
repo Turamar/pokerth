@@ -73,6 +73,14 @@ struct SimOptions
 	BotProfile profile;
 	std::vector<BotProfile> seatProfiles;
 
+	/* A reference field of human-like opponents: the first seat plays
+	 * options.profile (the hero), the other seats play these. It is how a win
+	 * rate gets an outside reference -- "our pro against the micro pool" --
+	 * instead of only ordering bots among themselves.
+	 */
+	std::vector<BotProfile> fieldProfiles;
+	std::string fieldName;
+
 	/* Calibration knobs: multipliers on the ranges of the profile. They exist so
 	 * that a corridor can be searched without a new build - the numbers are
 	 * measured, not guessed (see CHANGELOG.md).
