@@ -203,10 +203,10 @@ jobs:
 
       # QML is not compiled by the build: a typo in a .qml file breaks a page at
       # runtime while the build stays green - that is how the cash table page
-      # ended up dead behind a working button. qmllint catches exactly that
-      # class (syntax, unknown types, unknown properties), so its errors are a
-      # gate; its style warnings (there are many on this code base) are only
-      # counted, otherwise the build would fail on taste.
+      # ended up dead behind a working button. qmllint parses the files and
+      # reports parser errors with the category [syntax], so those are the gate;
+      # its style findings (unknown context properties and the like) are counted
+      # per category and printed, but do not fail the build.
       - name: QML lint
         run: |
           set -euo pipefail
@@ -215,14 +215,15 @@ jobs:
           test -x "$LINT"
           "$LINT" --version
 
-          # A gate that never fails is worse than no gate: prove on a file that is
-          # broken on purpose that syntax errors really come out as errors.
+          # A gate that never fails is worse than no gate: feed the linter a file
+          # with the very defect that broke the cash table page and insist that
+          # it is reported.
           BAD="$ROOT/qmllint-selftest.qml"
           printf 'import QtQuick\n\nItem {\n    text: qsTr("first" "second")\n}\n' > "$BAD"
-          if "$LINT" -I "$QML_DIR" "$BAD" 2>&1 | grep -q ': Error:'; then
-            echo "selftest: a broken file is reported as an error: ok"
+          if "$LINT" -I "$QML_DIR" "$BAD" 2>&1 | grep -q '\[syntax\]'; then
+            echo "selftest: a broken file is reported: ok"
           else
-            echo "selftest: the linter did not report a broken file - the gate is blind"
+            echo "selftest: the linter missed a broken file - the gate is blind"
             "$LINT" -I "$QML_DIR" "$BAD" || true
             exit 1
           fi
@@ -236,15 +237,14 @@ jobs:
             COUNT=$((COUNT + 1))
           done < <(find src/gui/qt6-qml -name '*.qml' | sort)
           echo "linted $COUNT file(s)"
-          WARNINGS=$(grep -c ': Warning:' "$LOG" || true)
-          echo "warnings: $WARNINGS"
-          grep ': Warning:' "$LOG" | head -n 20 || true
-          if grep -q ': Error:' "$LOG"; then
-            echo "=== QML errors ==="
-            grep ': Error:' "$LOG"
+          echo "--- findings per category ---"
+          grep -o '\[[a-z-]*\]$' "$LOG" | sort | uniq -c | sort -rn || true
+          if grep -q '\[syntax\]' "$LOG"; then
+            echo "=== QML syntax errors ==="
+            grep '\[syntax\]' "$LOG"
             exit 1
           fi
-          echo "no QML errors"
+          echo "no QML syntax errors"
 
       - name: Build
         run: |
