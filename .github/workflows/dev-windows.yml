@@ -201,6 +201,36 @@ jobs:
           test -d "$ROOT/Qt/$QT_VERSION/mingw_64"
           test -x "$ROOT/Qt/$QT_VERSION/gcc_64/bin/qt-cmake"
 
+      # QML is not compiled by the build: a typo in a .qml file breaks a page at
+      # runtime while the build stays green - that is how the cash table page
+      # ended up dead behind a working button. qmllint catches exactly that
+      # class (syntax, unknown types, unknown properties), so its errors are a
+      # gate; its style warnings (there are many on this code base) are only
+      # counted, otherwise the build would fail on taste.
+      - name: QML lint
+        run: |
+          set -euo pipefail
+          LINT="$ROOT/Qt/$QT_VERSION/gcc_64/bin/qmllint"
+          QML_DIR="$ROOT/Qt/$QT_VERSION/gcc_64/qml"
+          test -x "$LINT"
+          "$LINT" --version
+          LOG="$ROOT/qmllint.log"
+          : > "$LOG"
+          COUNT=0
+          while IFS= read -r file; do
+            "$LINT" -I src/gui/qt6-qml -I "$QML_DIR" "$file" >> "$LOG" 2>&1 || true
+            COUNT=$((COUNT + 1))
+          done < <(find src/gui/qt6-qml -name '*.qml' | sort)
+          echo "linted $COUNT file(s)"
+          WARNINGS=$(grep -c ': Warning:' "$LOG" || true)
+          echo "warnings: $WARNINGS"
+          if grep -q ': Error:' "$LOG"; then
+            echo "=== QML errors ==="
+            grep ': Error:' "$LOG"
+            exit 1
+          fi
+          echo "no QML errors"
+
       - name: Build
         run: |
           set -euo pipefail
