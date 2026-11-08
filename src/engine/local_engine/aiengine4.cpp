@@ -33,6 +33,7 @@
 
 #include "equitycalculator.h"
 #include "holecardsrange.h"
+#include "preflopstrength.h"
 #include "tools.h"
 
 #include <algorithm>
@@ -42,49 +43,9 @@ namespace
 {
 
 // ---------------------------------------------------------------------------
-// Praeflop-Charts
+// Opponent ranges
 // ---------------------------------------------------------------------------
 
-/* Opening ranges, ordered from the earliest to the latest position. The
- * fewer players still sit behind us, the wider we may open
- * -- exactly the consideration that is completely missing in the old engine.
- */
-const char* const OPENING_RANGES[] = {
-	// very early (five or more players behind us), about 12 %
-	"66+, ATs+, KTs+, QTs+, JTs, AJo+, KQo",
-	// middle field (three to four behind us), about 18 %
-	"44+, A8s+, K9s+, Q9s+, J9s+, T9s, ATo+, KJo+, QJo",
-	// late (one to two behind us), about 28 %
-	"22+, A2s+, K7s+, Q8s+, J8s+, T8s+, 97s+, 87s, 76s, 65s, A9o+, KTo+, QTo+, JTo",
-	// Button, rund 45 %
-	"22+, A2s+, K2s+, Q5s+, J7s+, T7s+, 96s+, 86s+, 75s+, 64s+, 54s, "
-	"A2o+, K7o+, Q8o+, J8o+, T8o+, 98o, 87o"
-};
-const int OPENING_RANGE_COUNT = 4;
-
-/* Hands with which we join a cheap pot with several players afterwards.
- * Deliberately NOT the button range: against many opponents the hands that
- * hit rarely but big pay off (small pairs, suited
- * connectors). Offsuit broadway hands such as KTo, by contrast, are
- * constantly dominated there and do not belong in it.
- */
-const char* const LIMP_BEHIND_RANGE = "22-TT, A2s+, K9s+, QTs+, J9s+, T9s, 98s, 87s, 76s, 65s, 54s";
-
-// Hands with which we raise ourselves against a raise (for value).
-const char* const THREE_BET_RANGE = "JJ+, AKs, AQs, AKo";
-
-// Hands with which we only call a raise.
-const char* const CALL_RAISE_IN_POSITION = "22+, A9s+, KTs+, QTs+, JTs, T9s, 98s, AJo+, KQo";
-const char* const CALL_RAISE_OUT_OF_POSITION = "55+, ATs+, KJs+, QJs, AQo+";
-
-// The big blind has already bet and gets better pot odds, so it defends
-// considerably wider.
-const char* const BIG_BLIND_DEFEND = "22+, A2s+, K5s+, Q7s+, J7s+, T7s+, 96s+, 86s+, 75s+, 65s, 54s, "
-									 "A7o+, K9o+, Q9o+, J9o+, T9o";
-
-// Push-or-fold with a short stack: from here on only all or nothing pays off.
-const char* const SHORT_STACK_PUSH_EARLY = "44+, A7s+, KTs+, QJs, ATo+, KQo";
-const char* const SHORT_STACK_PUSH_LATE  = "22+, A2s+, K7s+, Q9s+, J9s+, T9s, A5o+, K9o+, QTo+, JTo";
 
 /* The assumption about an opponent's hands, graded by the observed entering
  * behaviour. Whoever plays only every eighth hand holds something different when
@@ -159,20 +120,15 @@ bool inPosition(const AiSituation& s)
 	return s.opponentsBehind == 0;
 }
 
-// Index of the opening range from the number of players behind us.
-int openingRangeIndex(const AiSituation& s, const AiPersonality& p)
+/* Position as one of four buckets: the more players still sit behind us, the
+ * tighter we have to be. The profile holds one opening percentage per bucket.
+ */
+int positionBucket(const AiSituation& s)
 {
-	int index;
-	if(s.opponentsBehind >= 5) index = 0;
-	else if(s.opponentsBehind >= 3) index = 1;
-	else if(s.opponentsBehind >= 1) index = 2;
-	else index = 3;
-
-	// Loose natures open one step wider, cautious ones one step tighter.
-	if(p.looseness > 1.10) ++index;
-	else if(p.looseness < 0.90) --index;
-
-	return std::max(0, std::min(OPENING_RANGE_COUNT - 1, index));
+	if(s.opponentsBehind >= 5) return 0;
+	if(s.opponentsBehind >= 3) return 1;
+	if(s.opponentsBehind >= 1) return 2;
+	return 3;
 }
 
 }
@@ -281,14 +237,15 @@ AiDecision allIn(const AiSituation& s, const Metrics& m)
 /* Short stack: raising means the whole stack anyway, so the only decision left
  * is between "everything" and "nothing". The old engine lacks this
  * mode entirely -- it blinds itself to death in the tournament endgame.
+ * The push range widens with position and with every blind we lose.
  */
-AiDecision decideShortStack(const AiSituation& s, const AiPersonality& p, const Metrics& m)
+AiDecision decideShortStack(const AiSituation& s, const AiPersonality& p, const Metrics& m, double judgedHand)
 {
 	const bool late = s.opponentsBehind <= 2;
-	const HoleCardsRange& pushRange =
-		cachedRange(late ? SHORT_STACK_PUSH_LATE : SHORT_STACK_PUSH_EARLY);
+	double push = p.pushPercent * (late ? 1.7 : 1.0);
+	if(m.stackInBB < 8.0) push *= 1.4;
 
-	if(pushRange.contains(s.holeCards[0], s.holeCards[1])) return allIn(s, m);
+	if(judgedHand <= push) return allIn(s, m);
 
 	// Outside the push range: only play on if it costs nothing.
 	if(m.canCheck) return call(m);
@@ -303,56 +260,73 @@ AiDecision decideShortStack(const AiSituation& s, const AiPersonality& p, const 
 
 AiDecision decidePreflop(const AiSituation& s, const AiPersonality& p, const Metrics& m)
 {
-	if(m.stackInBB <= 12.0) return decideShortStack(s, p, m);
+	// 0 % is the best hand, 100 % the worst (see PreflopStrength).
+	const double hand = PreflopStrength::percentile(s.holeCards[0], s.holeCards[1]) * 100.0;
+
+	/* A weak bot misjudges its own hand: sometimes it plays trash, sometimes it
+	 * throws a premium hand away. Both cost money, and that is the point.
+	 */
+	double judgedHand = hand;
+	if(p.thresholdNoise > 0.0) {
+		judgedHand += (randomPercent() - 50.5) / 50.0 * p.thresholdNoise;
+	}
+
+	if(m.stackInBB <= 12.0) return decideShortStack(s, p, m, judgedHand);
 
 	const bool facingRaise = s.highestSet > m.bigBlind;
 
 	if(!facingRaise) {
-		const HoleCardsRange& opening = cachedRange(OPENING_RANGES[openingRangeIndex(s, p)]);
+		const int limpers = std::max(0, (s.setsThisRound - m.bigBlind - s.smallBlind) / m.bigBlind);
+		const double openPercent = p.openPercent[positionBucket(s)];
 
-		if(opening.contains(s.holeCards[0], s.holeCards[1])) {
-			// A base size of three big blinds, one more per limper.
-			const int limpers = std::max(0, (s.setsThisRound - m.bigBlind - s.smallBlind) / m.bigBlind);
-			int target = static_cast<int>((3 + limpers) * m.bigBlind * p.aggression);
-			target = std::max(target, s.highestSet + m.bigBlind);
-			return raiseTo(s, m, target);
+		if(judgedHand <= openPercent) {
+			/* Whether the range is played as a raise or as a limp is a matter of
+			 * style: a caller limps with nearly everything and almost never
+			 * raises, a maniac raises nearly everything.
+			 */
+			if(randomPercent() <= static_cast<int>(p.openRaiseChance * 100)) {
+				// A base size of three big blinds, one more per limper.
+				int target = static_cast<int>((3 + limpers) * m.bigBlind * p.aggression);
+				target = std::max(target, s.highestSet + m.bigBlind);
+				return raiseTo(s, m, target);
+			}
+			if(m.toCall <= m.bigBlind) return call(m);
+			return fold(m);
 		}
 
+		// Checking is free, so it always happens.
 		if(m.canCheck) return call(m);
 
-		/* Outside the opening range we only call if somebody has already limped
-		 * in front of us and the pot has a correspondingly large number of players. Limping
-		 * into a pot that is still untouched, by contrast, would only be weak.
+		/* Limping behind: with a cheap price and somebody already in the pot,
+		 * speculative hands are worth seeing a flop.
 		 */
-		const int limpersBefore = (s.setsThisRound - m.bigBlind - s.smallBlind) / m.bigBlind;
-		if(m.toCall <= m.bigBlind && s.opponents >= 3 && limpersBefore >= 1) {
-			const HoleCardsRange& speculative = cachedRange(LIMP_BEHIND_RANGE);
-			if(speculative.contains(s.holeCards[0], s.holeCards[1])) return call(m);
-		}
+		if(m.toCall <= m.bigBlind && limpers >= 1 && judgedHand <= openPercent * 1.6) return call(m);
 
 		return fold(m);
 	}
 
-	// Es wurde erhoeht.
-	const HoleCardsRange& threeBet = cachedRange(THREE_BET_RANGE);
-	if(threeBet.contains(s.holeCards[0], s.holeCards[1])) {
+	// Somebody raised.
+	if(judgedHand <= p.threeBetPercent) {
 		const int factor = inPosition(s) ? 3 : 4;
 		return raiseTo(s, m, static_cast<int>(factor * s.highestSet * p.aggression));
 	}
 
-	const HoleCardsRange& calling =
-		cachedRange(s.amBigBlind ? BIG_BLIND_DEFEND
-					: (inPosition(s) ? CALL_RAISE_IN_POSITION : CALL_RAISE_OUT_OF_POSITION));
+	/* A light re-raise, so that the value range does not become readable. Only
+	 * in position and only against few players -- otherwise it is a bluff into
+	 * a crowd.
+	 */
+	if(p.lightThreeBet > 0.0 && inPosition(s) && s.opponents <= 2
+			&& randomPercent() <= static_cast<int>(p.lightThreeBet)) {
+		return raiseTo(s, m, 3 * s.highestSet);
+	}
 
-	if(calling.contains(s.holeCards[0], s.holeCards[1])) {
+	const double callPercent = s.amBigBlind ? p.defendBigBlindPercent
+							 : (inPosition(s) ? p.callRaisePercent : p.callRaisePercentOop);
+
+	if(judgedHand <= callPercent) {
 		// Not at any price: a very large raise blows the odds.
 		const double priceInBB = static_cast<double>(m.toCall) / m.bigBlind;
 		if(priceInBB <= 12.0 * p.looseness) return call(m);
-	}
-
-	// An occasional bluff against few opponents, so that we do not become readable.
-	if(s.opponents == 1 && inPosition(s) && randomPercent() <= static_cast<int>(6 * p.bluffRate)) {
-		return raiseTo(s, m, 3 * s.highestSet);
 	}
 
 	return fold(m);
@@ -369,7 +343,15 @@ namespace
 
 AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Metrics& m)
 {
-	const double equity = AiEngine4::winningChance(s);
+	double equity = AiEngine4::winningChance(s);
+
+	/* A weak bot misjudges its hand here as well, only less than before the
+	 * flop: the board already says a lot about what the hand is worth.
+	 */
+	if(p.thresholdNoise > 0.0) {
+		equity += (randomPercent() - 50.5) / 50.0 * p.thresholdNoise * 0.003;
+		equity = std::max(0.0, std::min(1.0, equity));
+	}
 
 	/* The reference size is the share that would be due to us if everybody were
 	 * equally strong. At a full table that is little, heads-up it is half -- which is why
@@ -378,11 +360,27 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 	const double fairShare = 1.0 / (s.opponents + 1);
 
 	if(m.canCheck) {
-		if(equity > fairShare * 1.5 / p.looseness) {
+		/* How readily we bet into a checked pot is a matter of aggression, not
+		 * of looseness: a caller with a decent hand still just checks.
+		 */
+		if(equity > fairShare * 1.5 / p.aggression) {
 			// The clearer the lead, the larger the bet.
 			double fraction = (equity > fairShare * 2.2) ? 0.75 : 0.55;
 			fraction *= p.aggression;
 			const int amount = std::max(m.bigBlind, static_cast<int>(m.pot * fraction));
+			return raiseTo(s, m, s.mySet + amount);
+		}
+
+		/* A continuation bet: betting by range instead of by hand. That is where
+		 * a large part of the aggression of the styles comes from -- a maniac
+		 * fires at nearly every checked pot, a caller almost never. Turn and
+		 * river are fired at less often than the flop.
+		 */
+		double stab = p.cbetPercent * p.raiseFrequency;
+		if(s.round == GAME_STATE_TURN) stab *= 0.7;
+		else if(s.round == GAME_STATE_RIVER) stab *= 0.5;
+		if(randomPercent() <= static_cast<int>(stab)) {
+			const int amount = std::max(m.bigBlind, static_cast<int>(m.pot * 0.55 * p.aggression));
 			return raiseTo(s, m, s.mySet + amount);
 		}
 
@@ -412,10 +410,24 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 		margin = std::max(-0.02, margin);
 	}
 
+	// The style decides how much worse than the pot odds a call may be.
+	margin += p.callMargin;
+
 	if(equity >= m.potOdds + margin) {
 		const bool clearlyAhead = equity > fairShare * 1.9;
-		// Endlose Erhoehungsketten vermeiden.
-		if(clearlyAhead && s.raisesThisRound < 3) {
+		const bool strong = equity > fairShare * 1.25;
+
+		/* Putting the money in now instead of just calling. Without this a table
+		 * of bots is one long series of calls and every style ends up with the
+		 * same aggression factor.
+		 */
+		double raiseChance = 0.0;
+		if(clearlyAhead && s.raisesThisRound < 3) raiseChance = 60.0 + 40.0 * p.aggression;
+		else if(strong && s.raisesThisRound < 2) raiseChance = 25.0 * p.aggression;
+		else if(s.raisesThisRound < 2) raiseChance = p.raiseBluffPercent;
+		raiseChance *= p.raiseFrequency;
+
+		if(raiseChance > 0.0 && randomPercent() <= static_cast<int>(std::min(100.0, raiseChance))) {
 			const int amount = std::max(s.minimumRaise, static_cast<int>(m.pot * 0.7 * p.aggression));
 			return raiseTo(s, m, s.highestSet + amount);
 		}

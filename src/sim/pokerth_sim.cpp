@@ -43,7 +43,10 @@
  *
  * Usage: pokerth_sim [--players N] [--stack N] [--sb N] [--hands N]
  *                    [--raise-every N] [--seed N] [--runs N] [--json FILE]
- *                    [--quiet]
+ *                    [--profile P | --strength S | --archetype A | --mixed]
+ *                    [--seat-profiles L]
+ *                    [--scale-open F] [--scale-3bet F] [--scale-call F]
+ *                    [--scale-raise F] [--scale-cbet F] [--margin F] [--quiet]
  *        pokerth_sim --state-selftest DIR
  */
 
@@ -90,6 +93,22 @@ void printUsage()
 		"  --runs N          play N independent games and aggregate them (default 1);\n"
 		"                    game number i uses seed+i\n"
 		"  --json FILE       write the report as JSON to FILE\n"
+		"  --profile P       strength and style of every seat, e.g. elite/lag;\n"
+		"                    either half may be left out (--profile tag, --profile pro)\n"
+		"  --strength S      novice, amateur, pro or elite (all seats)\n"
+		"  --archetype A     maniac, lag, tag, nit, caller or balanced (all seats)\n"
+		"  --seat-profiles L one profile per seat, comma separated, e.g.\n"
+		"                    'novice/balanced,novice/tag,pro/tag,elite/tag';\n"
+		"                    the last entry repeats for the remaining seats\n"
+		"  --mixed           every seat draws its own profile - the mixture the\n"
+		"                    client uses (default)\n"
+		"  --scale-open F    multiply the opening ranges by F (calibration)\n"
+		"  --scale-3bet F    multiply the three-bet ranges by F (calibration)\n"
+		"  --scale-call F    multiply the calling ranges by F (calibration)\n"
+		"  --scale-raise F   multiply how often a made hand raises instead of calling\n"
+		"  --scale-cbet F    multiply how often a checked pot is bet at\n"
+		"  --margin F        postflop calling margin in equity points, e.g. -0.05\n"
+		"                    (calibration; overrides the value of the profile)\n"
 		"  --quiet           only the summary line, no table\n"
 		"  --state-selftest DIR\n"
 		"                    check the state store in DIR instead of simulating\n"
@@ -106,6 +125,42 @@ bool parseNumber(const char *value, long long &out)
 	if(errno != 0 || end == value || (end && *end != 0)) return false;
 	out = parsed;
 	return true;
+}
+
+bool parseDouble(const char *value, double &out)
+{
+	if(value == NULL || value[0] == 0) return false;
+	char *end = NULL;
+	errno = 0;
+	const double parsed = strtod(value, &end);
+	if(errno != 0 || end == value || (end && *end != 0)) return false;
+	out = parsed;
+	return true;
+}
+
+// "novice/tag,pro/lag,..." -- one profile per seat.
+bool parseProfileList(const char *value, vector<BotProfile> &out)
+{
+	out.clear();
+	const string text(value == NULL ? "" : value);
+
+	string::size_type pos = 0;
+	while(pos <= text.size()) {
+		const string::size_type comma = text.find(',', pos);
+		string token = text.substr(pos, comma == string::npos ? string::npos : comma - pos);
+		pos = (comma == string::npos) ? text.size() + 1 : comma + 1;
+
+		while(!token.empty() && (token[0] == ' ' || token[0] == '\t')) token.erase(0, 1);
+		while(!token.empty() && (token[token.size() - 1] == ' ' || token[token.size() - 1] == '\t')) {
+			token.erase(token.size() - 1);
+		}
+		if(token.empty()) continue;
+
+		BotProfile profile;
+		if(!BotProfile::parse(token, profile)) return false;
+		out.push_back(profile);
+	}
+	return !out.empty();
 }
 
 double percentage(long long value, long long total)
@@ -147,11 +202,17 @@ void accumulate(SimTotals &totals, const SimReport &report)
 		target.hands += source.hands;
 		target.vpip += source.vpip;
 		target.pfr += source.pfr;
+		target.threeBets += source.threeBets;
+		target.threeBetOpportunities += source.threeBetOpportunities;
 		target.aggressive += source.aggressive;
 		target.passive += source.passive;
 		target.handsWon += source.handsWon;
 		target.chipsWon += source.chipsWon;
+		target.netChips += source.netChips;
 		target.busts += source.busts;
+		// The seat keeps its profile name unless the runs disagree.
+		if(totals.runs == 1) target.profile = source.profile;
+		else if(target.profile != source.profile) target.profile = "mixed";
 		// chips and bustedAtHand describe a single game, not a series.
 	}
 }
@@ -168,43 +229,62 @@ void formatAggression(const SimSeatStats &seat, char *buffer, size_t size)
 	}
 }
 
-void printSeatTable(const vector<SimSeatStats> &seats, bool detailed)
+void formatThreeBet(const SimSeatStats &seat, char *buffer, size_t size)
 {
-	if(detailed) {
-		printf("\n%-6s %7s %7s %7s %7s %7s %8s %7s\n",
-			   "seat", "hands", "VPIP%", "PFR%", "AF", "won", "chips", "busted");
+	if(seat.threeBetOpportunities > 0) {
+		snprintf(buffer, size, "%.1f", percentage(seat.threeBets, seat.threeBetOpportunities));
 	} else {
-		printf("\n%-6s %8s %7s %7s %7s %7s %7s\n",
-			   "seat", "hands", "VPIP%", "PFR%", "AF", "won", "busts");
+		snprintf(buffer, size, "-");
 	}
+}
+
+/* Net chips per 100 hands, measured in big blinds so that runs with different
+ * stakes can be compared. This is the number that decides whether a style wins.
+ */
+double bigBlindsPer100(const SimSeatStats &seat, int smallBlind)
+{
+	const int bigBlind = 2 * smallBlind;
+	if(seat.hands <= 0 || bigBlind <= 0) return 0.0;
+	return 100.0 * seat.netChips / (static_cast<double>(seat.hands) * bigBlind);
+}
+
+void printSeatTable(const vector<SimSeatStats> &seats, bool detailed, int smallBlind)
+{
+	printf("\n%-6s %-14s %8s %7s %7s %6s %6s %8s %6s %7s\n",
+		   "seat", "profile", "hands", "VPIP%", "PFR%", "3B%", "AF",
+		   detailed ? "net" : "bb/100", "won", detailed ? "busted" : "busts");
+
 	for(size_t i = 0; i < seats.size(); i++) {
 		const SimSeatStats &seat = seats[i];
 		char aggression[16];
 		formatAggression(seat, aggression, sizeof(aggression));
+		char threeBet[8];
+		formatThreeBet(seat, threeBet, sizeof(threeBet));
 
+		char net[16];
 		if(detailed) {
-			char busted[16];
-			if(seat.bustedAtHand >= 0) {
-				snprintf(busted, sizeof(busted), "%d", seat.bustedAtHand);
-			} else {
-				snprintf(busted, sizeof(busted), "-");
-			}
-			printf("%-6s %7lld %7.1f %7.1f %7s %7lld %8lld %7s\n",
-				   seat.name.c_str(), seat.hands,
-				   percentage(seat.vpip, seat.hands),
-				   percentage(seat.pfr, seat.hands),
-				   aggression, seat.handsWon, seat.chips, busted);
+			snprintf(net, sizeof(net), "%lld", seat.netChips);
 		} else {
-			printf("%-6s %8lld %7.1f %7.1f %7s %7lld %7d\n",
-				   seat.name.c_str(), seat.hands,
-				   percentage(seat.vpip, seat.hands),
-				   percentage(seat.pfr, seat.hands),
-				   aggression, seat.handsWon, seat.busts);
+			snprintf(net, sizeof(net), "%.1f", bigBlindsPer100(seat, smallBlind));
 		}
+
+		char busted[16];
+		if(detailed) {
+			if(seat.bustedAtHand >= 0) snprintf(busted, sizeof(busted), "%d", seat.bustedAtHand);
+			else snprintf(busted, sizeof(busted), "-");
+		} else {
+			snprintf(busted, sizeof(busted), "%d", seat.busts);
+		}
+
+		printf("%-6s %-14s %8lld %7.1f %7.1f %6s %6s %8s %6lld %7s\n",
+			   seat.name.c_str(), seat.profile.c_str(), seat.hands,
+			   percentage(seat.vpip, seat.hands),
+			   percentage(seat.pfr, seat.hands),
+			   threeBet, aggression, net, seat.handsWon, busted);
 	}
 }
 
-void printSingleRun(const SimReport &report)
+void printSingleRun(const SimReport &report, int smallBlind)
 {
 	printf("\n");
 	printf("seed %llu, %d hands, %lld engine steps, %lld ms (%.1f ms/hand), %d seats left\n",
@@ -216,7 +296,7 @@ void printSingleRun(const SimReport &report)
 	} else {
 		printf("stopped after the hand limit\n");
 	}
-	printSeatTable(report.seats, true);
+	printSeatTable(report.seats, true, smallBlind);
 }
 
 void printTotals(const SimTotals &totals, const SimOptions &options)
@@ -228,7 +308,7 @@ void printTotals(const SimTotals &totals, const SimOptions &options)
 		   totals.elapsedMs,
 		   totals.runs > 0 ? static_cast<double>(totals.elapsedMs) / totals.runs : 0.0,
 		   totals.hands > 0 ? static_cast<double>(totals.elapsedMs) / static_cast<double>(totals.hands) : 0.0);
-	printSeatTable(totals.seats, false);
+	printSeatTable(totals.seats, false, options.smallBlind);
 }
 
 bool writeJson(const string &fileName, const SimTotals &totals, const SimOptions &options)
@@ -255,9 +335,13 @@ bool writeJson(const string &fileName, const SimTotals &totals, const SimOptions
 		QJsonObject entry;
 		entry[QStringLiteral("seat")] = seat.seat;
 		entry[QStringLiteral("name")] = QString::fromStdString(seat.name);
+		entry[QStringLiteral("profile")] = QString::fromStdString(seat.profile);
 		entry[QStringLiteral("hands")] = static_cast<qint64>(seat.hands);
 		entry[QStringLiteral("vpipPercent")] = percentage(seat.vpip, seat.hands);
 		entry[QStringLiteral("pfrPercent")] = percentage(seat.pfr, seat.hands);
+		entry[QStringLiteral("threeBetPercent")] = percentage(seat.threeBets, seat.threeBetOpportunities);
+		entry[QStringLiteral("netChips")] = static_cast<qint64>(seat.netChips);
+		entry[QStringLiteral("bigBlindsPer100")] = bigBlindsPer100(seat, options.smallBlind);
 		entry[QStringLiteral("aggressive")] = static_cast<qint64>(seat.aggressive);
 		entry[QStringLiteral("passive")] = static_cast<qint64>(seat.passive);
 		entry[QStringLiteral("handsWon")] = static_cast<qint64>(seat.handsWon);
@@ -535,6 +619,9 @@ int main(int argc, char *argv[])
 		} else if(strcmp(arg, "--quiet") == 0) {
 			quiet = true;
 			continue;
+		} else if(strcmp(arg, "--mixed") == 0) {
+			options.mixedProfiles = true;
+			continue;
 		}
 
 		if(value == NULL) {
@@ -551,6 +638,79 @@ int main(int argc, char *argv[])
 		if(strcmp(arg, "--state-selftest") == 0) {
 			stateSelfTestDir = value;
 			i++;
+			continue;
+		}
+
+		if(strcmp(arg, "--profile") == 0) {
+			BotProfile profile = options.profile;
+			if(!BotProfile::parse(value, profile)) {
+				fprintf(stderr, "pokerth_sim: unknown profile '%s'\n"
+						"  strength: %s\n  style:    %s\n",
+						value, BotProfile::strengthList(), BotProfile::archetypeList());
+				return 2;
+			}
+			options.profile = profile;
+			options.mixedProfiles = false;
+			i++;
+			continue;
+		}
+
+		if(strcmp(arg, "--strength") == 0) {
+			BotStrength strength;
+			if(!BotProfile::parseStrength(value, strength)) {
+				fprintf(stderr, "pokerth_sim: unknown strength '%s' (%s)\n",
+						value, BotProfile::strengthList());
+				return 2;
+			}
+			options.profile.strength = strength;
+			options.mixedProfiles = false;
+			i++;
+			continue;
+		}
+
+		if(strcmp(arg, "--archetype") == 0) {
+			BotArchetype archetype;
+			if(!BotProfile::parseArchetype(value, archetype)) {
+				fprintf(stderr, "pokerth_sim: unknown style '%s' (%s)\n",
+						value, BotProfile::archetypeList());
+				return 2;
+			}
+			options.profile.archetype = archetype;
+			options.mixedProfiles = false;
+			i++;
+			continue;
+		}
+
+		if(strcmp(arg, "--seat-profiles") == 0) {
+			if(!parseProfileList(value, options.seatProfiles)) {
+				fprintf(stderr, "pokerth_sim: cannot read the profile list '%s'\n"
+						"  strength: %s\n  style:    %s\n",
+						value, BotProfile::strengthList(), BotProfile::archetypeList());
+				return 2;
+			}
+			options.mixedProfiles = false;
+			i++;
+			continue;
+		}
+
+		if(strcmp(arg, "--scale-open") == 0 || strcmp(arg, "--scale-3bet") == 0
+				|| strcmp(arg, "--scale-call") == 0 || strcmp(arg, "--scale-raise") == 0
+				|| strcmp(arg, "--scale-cbet") == 0 || strcmp(arg, "--margin") == 0) {
+			double number = 0.0;
+			if(!parseDouble(value, number)) {
+				fprintf(stderr, "pokerth_sim: option '%s' expects a number, got '%s'\n", arg, value);
+				return 2;
+			}
+			i++;
+			if(strcmp(arg, "--scale-open") == 0) options.openScale = number;
+			else if(strcmp(arg, "--scale-3bet") == 0) options.threeBetScale = number;
+			else if(strcmp(arg, "--scale-call") == 0) options.callScale = number;
+			else if(strcmp(arg, "--scale-raise") == 0) options.raiseScale = number;
+			else if(strcmp(arg, "--scale-cbet") == 0) options.cbetScale = number;
+			else {
+				options.callMargin = number;
+				options.overrideCallMargin = true;
+			}
 			continue;
 		}
 
@@ -626,7 +786,7 @@ int main(int argc, char *argv[])
 
 	if(!quiet) {
 		if(options.runs == 1) {
-			printSingleRun(lastReport);
+			printSingleRun(lastReport, options.smallBlind);
 		} else {
 			printTotals(totals, options);
 		}

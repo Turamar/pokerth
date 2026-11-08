@@ -45,10 +45,14 @@ struct PlayerStatistics {
 	int hands;          // hands in which the player had a decision
 	int voluntary;      // of those with a voluntary bet before the flop (VPIP)
 	int preflopRaises;  // of those with a raise before the flop (PFR)
+	int threeBetOpportunities;  // of those where a raise was already in front (3B%)
+	int threeBets;              // of those where the player re-raised
 	int aggressive;     // bets and raises after the flop
 	int passive;        // calls after the flop
 
-	PlayerStatistics() : hands(0), voluntary(0), preflopRaises(0), aggressive(0), passive(0) {}
+	PlayerStatistics()
+		: hands(0), voluntary(0), preflopRaises(0), threeBetOpportunities(0), threeBets(0),
+		  aggressive(0), passive(0) {}
 };
 
 class PlayerInterface
@@ -134,7 +138,7 @@ public:
 	// opponent model of AI engine 4
 	virtual const PlayerStatistics& getMyStatistics() const =0;
 	virtual void beginStatisticsHand() =0;
-	virtual void recordStatisticsAction(int round, PlayerAction action) =0;
+	virtual void recordStatisticsAction(int round, PlayerAction action, bool facingRaise = false) =0;
 
 	virtual void setSBluff ( int theValue ) =0;
 	virtual int getSBluff() const =0;

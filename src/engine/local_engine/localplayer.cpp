@@ -31,6 +31,7 @@
 
 #include "localplayer.h"
 #include "aiengine4.h"
+#include "botprofile.h"
 #include "handinterface.h"
 #include "tools.h"
 #include "cardsvalue.h"
@@ -863,7 +864,9 @@ LocalPlayer::LocalPlayer(ConfigFile *c, int id, unsigned uniqueId, PlayerType ty
 	: PlayerInterface(), myConfig(c), currentHand(0), myID(id), myUniqueID(uniqueId), myType(type), myName(name), myAvatar(avatar),
 	  myDude(0), myDude4(0), myCardsValueInt(0), myOdds(-1.0), logHoleCardsDone(false), myCash(sC), mySet(0), myLastRelativeSet(0), myAction(PLAYER_ACTION_NONE),
 	  myButton(mB), myActiveStatus(aS), myStayOnTableStatus(sotS), myTurn(0), myCardsFlip(0), myRoundStartCash(0), lastMoneyWon(0),
-	  sBluff(0), sBluffStatus(false), myVoluntaryThisHand(false), myPreflopRaiseThisHand(false), m_actionTimeoutCounter(0), m_isSessionActive(false), m_isKicked(false), m_isMuted(false)
+	  sBluff(0), sBluffStatus(false), myVoluntaryThisHand(false), myPreflopRaiseThisHand(false),
+	  myFacedRaiseThisHand(false), myThreeBetThisHand(false),
+	  m_actionTimeoutCounter(0), m_isSessionActive(false), m_isKicked(false), m_isMuted(false)
 {
 
 	// !!!!!!!!!!!!!!!!!!!!!!!! testing !!!!!!!!!!!!!!!!!!!!!!!!
@@ -1004,11 +1007,23 @@ LocalPlayer::LocalPlayer(ConfigFile *c, int id, unsigned uniqueId, PlayerType ty
 	}
 	////////////////////////////
 
+	/* Every seat gets a strength level and a playing style. myDude and myDude4
+	 * stay what they were and keep driving the old engines; engine 4 works from
+	 * the profile of the seat instead. A caller of setBotProfile() (the
+	 * simulator, later the local game settings) replaces this default.
+	 */
+	myPersonality = BotProfile::randomForSeat().personality();
 }
 
 
 LocalPlayer::~LocalPlayer()
 {
+}
+
+
+void LocalPlayer::setBotProfile(const BotProfile &profile)
+{
+	myPersonality = profile.personality();
 }
 
 
@@ -1025,6 +1040,13 @@ void LocalPlayer::action()
 	// 	int oldHighestSet = currentHand->getCurrentBeRo()->getHighestSet();
 	// 	int oldMinimumRaise = currentHand->getCurrentBeRo()->getMinimumRaise();
 	// 	int myOldSet = mySet;
+
+	/* Was there a raise before our action? Only then is our own preflop raise a
+	 * three bet. It has to be taken before the engine runs: evaluation() books
+	 * our chips and changes the highest set of the round.
+	 */
+	const bool facingRaise = currentHand->getCurrentRound() == GAME_STATE_PREFLOP
+							 && currentHand->getCurrentBeRo()->getHighestSet() > 2 * currentHand->getSmallBlind();
 
 	// Engine 4 handles all betting rounds in one routine. The older
 	// engines stay reachable unchanged, so that the two can be
@@ -1054,7 +1076,7 @@ void LocalPlayer::action()
 	// Opponent model: here the action of the computer player is finally settled
 	// (evaluation() may still have turned a raise into an all-in).
 	if(myType == PLAYER_TYPE_COMPUTER) {
-		recordStatisticsAction(currentHand->getCurrentRound(), myAction);
+		recordStatisticsAction(currentHand->getCurrentRound(), myAction, facingRaise);
 	}
 
 	//set that i was the last active player. need this for unhighlighting groupbox
@@ -1220,16 +1242,10 @@ void LocalPlayer::engine4()
 	situation.opponentVpipPercent = vpipCounted ? static_cast<int>(vpipSum / vpipCounted) : -1;
 	situation.opponentAggressionPercent = aggressionCounted ? static_cast<int>(aggressionSum / aggressionCounted) : -1;
 
-	/* The existing random values myDude and myDude4 are kept as the player nature,
-	 * but now act as a moderate shift on an EV basis instead of as a surcharge
-	 * on a threshold.
+	/* Strength and style of the seat. The profile was resolved into these knobs
+	 * when it was set, so the engine only ever sees numbers.
 	 */
-	AiPersonality personality;
-	personality.looseness = 1.0 + myDude4 / 40.0;
-	personality.aggression = 1.0 + (myDude - 4) / 8.0;
-	personality.bluffRate = 1.0 + myDude4 / 30.0;
-
-	const AiDecision decision = AiEngine4::decide(situation, personality);
+	const AiDecision decision = AiEngine4::decide(situation, myPersonality);
 
 	myAction = decision.action;
 	evaluation(decision.bet, decision.raise);

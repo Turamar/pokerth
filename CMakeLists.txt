@@ -135,7 +135,9 @@ set(POKERTH_LIB_SRC
     src/engine/local_engine/handevaluator.cpp 
     src/engine/local_engine/holecardsrange.cpp 
     src/engine/local_engine/equitycalculator.cpp 
+    src/engine/local_engine/preflopstrength.cpp 
     src/engine/local_engine/aiengine4.cpp 
+    src/engine/local_engine/botprofile.cpp 
     src/engine/local_engine/localboard.cpp 
     src/engine/local_engine/localenginefactory.cpp 
     src/engine/local_engine/localhand.cpp 

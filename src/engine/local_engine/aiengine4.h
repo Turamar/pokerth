@@ -47,7 +47,9 @@
  *    a single random opponent.
  *  - It knows the pot and compares the chance with the pot odds instead of
  *    querying fixed thresholds.
- *  - It knows its position and plays by position charts before the flop.
+ *  - It knows its position and plays by position charts before the flop -- as a
+ *    percentage of the strongest starting hands, so that a style can express
+ *    any range from a nit to a maniac without a hand-written chart.
  *  - It bets in shares of the pot instead of in multiples of the small blind.
  *  - It knows push-or-fold with a short stack.
  */
@@ -84,16 +86,47 @@ struct AiSituation {
 	int opponentAggressionPercent;  // share of bets/raises among their actions after the flop
 };
 
-/* Player natures. All values are multipliers around 1.0; they
- * shift the behaviour without undermining the EV basis. That way the
- * bots stay distinguishable without falling back into random play.
+/* Player natures. The numbers come from a bot profile (botprofile.h) -- the
+ * engine itself knows neither names nor strength levels. All percentages are
+ * shares of the starting hands (see PreflopStrength), all multipliers are
+ * around 1.0 so that a style shifts the behaviour without undermining the EV
+ * basis.
  */
 struct AiPersonality {
-	double looseness;   // > 1 plays more hands
-	double aggression;  // > 1 bets and raises more often and bigger
-	double bluffRate;   // share of pure bluffs
+	// --- preflop ranges ---
+	double openPercent[4];       // per position: five or more behind, three or four, one or two, button
+	double openRaiseChance;      // share of the opens that raises, the rest limps
+	double threeBetPercent;      // value re-raises
+	double lightThreeBet;        // chance of a re-raise outside the value range
+	double callRaisePercent;     // cold call of a raise, in position
+	double callRaisePercentOop;  // cold call of a raise, out of position
+	double defendBigBlindPercent;
+	double pushPercent;          // short stack: push or fold
 
-	AiPersonality() : looseness(1.0), aggression(1.0), bluffRate(1.0) {}
+	// --- after the flop ---
+	double callMargin;           // added to the equity a call needs (> 0 folds more)
+	double cbetPercent;          // chance to bet a checked pot, by hand only in part
+	double raiseFrequency;       // how often a made hand raises instead of calling
+	double raiseBluffPercent;    // chance to raise a hand that would only be called
+	double aggression;           // > 1 bets and raises more often and bigger
+	double bluffRate;            // > 1 bluffs more often
+	double looseness;            // > 1 pays more, holds on longer
+
+	// --- judgement ---
+	double thresholdNoise;       // +/- percentage points the bot misjudges its hand by
+
+	AiPersonality()
+		: openRaiseChance(0.90), threeBetPercent(4.0), lightThreeBet(0.0),
+		  callRaisePercent(16.0), callRaisePercentOop(9.0), defendBigBlindPercent(30.0),
+		  pushPercent(18.0), callMargin(0.0), cbetPercent(55.0), raiseFrequency(1.0),
+		  raiseBluffPercent(5.0), aggression(1.0), bluffRate(1.0), looseness(1.0),
+		  thresholdNoise(0.0)
+	{
+		openPercent[0] = 12.0;
+		openPercent[1] = 18.0;
+		openPercent[2] = 28.0;
+		openPercent[3] = 45.0;
+	}
 };
 
 struct AiDecision {

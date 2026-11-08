@@ -34,8 +34,12 @@
 
 #include <playerinterface.h>
 
+#include "aiengine4.h"
+
 #include <boost/shared_ptr.hpp>
 #include <string>
+
+struct BotProfile;
 
 
 class ConfigFile;
@@ -94,6 +98,20 @@ public:
 	int getMyDude4() const
 	{
 		return myDude4;
+	}
+
+	/* Strength and playing style. The profile is translated into the knobs of
+	 * AI engine 4 once (see botprofile.h); the engine itself only ever sees
+	 * numbers. myDude/myDude4 keep driving the old engines unchanged.
+	 */
+	void setBotProfile(const BotProfile &profile);
+	void setBotPersonality(const AiPersonality &personality)
+	{
+		myPersonality = personality;
+	}
+	const AiPersonality &getBotPersonality() const
+	{
+		return myPersonality;
 	}
 
 	void setMyName(const std::string& theValue)
@@ -308,8 +326,13 @@ public:
 		if(myActiveStatus) ++myStatistics.hands;
 		myVoluntaryThisHand = false;
 		myPreflopRaiseThisHand = false;
+		myFacedRaiseThisHand = false;
+		myThreeBetThisHand = false;
 	}
-	void recordStatisticsAction(int round, PlayerAction action)
+	/* facingRaise: a raise was already in front of us in this betting round,
+	 * so our own raise is a re-raise. Only then is a preflop raise a three bet.
+	 */
+	void recordStatisticsAction(int round, PlayerAction action, bool facingRaise = false)
 	{
 		if(round == GAME_STATE_PREFLOP) {
 			// The blinds are forced and do not count as a voluntary bet.
@@ -320,8 +343,19 @@ public:
 					myVoluntaryThisHand = true;
 				}
 			}
-			if(action == PLAYER_ACTION_BET || action == PLAYER_ACTION_RAISE
-					|| action == PLAYER_ACTION_ALLIN) {
+			const bool raiseAction = (action == PLAYER_ACTION_BET || action == PLAYER_ACTION_RAISE
+									  || action == PLAYER_ACTION_ALLIN);
+			if(facingRaise) {
+				if(!myFacedRaiseThisHand) {
+					++myStatistics.threeBetOpportunities;
+					myFacedRaiseThisHand = true;
+				}
+				if(raiseAction && !myThreeBetThisHand) {
+					++myStatistics.threeBets;
+					myThreeBetThisHand = true;
+				}
+			}
+			if(raiseAction) {
 				if(!myPreflopRaiseThisHand) {
 					++myStatistics.preflopRaises;
 					myPreflopRaiseThisHand = true;
@@ -424,6 +458,8 @@ private:
 	std::string myAvatar;
 	int myDude;
 	int myDude4;
+	// Knobs of AI engine 4, resolved from the profile of the seat.
+	AiPersonality myPersonality;
 
 
 	// Laufvariablen
@@ -453,6 +489,8 @@ private:
 	PlayerStatistics myStatistics;
 	bool myVoluntaryThisHand;
 	bool myPreflopRaiseThisHand;
+	bool myFacedRaiseThisHand;
+	bool myThreeBetThisHand;
 
 	int sBluff;
 	bool sBluffStatus;

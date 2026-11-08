@@ -32,10 +32,12 @@
 #include "simdriver.h"
 #include "simguiinterface.h"
 
+#include <algorithm>
 #include <chrono>
 #include <exception>
 #include <sstream>
 
+#include <botprofile.h>
 #include <engine_defs.h>
 #include <enginefactory.h>
 #include <game.h>
@@ -43,6 +45,7 @@
 #include <gamedata.h>
 #include <handinterface.h>
 #include <localenginefactory.h>
+#include <localplayer.h>
 #include <playerdata.h>
 #include <playerinterface.h>
 #include <tools.h>
@@ -72,6 +75,19 @@ int playersWithCash(const boost::shared_ptr<Game> &game)
 		if((*it)->getMyCash() > 0) count++;
 	}
 	return count;
+}
+
+/* Which strength and style a seat plays. A list of profiles wins over the single
+ * profile; seats beyond the list repeat the last entry.
+ */
+BotProfile profileForSeat(const SimOptions &options, int seat)
+{
+	if(options.mixedProfiles) return BotProfile::randomForSeat();
+	if(!options.seatProfiles.empty()) {
+		const size_t index = std::min(static_cast<size_t>(seat), options.seatProfiles.size() - 1);
+		return options.seatProfiles[index];
+	}
+	return options.profile;
 }
 
 // Stack, wins and bust-out bookkeeping for one finished hand.
@@ -115,6 +131,8 @@ void collectStatistics(const boost::shared_ptr<Game> &game, SimReport &report)
 		stats.hands = statistics.hands;
 		stats.vpip = statistics.voluntary;
 		stats.pfr = statistics.preflopRaises;
+		stats.threeBets = statistics.threeBets;
+		stats.threeBetOpportunities = statistics.threeBetOpportunities;
 		stats.aggressive = statistics.aggressive;
 		stats.passive = statistics.passive;
 		stats.chips = (*it)->getMyCash();
@@ -202,6 +220,37 @@ bool runSimulation(ConfigFile *config, const SimOptions &options, SimReport &rep
 		report.seats[i].chips = options.startCash;
 	}
 
+	/* Hand out strength and style. The simulator can play one profile at every
+	 * seat -- that is how a corridor is measured -- or leave the choice to the
+	 * mixture the client uses.
+	 */
+	{
+		PlayerList seats = game->getSeatsList();
+		for(PlayerListConstIterator it = seats->begin(); it != seats->end(); ++it) {
+			const int seat = (*it)->getMyID();
+			if(seat < 0 || seat >= static_cast<int>(report.seats.size())) continue;
+
+			LocalPlayer *player = dynamic_cast<LocalPlayer*>((*it).get());
+			if(!player) continue;
+
+			const BotProfile profile = profileForSeat(options, seat);
+
+			AiPersonality knobs = profile.personality();
+			for(int i = 0; i < 4; ++i) knobs.openPercent[i] *= options.openScale;
+			knobs.threeBetPercent *= options.threeBetScale;
+			knobs.lightThreeBet *= options.threeBetScale;
+			knobs.callRaisePercent *= options.callScale;
+			knobs.callRaisePercentOop *= options.callScale;
+			knobs.defendBigBlindPercent *= options.callScale;
+			knobs.raiseFrequency *= options.raiseScale;
+			knobs.cbetPercent *= options.cbetScale;
+			if(options.overrideCallMargin) knobs.callMargin = options.callMargin;
+			player->setBotPersonality(knobs);
+
+			report.seats[seat].profile = profile.label();
+		}
+	}
+
 	bool handFinished = false;
 	gui.onHandFinished = [&handFinished]() {
 		handFinished = true;
@@ -259,6 +308,12 @@ bool runSimulation(ConfigFile *config, const SimOptions &options, SimReport &rep
 	report.elapsedMs = chrono::duration_cast<chrono::milliseconds>(finished - started).count();
 
 	collectStatistics(game, report);
+
+	// Net chips of the game: the stack at the end minus the buy-in. Summed over
+	// several games it is the number that says whether a style wins.
+	for(size_t i = 0; i < report.seats.size(); ++i) {
+		report.seats[i].netChips = report.seats[i].chips - options.startCash;
+	}
 
 	report.playersLeft = playersWithCash(game);
 	report.finished = report.playersLeft == 1;

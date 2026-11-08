@@ -35,6 +35,8 @@
 #include <string>
 #include <vector>
 
+#include "botprofile.h"
+
 class ConfigFile;
 
 /* Parameters of a headless run. The defaults describe a small tournament: six
@@ -43,7 +45,9 @@ struct SimOptions
 {
 	SimOptions()
 		: players(6), startCash(1000), smallBlind(10), raiseEveryHands(8), maxHands(200),
-		  seed(0), runs(1) {}
+		  seed(0), runs(1), mixedProfiles(true), openScale(1.0), threeBetScale(1.0),
+		  callScale(1.0), raiseScale(1.0), cbetScale(1.0), overrideCallMargin(false),
+		  callMargin(0.0) {}
 
 	int players;
 	int startCash;
@@ -59,6 +63,27 @@ struct SimOptions
 	// are aggregated into one report - a single game says very little about a
 	// bot, a few hundred say a lot.
 	int runs;
+
+	/* Strength and style. Mixed means the default mixture of the client: every
+	 * seat draws its own profile, as it happens in a local game. Otherwise all
+	 * seats play the profile given here -- unless seatProfiles names one profile
+	 * per seat, which is how strengths are measured against each other.
+	 */
+	bool mixedProfiles;
+	BotProfile profile;
+	std::vector<BotProfile> seatProfiles;
+
+	/* Calibration knobs: multipliers on the ranges of the profile. They exist so
+	 * that a corridor can be searched without a new build - the numbers are
+	 * measured, not guessed (see CHANGELOG.md).
+	 */
+	double openScale;
+	double threeBetScale;
+	double callScale;
+	double raiseScale;
+	double cbetScale;
+	bool overrideCallMargin;
+	double callMargin;
 };
 
 /* What one seat did over the run. The engine collects the opponent statistics
@@ -66,18 +91,23 @@ struct SimOptions
 struct SimSeatStats
 {
 	SimSeatStats()
-		: seat(0), hands(0), vpip(0), pfr(0), aggressive(0), passive(0), handsWon(0),
-		  chipsWon(0), chips(0), bustedAtHand(-1), busts(0) {}
+		: seat(0), hands(0), vpip(0), pfr(0), threeBets(0), threeBetOpportunities(0),
+		  aggressive(0), passive(0), handsWon(0), chipsWon(0), netChips(0), chips(0),
+		  bustedAtHand(-1), busts(0) {}
 
 	int seat;
 	std::string name;
+	std::string profile;  // strength/style of the seat, "mixed" in a mixed game
 	long long hands;      // hands in which this seat had a decision
 	long long vpip;       // of those: voluntarily put money in (preflop)
 	long long pfr;        // of those: raised preflop
+	long long threeBets;  // re-raised while a raise was already in front
+	long long threeBetOpportunities;  // how often a raise was in front
 	long long aggressive; // bets and raises after the flop
 	long long passive;    // calls after the flop
 	long long handsWon;
 	long long chipsWon;
+	long long netChips;   // chips at the end minus the starting stack, summed over runs
 	long long chips;      // stack at the end of the run
 	int bustedAtHand;     // hand in which the stack went to zero, -1 if never
 	int busts;            // how often the seat lost all chips (over several runs)
