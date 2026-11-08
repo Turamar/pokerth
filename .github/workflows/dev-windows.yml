@@ -20,6 +20,10 @@ name: Dev build (fast, no installer)
 # package=deploy    — всё дерево (exe + Qt + qml + plugins + data): можно
 #                     распаковать в любую папку и запускать без установки.
 #
+# В артефакт всегда попадает и pokerth_sim.exe — headless-симулятор партий
+# (калибровка ботов, проверка экономики). Запускать рядом с Qt-DLL, т.е. из
+# папки установленного PokerTH: pokerth_sim.exe --hands 500 --seed 42
+#
 # Время: тёплый кэш vcpkg + один клиент ≈ 10 минут (у релизной сборки ~31).
 # Если кэш vcpkg протух (7 дней без обращений) — плюс ~19 минут на порты.
 
@@ -200,10 +204,13 @@ jobs:
       - name: Build
         run: |
           set -euo pipefail
+          # pokerth_sim (headless simulator) comes along on every run: it is a
+          # few small files, and having it in the same artifact means a bot or
+          # economy change can be measured without a second build.
           if [ "${{ inputs.target }}" = "both" ]; then
-            export TARGET="pokerth_client pokerth_qml-client"
+            export TARGET="pokerth_client pokerth_qml-client pokerth_sim"
           else
-            export TARGET="pokerth_qml-client"
+            export TARGET="pokerth_qml-client pokerth_sim"
           fi
           echo "TARGET=$TARGET  SKIP_DEPLOY=$SKIP_DEPLOY  SKIP_NSIS=$SKIP_NSIS"
           START=$(date +%s)
@@ -215,6 +222,7 @@ jobs:
           set -euo pipefail
           ls -lh build/bin/*.exe
           test -f build/bin/pokerth_qml-client.exe
+          test -f build/bin/pokerth_sim.exe
           if [ "${{ inputs.target }}" = "both" ]; then
             test -f build/bin/pokerth_client.exe
           fi

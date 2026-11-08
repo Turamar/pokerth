@@ -58,10 +58,34 @@ namespace
 class RandomSource
 {
 public:
-	RandomSource() : m_pos(kWords) {}
+	RandomSource() : m_pos(kWords), m_deterministic(false) {}
+
+	// Deterministic mode for tests and the simulator: everything comes from a
+	// seeded PRNG, so a run can be repeated exactly. Never used by the clients -
+	// a seeded card deck would be predictable, which is why this is opt-in.
+	void Seed(uint64_t seed)
+	{
+		m_engine.seed(seed);
+		m_deterministic = true;
+	}
+
+	void Unseed()
+	{
+		m_deterministic = false;
+		// Drop the buffered DRBG values as well: after unseeding, randomness
+		// must come from the operating system again, not from leftovers of the
+		// seeded run.
+		m_pos = kWords;
+	}
+
+	bool Seeded() const
+	{
+		return m_deterministic;
+	}
 
 	uint32_t next32()
 	{
+		if(m_deterministic) return static_cast<uint32_t>(m_engine());
 		if(m_pos == kWords) Refill();
 		return m_words[m_pos++];
 	}
@@ -111,6 +135,10 @@ private:
 	static const unsigned kWords = 256; // 1 KiB, i.e. one DRBG call per 256 numbers
 	uint32_t m_words[kWords];
 	unsigned m_pos;
+	// Only used when seeded; mt19937_64 is fine here because a seeded run is
+	// not meant to be unpredictable.
+	std::mt19937_64 m_engine;
+	bool m_deterministic;
 };
 
 RandomSource &Source()
@@ -145,4 +173,19 @@ void Tools::GetRand(int minValue, int maxValue, unsigned count, int *out)
 		const uint64_t value = span > 0xFFFFFFFFull ? source.next32() : source.Below(static_cast<uint32_t>(span));
 		out[i] = static_cast<int>(static_cast<int64_t>(minValue) + static_cast<int64_t>(value));
 	}
+}
+
+void Tools::SetRandomSeed(uint64_t seed)
+{
+	Source().Seed(seed);
+}
+
+void Tools::ClearRandomSeed()
+{
+	Source().Unseed();
+}
+
+bool Tools::IsRandomSeeded()
+{
+	return Source().Seeded();
 }

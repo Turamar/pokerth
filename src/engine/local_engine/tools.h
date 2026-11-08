@@ -32,12 +32,22 @@
 #ifndef TOOLS_H
 #define TOOLS_H
 
+#include <cstdint>
+
 class Tools
 {
 public:
 
 	static void ShuffleArrayNonDeterministic(int *inout, unsigned count);
 	static void GetRand(int minValue, int maxValue, unsigned count, int *out);
+
+	// Deterministic mode, meant for tests and the headless simulator: with a
+	// seed set, cards and AI decisions are drawn from a seeded PRNG instead of
+	// the operating system's DRBG, so the same seed reproduces the same game.
+	// Applies to the calling thread only; the clients never set a seed.
+	static void SetRandomSeed(uint64_t seed);
+	static void ClearRandomSeed();
+	static bool IsRandomSeeded();
 
 };
 

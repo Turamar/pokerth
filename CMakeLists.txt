@@ -345,6 +345,9 @@ add_subdirectory(src/chatcleaner)
 add_subdirectory(src/dbofficial)
 add_subdirectory(src/gui/qt)
 add_subdirectory(src/gui/qt6-qml)
+# Headless simulator: console only and EXCLUDE_FROM_ALL, so it is never part of
+# a release build - `--target pokerth_sim` builds it explicitly.
+add_subdirectory(src/sim)
 
 # zlib_compress utility tool for compressing serverlist
 add_executable(zlib_compress src/zlib_compress.cpp)
