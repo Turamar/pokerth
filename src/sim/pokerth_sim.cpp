@@ -101,7 +101,7 @@ void printUsage()
 		"  --seat-profiles L one profile per seat, comma separated, e.g.\n"
 		"                    'novice/balanced,novice/tag,pro/tag,elite/tag';\n"
 		"                    the last entry repeats for the remaining seats\n"
-		"  --field F         a reference field: rookie (first tournament tier),\n"
+		"  --field F         a reference field: rookie (between micro and low),\n"
 		"                    micro, low or mid; the first seat then plays the\n"
 		"                    profile given above (the hero), the rest the field\n"
 		"  --mixed           every seat draws its own profile - the mixture the\n"
