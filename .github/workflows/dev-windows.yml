@@ -219,15 +219,20 @@ jobs:
           # with the very defect that broke the cash table page and insist that
           # it is reported.
           BAD="$ROOT/qmllint-selftest.qml"
+          BAD_LOG="$ROOT/qmllint-selftest.log"
           printf 'import QtQuick\n\nItem {\n    text: qsTr("first" "second")\n}\n' > "$BAD"
-          if "$LINT" -I "$QML_DIR" "$BAD" 2>&1 | grep -q '\[syntax\]'; then
+          # The linter exits non-zero on a broken file, and with pipefail that
+          # would fail the pipeline before grep ever sees the output - so the
+          # output is collected first.
+          "$LINT" -I "$QML_DIR" "$BAD" > "$BAD_LOG" 2>&1 || true
+          if grep -q '\[syntax\]' "$BAD_LOG"; then
             echo "selftest: a broken file is reported: ok"
           else
             echo "selftest: the linter missed a broken file - the gate is blind"
-            "$LINT" -I "$QML_DIR" "$BAD" || true
+            cat "$BAD_LOG"
             exit 1
           fi
-          rm -f "$BAD"
+          rm -f "$BAD" "$BAD_LOG"
 
           LOG="$ROOT/qmllint.log"
           : > "$LOG"
