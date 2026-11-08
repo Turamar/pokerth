@@ -157,12 +157,12 @@ struct PopulationNumbers {
 };
 
 const PopulationNumbers POPULATIONS[BOT_POPULATION_COUNT] = {
-	{ "micro", "NL2-NL5: recreational, loose and passive, two aggressors",
+	{ "micro", "NL2-NL5: a crowd of callers, one player who knows the chart",
 	  40.0, 10.0, 2.0, {
 		  { BOT_STRENGTH_NOVICE, BOT_ARCHETYPE_CALLER },
 		  { BOT_STRENGTH_NOVICE, BOT_ARCHETYPE_CALLER },
-		  { BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_MANIAC },
-		  { BOT_STRENGTH_NOVICE, BOT_ARCHETYPE_BALANCED },
+		  { BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_CALLER },
+		  { BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_CALLER },
 		  { BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_TAG } } },
 	{ "low", "NL10-NL25: some idea of position, still calls too much",
 	  29.0, 16.0, 4.0, {
@@ -174,10 +174,10 @@ const PopulationNumbers POPULATIONS[BOT_POPULATION_COUNT] = {
 	{ "mid", "NL50-NL100: regulars, no obvious leak",
 	  23.0, 19.0, 6.0, {
 		  { BOT_STRENGTH_PRO, BOT_ARCHETYPE_LAG },
+		  { BOT_STRENGTH_PRO, BOT_ARCHETYPE_LAG },
 		  { BOT_STRENGTH_PRO, BOT_ARCHETYPE_TAG },
 		  { BOT_STRENGTH_PRO, BOT_ARCHETYPE_BALANCED },
-		  { BOT_STRENGTH_ELITE, BOT_ARCHETYPE_TAG },
-		  { BOT_STRENGTH_PRO, BOT_ARCHETYPE_NIT } } }
+		  { BOT_STRENGTH_ELITE, BOT_ARCHETYPE_TAG } } }
 };
 
 string lower(const string &text)
