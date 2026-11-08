@@ -71,6 +71,17 @@ Rectangle {
         return best
     }
 
+    // Selecting a step: the property plus the radio buttons of the list. The
+    // buttons are set by hand because a clicked button writes "checked" itself,
+    // and a binding on it would be broken from then on.
+    function selectLimit(index) {
+        localGamePagePage.selectedLimit = index
+        for (var i = 0; i < limitGroup.buttons.length; ++i) {
+            var button = limitGroup.buttons[i]
+            button.checked = (button.limitIndex === index)
+        }
+    }
+
     // Default button of the page: Enter sits down, no matter which field
     // has the focus. A focused button consumes Return itself and keeps
     // precedence (Enter on "cancel" therefore cancels).
@@ -81,7 +92,7 @@ Rectangle {
     // because the focus would otherwise fizzle out during the stack animation.
     StackView.onActivated: {
         cashBalance = Wallet ? Wallet.balance : 0
-        selectedLimit = bestLimit()
+        selectLimit(bestLimit())
         buyIn.value = defaultBuyInBB()
         errorText = ""
         Qt.callLater(startGameButton.forceActiveFocus)
@@ -207,17 +218,12 @@ Rectangle {
                                 Layout.columnSpan: 2
                                 Layout.fillWidth: true
                                 enabled: modelData.unlocked
+                                // The index of the limit this button stands for.
+                                property int limitIndex: index
                                 ButtonGroup.group: limitGroup
-                                onClicked: localGamePagePage.selectedLimit = index
-                                // A Binding, not a plain expression: clicking a
-                                // button writes "checked" itself, and that would
-                                // break the expression for the rest of the page.
-                                Binding {
-                                    target: limitOption
-                                    property: "checked"
-                                    value: localGamePagePage.selectedLimit === index
-                                    restoreMode: Binding.RestoreNone
-                                }
+                                onClicked: localGamePagePage.selectLimit(limitIndex)
+                                Component.onCompleted: checked =
+                                        (localGamePagePage.selectedLimit === limitIndex)
                                 text: modelData.label
                                       + "  ·  " + qsTr("Buy-in %1–%2")
                                         .arg(Wallet.money(modelData.minBuyIn))
@@ -303,9 +309,7 @@ Rectangle {
                 AppLabel {
                     Layout.fillWidth: true
                     visible: !localGamePagePage.canSit
-                    text: qsTr("Kein offenes Limit: für die unterste Stufe sind %1 nötig "
-                               "(Guthaben jetzt %2). Ein Rebuy auf der Guthaben-Seite füllt "
-                               "bis dahin auf.")
+                    text: qsTr("Kein offenes Limit: für die unterste Stufe sind %1 nötig, dein Guthaben ist %2. Der Rebuy auf der Guthaben-Seite füllt bis dahin auf.")
                           .arg(Wallet ? Wallet.money(localGamePagePage.bottomGate) : "–")
                           .arg(Wallet ? Wallet.money(localGamePagePage.cashBalance) : "–")
                     color: Config.Theme.colorDanger
@@ -355,7 +359,7 @@ Rectangle {
                                         qsTr("Der Platz konnte nicht gekauft werden: %1")
                                         .arg(Wallet.lastError)
                                 localGamePagePage.cashBalance = Wallet.balance
-                                localGamePagePage.selectedLimit = localGamePagePage.bestLimit()
+                                localGamePagePage.selectLimit(localGamePagePage.bestLimit())
                                 buyIn.value = localGamePagePage.defaultBuyInBB()
                                 return
                             }

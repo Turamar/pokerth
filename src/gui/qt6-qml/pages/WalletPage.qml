@@ -138,8 +138,7 @@ Rectangle {
                                 if (!Wallet)
                                     return ""
                                 if (Wallet.canRebuy)
-                                    return qsTr("Das Guthaben liegt unter %1 – der Rebuy füllt es "
-                                                "bis %1 wieder auf.")
+                                    return qsTr("Das Guthaben liegt unter %1 – der Rebuy füllt es wieder auf.")
                                            .arg(Wallet.money(Wallet.rebuyTarget))
                                 if (Wallet.atTable)
                                     return qsTr("Nicht am Tisch möglich – verlasse zuerst das Spiel.")
