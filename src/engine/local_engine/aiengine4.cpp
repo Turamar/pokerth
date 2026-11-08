@@ -375,11 +375,14 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 
 	if(m.canCheck) {
 		/* How readily we bet into a checked pot is a matter of aggression, not
-		 * of looseness: a caller with a decent hand still just checks. A table
-		 * that calls everything gets thinner value bets, a table that folds
-		 * gets none.
+		 * of looseness: a caller with a decent hand still just checks. Against
+		 * a table that calls everything the value bets go thinner and the
+		 * bluffs stop; against a table that gives up the pressure goes up while
+		 * the value threshold barely moves -- they do not pay off thin value,
+		 * but there is no reason to stop betting for it either.
 		 */
-		if(equity > fairShare * (1.5 + 0.30 * pressure) / p.aggression) {
+		const double valueShift = (pressure < 0.0) ? 0.30 * pressure : 0.10 * pressure;
+		if(equity > fairShare * (1.5 + valueShift) / p.aggression) {
 			// The clearer the lead, the larger the bet.
 			double fraction = (equity > fairShare * 2.2) ? 0.75 : 0.55;
 			fraction *= p.aggression;
@@ -392,7 +395,7 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 		 * fires at nearly every checked pot, a caller almost never. Turn and
 		 * river are fired at less often than the flop.
 		 */
-		double stab = p.cbetPercent * p.raiseFrequency * (1.0 + 0.5 * pressure);
+		double stab = p.cbetPercent * p.raiseFrequency * (1.0 + 0.8 * pressure);
 		if(s.round == GAME_STATE_TURN) stab *= 0.7;
 		else if(s.round == GAME_STATE_RIVER) stab *= 0.5;
 		if(randomPercent() <= static_cast<int>(stab)) {
@@ -402,7 +405,7 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 
 		// Bluff only against few opponents and preferably as the last one --
 		// and not at all against opponents who call everything.
-		const double bluffChance = 18.0 * p.bluffRate * (1.0 + 0.8 * pressure);
+		const double bluffChance = 18.0 * p.bluffRate * (1.0 + 1.0 * pressure);
 		if(bluffChance > 0.0 && s.opponents <= 2 && inPosition(s)
 				&& randomPercent() <= static_cast<int>(bluffChance)) {
 			const int amount = std::max(m.bigBlind, static_cast<int>(m.pot * 0.5));
