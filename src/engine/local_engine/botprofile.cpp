@@ -124,13 +124,18 @@ struct StrengthNumbers {
 	double callMarginShift;
 	double noise;
 	double cbetScale;
+	/* How much of the observed opponents the level actually uses. A novice
+	 * plays his own two cards, an elite reads the table -- that is the part of
+	 * the level that has nothing to do with hand judgement.
+	 */
+	double adaptation;
 };
 
 const StrengthNumbers STRENGTHS[BOT_STRENGTH_COUNT] = {
-	{ "novice",  1.15, 0.40, 1.55, 0.75, 1.40, 1.10, -0.080, 18.0, 0.75 },
-	{ "amateur", 1.05, 0.70, 1.25, 0.90, 1.15, 1.05, -0.040, 9.0, 0.88 },
-	{ "pro",     1.00, 1.00, 1.00, 1.00, 1.00, 1.00, -0.010, 3.0, 1.00 },
-	{ "elite",   0.95, 1.20, 0.90, 1.10, 0.90, 0.97, 0.010, 0.0, 1.05 }
+	{ "novice",  1.15, 0.40, 1.55, 0.75, 1.40, 1.10, -0.080, 18.0, 0.75, 0.25 },
+	{ "amateur", 1.05, 0.70, 1.25, 0.90, 1.15, 1.05, -0.040, 9.0, 0.88, 0.60 },
+	{ "pro",     1.00, 1.00, 1.00, 1.00, 1.00, 1.00, -0.010, 3.0, 1.00, 1.00 },
+	{ "elite",   0.95, 1.20, 0.90, 1.10, 0.90, 0.97, 0.010, 0.0, 1.05, 1.20 }
 };
 
 const int STRENGTH_WEIGHTS[BOT_STRENGTH_COUNT] = { 30, 35, 23, 12 };
@@ -228,6 +233,7 @@ AiPersonality BotProfile::personality() const
 	p.bluffRate = style.bluffRate * level.bluffScale;
 	p.looseness = style.looseness * level.loosenessScale;
 	p.thresholdNoise = level.noise;
+	p.adaptation = level.adaptation;
 	return p;
 }
 

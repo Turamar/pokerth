@@ -142,6 +142,8 @@ void collectStatistics(const boost::shared_ptr<Game> &game, SimReport &report)
 		stats.threeBetOpportunities = statistics.threeBetOpportunities;
 		stats.aggressive = statistics.aggressive;
 		stats.passive = statistics.passive;
+		stats.facedBets = statistics.facedBets;
+		stats.foldedToBets = statistics.foldedToBets;
 		stats.chips = (*it)->getMyCash();
 	}
 }
@@ -251,6 +253,7 @@ bool runSimulation(ConfigFile *config, const SimOptions &options, SimReport &rep
 			knobs.defendBigBlindPercent *= options.callScale;
 			knobs.raiseFrequency *= options.raiseScale;
 			knobs.cbetPercent *= options.cbetScale;
+			knobs.adaptation *= options.adaptScale;
 			if(options.overrideCallMargin) knobs.callMargin = options.callMargin;
 			player->setBotPersonality(knobs);
 

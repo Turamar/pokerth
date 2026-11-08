@@ -46,7 +46,8 @@
  *                    [--profile P | --strength S | --archetype A | --mixed]
  *                    [--seat-profiles L] [--field F]
  *                    [--scale-open F] [--scale-3bet F] [--scale-call F]
- *                    [--scale-raise F] [--scale-cbet F] [--margin F] [--quiet]
+ *                    [--scale-raise F] [--scale-cbet F] [--scale-adapt F]
+ *                    [--margin F] [--quiet]
  *        pokerth_sim --state-selftest DIR
  */
 
@@ -110,6 +111,8 @@ void printUsage()
 		"  --scale-call F    multiply the calling ranges by F (calibration)\n"
 		"  --scale-raise F   multiply how often a made hand raises instead of calling\n"
 		"  --scale-cbet F    multiply how often a checked pot is bet at\n"
+		"  --scale-adapt F   multiply how much the bot acts on the opponents'\n"
+		"                    tendencies (0 = blind, 1 = normal)\n"
 		"  --margin F        postflop calling margin in equity points, e.g. -0.05\n"
 		"                    (calibration; overrides the value of the profile)\n"
 		"  --quiet           only the summary line, no table\n"
@@ -209,6 +212,8 @@ void accumulate(SimTotals &totals, const SimReport &report)
 		target.threeBetOpportunities += source.threeBetOpportunities;
 		target.aggressive += source.aggressive;
 		target.passive += source.passive;
+		target.facedBets += source.facedBets;
+		target.foldedToBets += source.foldedToBets;
 		target.handsWon += source.handsWon;
 		target.chipsWon += source.chipsWon;
 		target.netChips += source.netChips;
@@ -241,6 +246,16 @@ void formatThreeBet(const SimSeatStats &seat, char *buffer, size_t size)
 	}
 }
 
+// Share of the times the seat gave up when a bet was in front of it after the flop.
+void formatFoldToBet(const SimSeatStats &seat, char *buffer, size_t size)
+{
+	if(seat.facedBets > 0) {
+		snprintf(buffer, size, "%.1f", percentage(seat.foldedToBets, seat.facedBets));
+	} else {
+		snprintf(buffer, size, "-");
+	}
+}
+
 /* Net chips per 100 hands, measured in big blinds so that runs with different
  * stakes can be compared. This is the number that decides whether a style wins.
  */
@@ -268,8 +283,8 @@ void printFieldHeader(const SimOptions &options)
 
 void printSeatTable(const vector<SimSeatStats> &seats, bool detailed, int smallBlind)
 {
-	printf("\n%-6s %-14s %8s %7s %7s %6s %6s %8s %6s %7s\n",
-		   "seat", "profile", "hands", "VPIP%", "PFR%", "3B%", "AF",
+	printf("\n%-6s %-14s %8s %7s %7s %6s %6s %6s %8s %6s %7s\n",
+		   "seat", "profile", "hands", "VPIP%", "PFR%", "3B%", "F2B%", "AF",
 		   detailed ? "net" : "bb/100", "won", detailed ? "busted" : "busts");
 
 	for(size_t i = 0; i < seats.size(); i++) {
@@ -278,6 +293,8 @@ void printSeatTable(const vector<SimSeatStats> &seats, bool detailed, int smallB
 		formatAggression(seat, aggression, sizeof(aggression));
 		char threeBet[8];
 		formatThreeBet(seat, threeBet, sizeof(threeBet));
+		char foldToBet[8];
+		formatFoldToBet(seat, foldToBet, sizeof(foldToBet));
 
 		char net[16];
 		if(detailed) {
@@ -294,11 +311,11 @@ void printSeatTable(const vector<SimSeatStats> &seats, bool detailed, int smallB
 			snprintf(busted, sizeof(busted), "%d", seat.busts);
 		}
 
-		printf("%-6s %-14s %8lld %7.1f %7.1f %6s %6s %8s %6lld %7s\n",
+		printf("%-6s %-14s %8lld %7.1f %7.1f %6s %6s %6s %8s %6lld %7s\n",
 			   seat.name.c_str(), seat.profile.c_str(), seat.hands,
 			   percentage(seat.vpip, seat.hands),
 			   percentage(seat.pfr, seat.hands),
-			   threeBet, aggression, net, seat.handsWon, busted);
+			   threeBet, foldToBet, aggression, net, seat.handsWon, busted);
 	}
 }
 
@@ -365,6 +382,9 @@ bool writeJson(const string &fileName, const SimTotals &totals, const SimOptions
 		entry[QStringLiteral("bigBlindsPer100")] = bigBlindsPer100(seat, options.smallBlind);
 		entry[QStringLiteral("aggressive")] = static_cast<qint64>(seat.aggressive);
 		entry[QStringLiteral("passive")] = static_cast<qint64>(seat.passive);
+		entry[QStringLiteral("facedBets")] = static_cast<qint64>(seat.facedBets);
+		entry[QStringLiteral("foldedToBets")] = static_cast<qint64>(seat.foldedToBets);
+		entry[QStringLiteral("foldToBetPercent")] = percentage(seat.foldedToBets, seat.facedBets);
 		entry[QStringLiteral("handsWon")] = static_cast<qint64>(seat.handsWon);
 		entry[QStringLiteral("chipsWon")] = static_cast<qint64>(seat.chipsWon);
 		entry[QStringLiteral("busts")] = seat.busts;
@@ -728,7 +748,8 @@ int main(int argc, char *argv[])
 
 		if(strcmp(arg, "--scale-open") == 0 || strcmp(arg, "--scale-3bet") == 0
 				|| strcmp(arg, "--scale-call") == 0 || strcmp(arg, "--scale-raise") == 0
-				|| strcmp(arg, "--scale-cbet") == 0 || strcmp(arg, "--margin") == 0) {
+				|| strcmp(arg, "--scale-cbet") == 0 || strcmp(arg, "--scale-adapt") == 0
+				|| strcmp(arg, "--margin") == 0) {
 			double number = 0.0;
 			if(!parseDouble(value, number)) {
 				fprintf(stderr, "pokerth_sim: option '%s' expects a number, got '%s'\n", arg, value);
@@ -740,6 +761,7 @@ int main(int argc, char *argv[])
 			else if(strcmp(arg, "--scale-call") == 0) options.callScale = number;
 			else if(strcmp(arg, "--scale-raise") == 0) options.raiseScale = number;
 			else if(strcmp(arg, "--scale-cbet") == 0) options.cbetScale = number;
+			else if(strcmp(arg, "--scale-adapt") == 0) options.adaptScale = number;
 			else {
 				options.callMargin = number;
 				options.overrideCallMargin = true;

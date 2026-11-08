@@ -49,10 +49,16 @@ struct PlayerStatistics {
 	int threeBets;              // of those where the player re-raised
 	int aggressive;     // bets and raises after the flop
 	int passive;        // calls after the flop
+	/* After the flop: how often the player was facing a bet at all, and how
+	 * often he gave up. This is the one number that says whether a bet has a
+	 * chance to win the pot without a showdown (PLAN.md, "fold equity step").
+	 */
+	int facedBets;
+	int foldedToBets;
 
 	PlayerStatistics()
 		: hands(0), voluntary(0), preflopRaises(0), threeBetOpportunities(0), threeBets(0),
-		  aggressive(0), passive(0) {}
+		  aggressive(0), passive(0), facedBets(0), foldedToBets(0) {}
 };
 
 class PlayerInterface
@@ -138,7 +144,10 @@ public:
 	// opponent model of AI engine 4
 	virtual const PlayerStatistics& getMyStatistics() const =0;
 	virtual void beginStatisticsHand() =0;
-	virtual void recordStatisticsAction(int round, PlayerAction action, bool facingRaise = false) =0;
+	// facingRaise: a raise was in front of us preflop; facingBet: a bet was in
+	// front of us after the flop (both have to be taken before evaluation()).
+	virtual void recordStatisticsAction(int round, PlayerAction action,
+										bool facingRaise = false, bool facingBet = false) =0;
 
 	virtual void setSBluff ( int theValue ) =0;
 	virtual int getSBluff() const =0;

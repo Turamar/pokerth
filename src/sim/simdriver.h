@@ -46,8 +46,8 @@ struct SimOptions
 	SimOptions()
 		: players(6), startCash(1000), smallBlind(10), raiseEveryHands(8), maxHands(200),
 		  seed(0), runs(1), mixedProfiles(true), openScale(1.0), threeBetScale(1.0),
-		  callScale(1.0), raiseScale(1.0), cbetScale(1.0), overrideCallMargin(false),
-		  callMargin(0.0) {}
+		  callScale(1.0), raiseScale(1.0), cbetScale(1.0), adaptScale(1.0),
+		  overrideCallMargin(false), callMargin(0.0) {}
 
 	int players;
 	int startCash;
@@ -90,6 +90,7 @@ struct SimOptions
 	double callScale;
 	double raiseScale;
 	double cbetScale;
+	double adaptScale;
 	bool overrideCallMargin;
 	double callMargin;
 };
@@ -100,8 +101,8 @@ struct SimSeatStats
 {
 	SimSeatStats()
 		: seat(0), hands(0), vpip(0), pfr(0), threeBets(0), threeBetOpportunities(0),
-		  aggressive(0), passive(0), handsWon(0), chipsWon(0), netChips(0), chips(0),
-		  bustedAtHand(-1), busts(0) {}
+		  aggressive(0), passive(0), facedBets(0), foldedToBets(0), handsWon(0),
+		  chipsWon(0), netChips(0), chips(0), bustedAtHand(-1), busts(0) {}
 
 	int seat;
 	std::string name;
@@ -113,6 +114,8 @@ struct SimSeatStats
 	long long threeBetOpportunities;  // how often a raise was in front
 	long long aggressive; // bets and raises after the flop
 	long long passive;    // calls after the flop
+	long long facedBets;  // faced a bet after the flop: a chance to give up
+	long long foldedToBets;  // of those: folded
 	long long handsWon;
 	long long chipsWon;
 	long long netChips;   // chips at the end minus the starting stack, summed over runs

@@ -124,7 +124,8 @@ public:
 	 */
 	const PlayerStatistics& getMyStatistics() const;
 	void beginStatisticsHand();
-	void recordStatisticsAction(int round, PlayerAction action, bool facingRaise = false);
+	void recordStatisticsAction(int round, PlayerAction action, bool facingRaise = false,
+								bool facingBet = false);
 
 	void setSBluff (int theValue);
 	int getSBluff() const;

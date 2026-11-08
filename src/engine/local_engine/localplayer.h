@@ -331,8 +331,11 @@ public:
 	}
 	/* facingRaise: a raise was already in front of us in this betting round,
 	 * so our own raise is a re-raise. Only then is a preflop raise a three bet.
+	 * facingBet: after the flop a bet was in front of us, so this was a chance
+	 * to fold -- the basis of the fold equity of the opponent model.
 	 */
-	void recordStatisticsAction(int round, PlayerAction action, bool facingRaise = false)
+	void recordStatisticsAction(int round, PlayerAction action, bool facingRaise = false,
+								bool facingBet = false)
 	{
 		if(round == GAME_STATE_PREFLOP) {
 			// The blinds are forced and do not count as a voluntary bet.
@@ -365,6 +368,15 @@ public:
 			if(action == PLAYER_ACTION_BET || action == PLAYER_ACTION_RAISE
 					|| action == PLAYER_ACTION_ALLIN) ++myStatistics.aggressive;
 			else if(action == PLAYER_ACTION_CALL) ++myStatistics.passive;
+
+			/* A bet in front of us is a chance to give up. How often a player
+			 * takes it is what the opponent model reads as "this one folds too
+			 * much" -- the input of the fold-equity step.
+			 */
+			if(facingBet) {
+				++myStatistics.facedBets;
+				if(action == PLAYER_ACTION_FOLD) ++myStatistics.foldedToBets;
+			}
 		}
 	}
 

@@ -359,11 +359,26 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 	 */
 	const double fairShare = 1.0 / (s.opponents + 1);
 
+	/* How likely a bet wins the pot without a showdown. There is no EV of a bet
+	 * in this engine and no model of a bet size, but the opponents' fold rate
+	 * says which way to lean: against opponents who give up, pressure pays;
+	 * against opponents who call, bluffs burn money and value bets can be
+	 * thinner. The shift stays small on purpose -- it is a bias on top of the
+	 * equity basis, nothing more (see PLAN.md, the fold step).
+	 */
+	double pressure = 0.0;
+	if(s.opponentFoldToBetPercent >= 0) {
+		pressure = (s.opponentFoldToBetPercent - 50) / 50.0;
+		pressure = std::max(-0.8, std::min(0.8, pressure * p.adaptation));
+	}
+
 	if(m.canCheck) {
 		/* How readily we bet into a checked pot is a matter of aggression, not
-		 * of looseness: a caller with a decent hand still just checks.
+		 * of looseness: a caller with a decent hand still just checks. A table
+		 * that calls everything gets thinner value bets, a table that folds
+		 * gets none.
 		 */
-		if(equity > fairShare * 1.5 / p.aggression) {
+		if(equity > fairShare * (1.5 + 0.30 * pressure) / p.aggression) {
 			// The clearer the lead, the larger the bet.
 			double fraction = (equity > fairShare * 2.2) ? 0.75 : 0.55;
 			fraction *= p.aggression;
@@ -376,7 +391,7 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 		 * fires at nearly every checked pot, a caller almost never. Turn and
 		 * river are fired at less often than the flop.
 		 */
-		double stab = p.cbetPercent * p.raiseFrequency;
+		double stab = p.cbetPercent * p.raiseFrequency * (1.0 + 0.5 * pressure);
 		if(s.round == GAME_STATE_TURN) stab *= 0.7;
 		else if(s.round == GAME_STATE_RIVER) stab *= 0.5;
 		if(randomPercent() <= static_cast<int>(stab)) {
@@ -384,8 +399,11 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 			return raiseTo(s, m, s.mySet + amount);
 		}
 
-		// Bluff only against few opponents and preferably as the last one.
-		if(s.opponents <= 2 && inPosition(s) && randomPercent() <= static_cast<int>(18 * p.bluffRate)) {
+		// Bluff only against few opponents and preferably as the last one --
+		// and not at all against opponents who call everything.
+		const double bluffChance = 18.0 * p.bluffRate * (1.0 + 0.8 * pressure);
+		if(bluffChance > 0.0 && s.opponents <= 2 && inPosition(s)
+				&& randomPercent() <= static_cast<int>(bluffChance)) {
 			const int amount = std::max(m.bigBlind, static_cast<int>(m.pot * 0.5));
 			return raiseTo(s, m, s.mySet + amount);
 		}

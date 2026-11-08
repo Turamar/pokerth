@@ -84,6 +84,11 @@ struct AiSituation {
 	 */
 	int opponentVpipPercent;        // how often they enter voluntarily before the flop
 	int opponentAggressionPercent;  // share of bets/raises among their actions after the flop
+	/* How often they give up when facing a bet after the flop. A bet has two
+	 * ways to win the pot -- the opponent folds or we show the better hand --
+	 * and this is the only number that says anything about the first one.
+	 */
+	int opponentFoldToBetPercent;
 };
 
 /* Player natures. The numbers come from a bot profile (botprofile.h) -- the
@@ -114,13 +119,19 @@ struct AiPersonality {
 
 	// --- judgement ---
 	double thresholdNoise;       // +/- percentage points the bot misjudges its hand by
+	/* How much the bot acts on what it observes about its opponents: 0 is "I
+	 * play my cards", 1 is "I read the table". The weak levels are given less
+	 * of it, so that the difference between the levels stays a difference of
+	 * judgement, not of knowledge.
+	 */
+	double adaptation;
 
 	AiPersonality()
 		: openRaiseChance(0.90), threeBetPercent(4.0), lightThreeBet(0.0),
 		  callRaisePercent(16.0), callRaisePercentOop(9.0), defendBigBlindPercent(30.0),
 		  pushPercent(18.0), callMargin(0.0), cbetPercent(55.0), raiseFrequency(1.0),
 		  raiseBluffPercent(5.0), aggression(1.0), bluffRate(1.0), looseness(1.0),
-		  thresholdNoise(0.0)
+		  thresholdNoise(0.0), adaptation(1.0)
 	{
 		openPercent[0] = 12.0;
 		openPercent[1] = 18.0;

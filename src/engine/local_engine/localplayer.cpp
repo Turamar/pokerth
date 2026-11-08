@@ -1043,10 +1043,15 @@ void LocalPlayer::action()
 
 	/* Was there a raise before our action? Only then is our own preflop raise a
 	 * three bet. It has to be taken before the engine runs: evaluation() books
-	 * our chips and changes the highest set of the round.
+	 * our chips and changes the highest set of the round. The same moment tells
+	 * us whether a bet is in front of us after the flop -- the chance to fold
+	 * that the opponent model counts.
 	 */
-	const bool facingRaise = currentHand->getCurrentRound() == GAME_STATE_PREFLOP
+	const GameState actingRound = currentHand->getCurrentRound();
+	const bool facingRaise = actingRound == GAME_STATE_PREFLOP
 							 && currentHand->getCurrentBeRo()->getHighestSet() > 2 * currentHand->getSmallBlind();
+	const bool facingBet = actingRound != GAME_STATE_PREFLOP
+						   && currentHand->getCurrentBeRo()->getHighestSet() > mySet;
 
 	// Engine 4 handles all betting rounds in one routine. The older
 	// engines stay reachable unchanged, so that the two can be
@@ -1076,7 +1081,7 @@ void LocalPlayer::action()
 	// Opponent model: here the action of the computer player is finally settled
 	// (evaluation() may still have turned a raise into an all-in).
 	if(myType == PLAYER_TYPE_COMPUTER) {
-		recordStatisticsAction(currentHand->getCurrentRound(), myAction, facingRaise);
+		recordStatisticsAction(currentHand->getCurrentRound(), myAction, facingRaise, facingBet);
 	}
 
 	//set that i was the last active player. need this for unhighlighting groupbox
@@ -1224,6 +1229,8 @@ void LocalPlayer::engine4()
 	double vpipSum = 0.0;
 	int aggressionCounted = 0;
 	double aggressionSum = 0.0;
+	int foldCounted = 0;
+	double foldSum = 0.0;
 	for(it_c = currentHand->getActivePlayerList()->begin(); it_c != currentHand->getActivePlayerList()->end(); ++it_c) {
 		if((*it_c)->getMyUniqueID() == myUniqueID) continue;
 		if((*it_c)->getMyAction() == PLAYER_ACTION_FOLD) continue;
@@ -1238,9 +1245,18 @@ void LocalPlayer::engine4()
 			aggressionSum += (100.0 * stats.aggressive) / postflopActions;
 			++aggressionCounted;
 		}
+		/* Fewer samples are enough here: every hand offers one or two chances
+		 * to fold, and the question "does he give up" is about a frequency,
+		 * not about a fine difference.
+		 */
+		if(stats.facedBets >= 8) {
+			foldSum += (100.0 * stats.foldedToBets) / stats.facedBets;
+			++foldCounted;
+		}
 	}
 	situation.opponentVpipPercent = vpipCounted ? static_cast<int>(vpipSum / vpipCounted) : -1;
 	situation.opponentAggressionPercent = aggressionCounted ? static_cast<int>(aggressionSum / aggressionCounted) : -1;
+	situation.opponentFoldToBetPercent = foldCounted ? static_cast<int>(foldSum / foldCounted) : -1;
 
 	/* Strength and style of the seat. The profile was resolved into these knobs
 	 * when it was set, so the engine only ever sees numbers.

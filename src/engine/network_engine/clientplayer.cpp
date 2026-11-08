@@ -614,6 +614,7 @@ ClientPlayer::beginStatisticsHand()
 }
 
 void
-ClientPlayer::recordStatisticsAction(int /*round*/, PlayerAction /*action*/, bool /*facingRaise*/)
+ClientPlayer::recordStatisticsAction(int /*round*/, PlayerAction /*action*/,
+									 bool /*facingRaise*/, bool /*facingBet*/)
 {
 }
