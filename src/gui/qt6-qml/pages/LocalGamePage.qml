@@ -6,6 +6,12 @@ import QtQuick.Layouts
 import "../config" as Config
 import "../components"
 
+// Sitting down at a cash table (PLAN.md section 2).
+//
+// Money and chips are 1:1, so the table is paid for with the balance: the
+// buy-in leaves the wallet when the table starts and comes back - as the stack
+// that is left - when it is left. The blinds are fixed and never raised, which
+// is what makes it a cash table and not a tournament.
 Rectangle {
     id: localGamePagePage
     objectName: "localGamePage"
@@ -13,7 +19,35 @@ Rectangle {
     Layout.fillHeight: true
     color: Config.StaticData.palette.secondary.col700
 
-    // Default button of the page: Enter starts the game, no matter which field
+    // The balance as it was when the page was opened: while the table is
+    // running the buy-in is already gone from the wallet, and the fields must
+    // not follow that.
+    property int cashBalance: Wallet ? Wallet.balance : 0
+    property string errorText: ""
+
+    readonly property int bigBlind: Wallet ? Wallet.bigBlind : 2
+    readonly property int bbMin: Wallet ? Wallet.minBuyIn : 40
+    readonly property int bbMax: Wallet ? Wallet.maxBuyIn : 200
+    readonly property int bbShort: Wallet ? Wallet.shortBuyIn : 10
+    // Below the regular minimum the rest of the balance is a legal (short) buy-in.
+    readonly property int buyInMin: cashBalance >= bbMin ? bbMin : bbShort
+    readonly property int buyInMax: Math.max(buyInMin, Math.min(bbMax, cashBalance))
+    readonly property bool canSit: cashBalance >= buyInMin
+
+    function defaultBuyIn() {
+        if (cashBalance <= 0)
+            return buyInMin
+        var wanted = Math.min(bbMax, cashBalance)
+        // Whole big blinds, never below the minimum this balance allows.
+        wanted = wanted - (wanted % bigBlind)
+        return Math.max(buyInMin, wanted)
+    }
+
+    function stackInBB(chips) {
+        return bigBlind > 0 ? Math.round(chips / bigBlind) : 0
+    }
+
+    // Default button of the page: Enter sits down, no matter which field
     // has the focus. A focused button consumes Return itself and keeps
     // precedence (Enter on "cancel" therefore cancels).
     Keys.onReturnPressed: startGameButton.clicked()
@@ -21,40 +55,23 @@ Rectangle {
 
     // Initial focus on the main action – as when opening a dialog. Qt.callLater,
     // because the focus would otherwise fizzle out during the stack animation.
-    // Without a focus reason there is no focus frame; it appears on the first Tab.
-    StackView.onActivated: Qt.callLater(startGameButton.forceActiveFocus)
+    StackView.onActivated: {
+        cashBalance = Wallet ? Wallet.balance : 0
+        buyIn.value = localGamePagePage.defaultBuyIn()
+        errorText = ""
+        Qt.callLater(startGameButton.forceActiveFocus)
+    }
 
     // Ace's Help (GuideOverlay): the fields a tour step outlines (label + control).
     function guideTarget(key) {
         switch (key) {
         case "players": return [numPlayersLabel, numPlayers]
-        case "stack":   return [startCashLabel, startCash]
-        case "blinds":  return blindsBox
+        case "stack":   return [buyInLabel, buyIn]
+        case "blinds":  return blindsNote
         case "speed":   return [gameSpeedLabel, gameSpeed]
         case "actions": return startGameButton.parent
         }
         return null
-    }
-
-    // Returns a readable summary of the current blinds settings
-    function blindsSummary() {
-        if (!SettingsManager) return ""
-        var fsb = SettingsManager.readConfigInt("FirstSmallBlind")
-        var atHands = SettingsManager.readConfigInt("RaiseBlindsAtHands") !== 0
-        var atMins  = SettingsManager.readConfigInt("RaiseBlindsAtMinutes") !== 0
-        var alwaysDouble = SettingsManager.readConfigInt("AlwaysDoubleBlinds") !== 0
-        var manual = SettingsManager.readConfigInt("ManualBlindsOrder") !== 0
-
-        var raise = ""
-        if (atHands) {
-            var h = SettingsManager.readConfigInt("RaiseSmallBlindEveryHands")
-            raise = qsTr("alle %1 Hände").arg(h)
-        } else if (atMins) {
-            var m = SettingsManager.readConfigInt("RaiseSmallBlindEveryMinutes")
-            raise = qsTr("alle %1 Minuten").arg(m)
-        }
-        var mode = alwaysDouble ? qsTr("verdoppeln") : (manual ? qsTr("manuell") : "")
-        return qsTr("Small Blind: $%1  •  Erhöhen %2  •  %3").arg(fsb).arg(raise).arg(mode)
     }
 
     Flickable {
@@ -83,281 +100,204 @@ Rectangle {
             height: Math.max(scroller.height,
                              pageColumn.implicitHeight + Config.Theme.margin * 2)
 
-    ColumnLayout {
-        id: pageColumn
-        anchors.fill: parent
-        anchors.margins: Config.Theme.margin
-        spacing: Config.Theme.spacing
+            ColumnLayout {
+                id: pageColumn
+                anchors.fill: parent
+                anchors.margins: Config.Theme.margin
+                spacing: Config.Theme.spacing
 
-        AppLabel {
-            text: qsTr("Lokales Spiel")
-            font.bold: true
-            font.pixelSize: 16
-            color: Config.StaticData.palette.secondary.col200
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            height: 1
-            color: Config.StaticData.palette.secondary.col500
-        }
-
-        Item { Layout.fillHeight: true }
-
-        // Settings card (corresponds to the Qt widgets newGameDialog)
-        GroupBox {
-            Layout.fillWidth: true
-            title: qsTr("Lokale Spiel-Einstellungen")
-
-            GridLayout {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                columns: 2
-                columnSpacing: 12
-                rowSpacing: 10
-
-                // --- Number of players ---
-                Label {
-                    id: numPlayersLabel
-                    text: qsTr("Anzahl der Spieler:")
+                AppLabel {
+                    Layout.fillWidth: true
+                    text: qsTr("Cash-Tisch")
+                    font.bold: true
+                    font.pixelSize: 16
                     color: Config.StaticData.palette.secondary.col200
-                    Layout.fillWidth: true
-                }
-                CustomSpinBox {
-                    id: numPlayers
-                    from: 2
-                    to: 10
-                    value: SettingsManager ? SettingsManager.readConfigInt("NumberOfPlayers") : 10
-                    onValueModified: {
-                        if (SettingsManager) SettingsManager.writeConfigInt("NumberOfPlayers", value)
-                    }
                 }
 
-                // --- Startkapital ---
-                Label {
-                    id: startCashLabel
-                    text: qsTr("Startkapital:")
-                    color: Config.StaticData.palette.secondary.col200
-                    Layout.fillWidth: true
-                }
-                CustomSpinBox {
-                    id: startCash
-                    from: 1000
-                    to: 1000000
-                    stepSize: 50
-                    value: SettingsManager ? SettingsManager.readConfigInt("StartCash") : 5000
-                    onValueModified: {
-                        if (SettingsManager) SettingsManager.writeConfigInt("StartCash", value)
-                    }
-                }
+                SectionDivider {}
 
-                // --- Blinds ---
-                GroupBox {
-                    id: blindsBox
-                    Layout.columnSpan: 2
-                    Layout.fillWidth: true
-                    title: qsTr("Blinds")
+                Item { Layout.fillHeight: true }
 
-                    ColumnLayout {
+                // What is in the wallet - the table is paid from here.
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 44
+                    radius: 8
+                    color: Config.StaticData.palette.secondary.col600
+
+                    RowLayout {
                         anchors.fill: parent
-                        spacing: 6
+                        anchors.leftMargin: Config.Theme.margin
+                        anchors.rightMargin: Config.Theme.margin
+                        spacing: 8
 
-                        ButtonGroup { id: blindsChoiceGroup }
-
-                        RadioButton {
-                            id: useSavedBlinds
-                            text: qsTr("Gespeicherte Blinds-Einstellungen verwenden")
-                            ButtonGroup.group: blindsChoiceGroup
-                            checked: true
+                        AppLabel {
+                            text: qsTr("Guthaben")
+                            color: Config.StaticData.palette.secondary.col300
                         }
-
-                        // Summary of the currently stored blinds
-                        Label {
-                            Layout.leftMargin: 28
-                            text: localGamePagePage.blindsSummary()
-                            color: Config.StaticData.palette.secondary.col400
-                            font.pixelSize: 12
-                            wrapMode: Text.WordWrap
-                            Layout.fillWidth: true
-                            visible: useSavedBlinds.checked
-                        }
-
-                        RadioButton {
-                            id: changeBlinds
-                            text: qsTr("Blinds-Einstellungen ändern …")
-                            ButtonGroup.group: blindsChoiceGroup
-                        }
-
-                        // Inline blinds editor (only visible when "change" is selected)
-                        GridLayout {
-                            Layout.leftMargin: 28
-                            Layout.fillWidth: true
-                            visible: changeBlinds.checked
-                            columns: 2
-                            columnSpacing: 12
-                            rowSpacing: 8
-
-                            Label {
-                                text: qsTr("Erster Small Blind:")
-                                color: Config.StaticData.palette.secondary.col200
-                                Layout.fillWidth: true
-                            }
-                            CustomSpinBox {
-                                id: firstSmallBlind
-                                from: 5
-                                to: 20000
-                                stepSize: 5
-                                value: SettingsManager ? SettingsManager.readConfigInt("FirstSmallBlind") : 10
-                                onValueModified: {
-                                    if (SettingsManager) SettingsManager.writeConfigInt("FirstSmallBlind", value)
-                                }
-                            }
-
-                            Label {
-                                text: qsTr("Small Blind erhöhen:")
-                                color: Config.StaticData.palette.secondary.col200
-                                Layout.fillWidth: true
-                            }
-
-                            ColumnLayout {
-                                spacing: 4
-
-                                ButtonGroup { id: raiseAtGroup }
-
-                                RowLayout {
-                                    RadioButton {
-                                        id: raiseAtHands
-                                        text: qsTr("alle")
-                                        ButtonGroup.group: raiseAtGroup
-                                        checked: SettingsManager ? SettingsManager.readConfigInt("RaiseBlindsAtHands") !== 0 : true
-                                        onCheckedChanged: {
-                                            if (SettingsManager && checked) {
-                                                SettingsManager.writeConfigInt("RaiseBlindsAtHands", 1)
-                                                SettingsManager.writeConfigInt("RaiseBlindsAtMinutes", 0)
-                                            }
-                                        }
-                                    }
-                                    CustomSpinBox {
-                                        from: 1; to: 100
-                                        value: SettingsManager ? SettingsManager.readConfigInt("RaiseSmallBlindEveryHands") : 8
-                                        enabled: raiseAtHands.checked
-                                        onValueModified: {
-                                            if (SettingsManager) SettingsManager.writeConfigInt("RaiseSmallBlindEveryHands", value)
-                                        }
-                                    }
-                                    Label { text: qsTr("Hände"); color: Config.StaticData.palette.secondary.col200; enabled: raiseAtHands.checked }
-                                }
-
-                                RowLayout {
-                                    RadioButton {
-                                        id: raiseAtMinutes
-                                        text: qsTr("alle")
-                                        ButtonGroup.group: raiseAtGroup
-                                        checked: SettingsManager ? SettingsManager.readConfigInt("RaiseBlindsAtMinutes") !== 0 : false
-                                        onCheckedChanged: {
-                                            if (SettingsManager && checked) {
-                                                SettingsManager.writeConfigInt("RaiseBlindsAtHands", 0)
-                                                SettingsManager.writeConfigInt("RaiseBlindsAtMinutes", 1)
-                                            }
-                                        }
-                                    }
-                                    CustomSpinBox {
-                                        from: 1; to: 60
-                                        value: SettingsManager ? SettingsManager.readConfigInt("RaiseSmallBlindEveryMinutes") : 5
-                                        enabled: raiseAtMinutes.checked
-                                        onValueModified: {
-                                            if (SettingsManager) SettingsManager.writeConfigInt("RaiseSmallBlindEveryMinutes", value)
-                                        }
-                                    }
-                                    Label { text: qsTr("Minuten"); color: Config.StaticData.palette.secondary.col200; enabled: raiseAtMinutes.checked }
-                                }
-                            }
-
-                            Label {
-                                text: qsTr("Erhöhungsmodus:")
-                                color: Config.StaticData.palette.secondary.col200
-                                Layout.fillWidth: true
-                            }
-
-                            ColumnLayout {
-                                spacing: 4
-                                ButtonGroup { id: raiseModeGroup }
-
-                                RadioButton {
-                                    text: qsTr("Blinds immer verdoppeln")
-                                    ButtonGroup.group: raiseModeGroup
-                                    checked: SettingsManager ? SettingsManager.readConfigInt("AlwaysDoubleBlinds") !== 0 : true
-                                    onCheckedChanged: {
-                                        if (SettingsManager && checked) {
-                                            SettingsManager.writeConfigInt("AlwaysDoubleBlinds", 1)
-                                            SettingsManager.writeConfigInt("ManualBlindsOrder", 0)
-                                        }
-                                    }
-                                }
-                                RadioButton {
-                                    text: qsTr("Manuelle Blind-Reihenfolge")
-                                    ButtonGroup.group: raiseModeGroup
-                                    checked: SettingsManager ? SettingsManager.readConfigInt("ManualBlindsOrder") !== 0 : false
-                                    onCheckedChanged: {
-                                        if (SettingsManager && checked) {
-                                            SettingsManager.writeConfigInt("AlwaysDoubleBlinds", 0)
-                                            SettingsManager.writeConfigInt("ManualBlindsOrder", 1)
-                                        }
-                                    }
-                                }
-                            }
+                        Item { Layout.fillWidth: true }
+                        AppLabel {
+                            text: "$" + localGamePagePage.cashBalance
+                            color: Config.StaticData.palette.secondary.col100
+                            font.bold: true
+                            font.pixelSize: 18
                         }
                     }
                 }
 
-                // --- Spielgeschwindigkeit ---
-                Label {
-                    id: gameSpeedLabel
-                    text: qsTr("Spielgeschwindigkeit\n(1=langsam, 11=schnell):")
-                    color: Config.StaticData.palette.secondary.col200
+                // Settings card (corresponds to the Qt widgets newGameDialog)
+                GroupBox {
                     Layout.fillWidth: true
-                }
-                CustomSpinBox {
-                    id: gameSpeed
-                    from: 1
-                    to: 11
-                    value: SettingsManager ? SettingsManager.readConfigInt("GameSpeed") : 4
-                    onValueModified: {
-                        if (SettingsManager) SettingsManager.writeConfigInt("GameSpeed", value)
+                    title: qsTr("Tisch-Einstellungen")
+
+                    GridLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        columns: 2
+                        columnSpacing: 12
+                        rowSpacing: 10
+
+                        // --- Buy-in (the stack he sits down with) ---
+                        Label {
+                            id: buyInLabel
+                            text: qsTr("Buy-in:")
+                            color: Config.StaticData.palette.secondary.col200
+                            Layout.fillWidth: true
+                        }
+                        CustomSpinBox {
+                            id: buyIn
+                            from: localGamePagePage.buyInMin
+                            to: localGamePagePage.buyInMax
+                            stepSize: 10
+                            value: localGamePagePage.defaultBuyIn()
+                            onValueModified: localGamePagePage.errorText = ""
+                        }
+
+                        // What the chosen stack means at this table.
+                        Label {
+                            Layout.columnSpan: 2
+                            Layout.fillWidth: true
+                            text: qsTr("%1 Big Blinds ($%2 Blind, $%3)")
+                                  .arg(localGamePagePage.stackInBB(buyIn.value))
+                                  .arg(Wallet ? Wallet.smallBlind : 1)
+                                  .arg(localGamePagePage.bigBlind)
+                            color: Config.StaticData.palette.secondary.col400
+                            font.pixelSize: Config.Theme.fontSizeCaption
+                            wrapMode: Text.WordWrap
+                            visible: localGamePagePage.canSit
+                        }
+
+                        // --- Number of players ---
+                        Label {
+                            id: numPlayersLabel
+                            text: qsTr("Anzahl der Spieler:")
+                            color: Config.StaticData.palette.secondary.col200
+                            Layout.fillWidth: true
+                        }
+                        CustomSpinBox {
+                            id: numPlayers
+                            from: 2
+                            to: 10
+                            value: SettingsManager ? SettingsManager.readConfigInt("NumberOfPlayers") : 6
+                            onValueModified: {
+                                if (SettingsManager) SettingsManager.writeConfigInt("NumberOfPlayers", value)
+                            }
+                        }
+
+                        // --- Blinds (fixed, as on every cash table) ---
+                        Label {
+                            id: blindsNote
+                            Layout.columnSpan: 2
+                            Layout.fillWidth: true
+                            text: qsTr("Blinds: $%1 / $%2, keine Erhöhung - wie an einem Cash-Tisch üblich.")
+                                  .arg(Wallet ? Wallet.smallBlind : 1)
+                                  .arg(localGamePagePage.bigBlind)
+                            color: Config.StaticData.palette.secondary.col300
+                            font.pixelSize: Config.Theme.fontSizeCaption
+                            wrapMode: Text.WordWrap
+                        }
+
+                        // --- Spielgeschwindigkeit ---
+                        Label {
+                            id: gameSpeedLabel
+                            text: qsTr("Spielgeschwindigkeit\n(1=langsam, 11=schnell):")
+                            color: Config.StaticData.palette.secondary.col200
+                            Layout.fillWidth: true
+                        }
+                        CustomSpinBox {
+                            id: gameSpeed
+                            from: 1
+                            to: 11
+                            value: SettingsManager ? SettingsManager.readConfigInt("GameSpeed") : 4
+                            onValueModified: {
+                                if (SettingsManager) SettingsManager.writeConfigInt("GameSpeed", value)
+                            }
+                        }
                     }
                 }
-            }
-        }
 
-        Item { Layout.fillHeight: true }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Config.Theme.spacing
-
-            CustomButton {
-                text: qsTr("Abbrechen")
-                Layout.fillWidth: true
-                onClicked: mainStackView.pop()
-            }
-
-            CustomButton {
-                id: startGameButton
-                text: qsTr("Spiel starten")
-                Layout.fillWidth: true
-                onClicked: {
-                    // Double click protection: otherwise two GamePages end up in the stack.
-                    if (mainStackView.currentItem
-                            && mainStackView.currentItem.objectName === "gamePage")
-                        return
-                    GameTable.startLocalGame()
-                    mainStackView.push("GamePage.qml")
+                // No money, no seat.
+                AppLabel {
+                    Layout.fillWidth: true
+                    visible: !localGamePagePage.canSit
+                    text: qsTr("Nicht genug Guthaben für einen Platz: mindestens $%1 nötig.")
+                          .arg(localGamePagePage.buyInMin)
+                    color: Config.Theme.colorDanger
+                    font.pixelSize: Config.Theme.fontSizeCaption
+                    wrapMode: Text.WordWrap
                 }
-            }
-        }
 
-        Item { Layout.fillHeight: true }
-    }
+                // Whatever stopped the last attempt (the bank refuses silently
+                // otherwise - the reason stays English in the log).
+                AppLabel {
+                    Layout.fillWidth: true
+                    visible: localGamePagePage.errorText !== ""
+                    text: localGamePagePage.errorText
+                    color: Config.Theme.colorDanger
+                    font.pixelSize: Config.Theme.fontSizeCaption
+                    wrapMode: Text.WordWrap
+                }
+
+                Item { Layout.fillHeight: true }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Config.Theme.spacing
+
+                    CustomButton {
+                        text: qsTr("Abbrechen")
+                        Layout.fillWidth: true
+                        onClicked: mainStackView.pop()
+                    }
+
+                    CustomButton {
+                        id: startGameButton
+                        text: qsTr("Spiel starten")
+                        Layout.fillWidth: true
+                        enabled: localGamePagePage.canSit
+                        onClicked: {
+                            // Double click protection: otherwise two GamePages end up in the stack.
+                            if (mainStackView.currentItem
+                                    && mainStackView.currentItem.objectName === "gamePage")
+                                return
+                            if (!GameTable.startCashGame(numPlayers.value, buyIn.value,
+                                                         Wallet.smallBlind)) {
+                                // The bank refused (balance changed meanwhile):
+                                // show why, and refresh what the page displays.
+                                localGamePagePage.errorText =
+                                        qsTr("Der Platz konnte nicht gekauft werden: %1")
+                                        .arg(Wallet.lastError)
+                                localGamePagePage.cashBalance = Wallet.balance
+                                buyIn.value = localGamePagePage.defaultBuyIn()
+                                return
+                            }
+                            mainStackView.push("GamePage.qml")
+                        }
+                    }
+                }
+
+                Item { Layout.fillHeight: true }
+            }
         }
     }
 }

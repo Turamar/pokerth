@@ -854,6 +854,18 @@
         <source>New Game</source>
         <translation>Новая игра</translation>
     </message>
+    <message>
+        <source>Guthaben: $%1</source>
+        <translation>Баланс: $%1</translation>
+    </message>
+    <message>
+        <source>Noch einmal</source>
+        <translation>Ещё раз</translation>
+    </message>
+    <message>
+        <source>Dein Stack ist aufgebraucht.</source>
+        <translation>Стек закончился.</translation>
+    </message>
 </context>
 <context>
     <name>GamePlayerBox</name>
@@ -2956,6 +2968,38 @@ PokerTH может уменьшить его. Новый аватар вступ
         <location line="+7"/>
         <source>Spiel starten</source>
         <translation>Начать игру</translation>
+    </message>
+    <message>
+        <source>Cash-Tisch</source>
+        <translation>Кэш-стол</translation>
+    </message>
+    <message>
+        <source>Guthaben</source>
+        <translation>Баланс</translation>
+    </message>
+    <message>
+        <source>Tisch-Einstellungen</source>
+        <translation>Настройки стола</translation>
+    </message>
+    <message>
+        <source>Buy-in:</source>
+        <translation>Бай-ин:</translation>
+    </message>
+    <message>
+        <source>%1 Big Blinds ($%2 Blind, $%3)</source>
+        <translation>%1 больших блайндов ($%2 блайнд, $%3)</translation>
+    </message>
+    <message>
+        <source>Blinds: $%1 / $%2, keine Erhöhung - wie an einem Cash-Tisch üblich.</source>
+        <translation>Блайнды: $%1 / $%2, без повышения — как за кэш-столом.</translation>
+    </message>
+    <message>
+        <source>Nicht genug Guthaben für einen Platz: mindestens $%1 nötig.</source>
+        <translation>Недостаточно денег на место: нужно минимум $%1.</translation>
+    </message>
+    <message>
+        <source>Der Platz konnte nicht gekauft werden: %1</source>
+        <translation>Не удалось купить место: %1</translation>
     </message>
 </context>
 <context>
@@ -5452,6 +5496,84 @@ and go back to the lobby?</source>
 and disconnect from the server?</source>
         <translation>Внимание! Вы действительно хотите покинуть лобби
 и отключиться от сервера?</translation>
+    </message>
+    <message>
+        <source>Wallet</source>
+        <translation>Кошелёк</translation>
+    </message>
+</context>
+<context>
+    <name>WalletPage</name>
+    <message>
+        <source>Geldbeutel</source>
+        <translation>Кошелёк</translation>
+    </message>
+    <message>
+        <source>jetzt</source>
+        <translation>сейчас</translation>
+    </message>
+    <message>
+        <source>Guthaben</source>
+        <translation>Баланс</translation>
+    </message>
+    <message>
+        <source>Hände gespielt</source>
+        <translation>Раздач сыграно</translation>
+    </message>
+    <message>
+        <source>Hände gewonnen</source>
+        <translation>Раздач выиграно</translation>
+    </message>
+    <message>
+        <source>Spieler</source>
+        <translation>Игрок</translation>
+    </message>
+    <message>
+        <source>Rebuy</source>
+        <translation>Ребай</translation>
+    </message>
+    <message>
+        <source>Rebuy $%1 nehmen</source>
+        <translation>Взять ребай $%1</translation>
+    </message>
+    <message>
+        <source>Das Guthaben ist unter $%1 – du kannst $%2 nachlegen.</source>
+        <translation>Баланс ниже $%1 — можно взять ребай $%2.</translation>
+    </message>
+    <message>
+        <source>Nicht am Tisch möglich – verlasse zuerst das Spiel.</source>
+        <translation>Нельзя за столом — сначала выйдите из игры.</translation>
+    </message>
+    <message>
+        <source>Nächster Rebuy in %1.</source>
+        <translation>Следующий ребай через %1.</translation>
+    </message>
+    <message>
+        <source>Der Rebuy wird angeboten, wenn das Guthaben unter $%1 liegt.</source>
+        <translation>Ребай доступен, когда баланс ниже $%1.</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>ОК</translation>
+    </message>
+    <message>
+        <source>Der Spielstand kann nicht gespeichert werden: %1</source>
+        <translation>Не удалось сохранить состояние: %1</translation>
+    </message>
+    <message>
+        <source>Statusdatei: %1</source>
+        <translation>Файл состояния: %1</translation>
+    </message>
+    <message>
+        <source>Zurück</source>
+        <translation>Назад</translation>
+    </message>
+</context>
+<context>
+    <name>WalletHandler</name>
+    <message>
+        <source>Interrupted cash table session: $%1 of the $%2 buy-in went back into your balance.</source>
+        <translation>Прерванная сессия за кэш-столом: $%1 из бай-ина $%2 вернулись в баланс.</translation>
     </message>
 </context>
 </TS>

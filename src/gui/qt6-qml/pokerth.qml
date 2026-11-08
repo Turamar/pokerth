@@ -42,6 +42,15 @@ ApplicationWindow {
         privateMessageDialog.openWith(playerName)
     }
 
+    // The wallet: balance, counters and the rebuy. A normal page on the stack,
+    // so the back caret (and Escape) returns to whatever was open before.
+    function openWallet() {
+        var current = mainStackView.currentItem
+        if (current && current.objectName === "walletPage")
+            return
+        mainStackView.push("pages/WalletPage.qml")
+    }
+
     // True between the beginning of an automatic reconnect and its
     // outcome. It covers the case that the reconnect is given up:
     // the lobby is already torn down then, so inLobbySession is false, but the
@@ -529,6 +538,60 @@ ApplicationWindow {
                     id: topBarMenuSpace
                     Layout.fillWidth: true
                     Layout.horizontalStretchFactor: 2
+                }
+
+                // The player's money. It is visible on every page - the balance is
+                // the one number that always matters - and a click opens the wallet.
+                Item {
+                    id: topBarWallet
+                    Layout.preferredWidth: walletRow.implicitWidth + 8
+                    Layout.preferredHeight: 22
+                    Layout.margins: Config.Responsive.landscapeCompact ? 2 : 6
+                    visible: mainWindow.topBarIconsVisible
+                             && (typeof Wallet !== "undefined") && Wallet !== null
+
+                    ToolTip.visible: walletArea.containsMouse && !Config.Responsive.isMobile
+                                     && Config.Parameters.showTooltips
+                    ToolTip.delay: 600
+                    ToolTip.text: qsTr("Wallet")
+
+                    Row {
+                        id: walletRow
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.right: parent.right
+                        spacing: 4
+
+                        SvgIcon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 16
+                            height: 16
+                            source: "resources/chip.svg"
+                            layer.enabled: true
+                            layer.effect: MultiEffect {
+                                colorization: 1.0
+                                colorizationColor: walletArea.containsMouse
+                                    ? Config.StaticData.palette.secondary.col100
+                                    : Config.StaticData.palette.secondary.col300
+                            }
+                        }
+                        AppText {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Wallet ? ("$" + Wallet.balance) : ""
+                            color: walletArea.containsMouse
+                                ? Config.StaticData.palette.secondary.col100
+                                : Config.StaticData.palette.secondary.col200
+                            font.pixelSize: 13
+                            font.bold: true
+                        }
+                    }
+
+                    MouseArea {
+                        id: walletArea
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        hoverEnabled: true
+                        onClicked: mainWindow.openWallet()
+                    }
                 }
 
                 // Ace's Help: the A♠ button opens its menu (GuideOverlay). The red

@@ -25,6 +25,7 @@ class SoundEvents;
 class QTimer;
 class ChatTranslator;
 class StyleProvider;
+class WalletHandler;
 
 // An incremental list model for the game history (log). Deliberately NOT a
 // QStringList property: for QML a QStringList is a value type that is read
@@ -221,11 +222,19 @@ public:
 	// Register the table theme: the chat and the game history take their text colours
 	// from there and recolour themselves on every style change.
 	void setStyleProvider(StyleProvider *styleProvider);
+	// The bank. Not owned; the GameHandler calls it when a cash table session
+	// starts, at every hand end and when the table is left (PLAN.md section 2).
+	void setWallet(WalletHandler *wallet);
 
-	// Called from QML to start a local game
-	Q_INVOKABLE void startLocalGame();
+	// Called from QML to sit down at a cash table: the buy-in is taken out of
+	// the balance, all seats start with that stack and the blinds stay where
+	// they are (a cash table does not raise them). False if the game could not
+	// be started - the buy-in is returned in that case.
+	Q_INVOKABLE bool startCashGame(int players, int buyIn, int smallBlind);
 	Q_INVOKABLE void endLocalGame();
 	Q_INVOKABLE bool isLocalGameRunning() const;
+	// The chips in front of the player (seat 0) right now.
+	Q_INVOKABLE int myStack() const;
 	// Is an internet game running (a network client, the game type internet)? Only then
 	// does reporting an avatar make sense – as in the Qt widgets client, which shows
 	// "Report inappropriate avatar" exclusively for internet games.
@@ -617,6 +626,7 @@ private:
 	boost::shared_ptr<Game> m_game;
 	ConfigFile *m_config = nullptr;
 	SoundEvents *m_soundEventHandler = nullptr;   // not owned
+	WalletHandler *m_wallet = nullptr;            // not owned
 	QTimer *m_timeoutBeepTimer = nullptr;
 	// The rate limit for the AFK reset (ResetTimeoutMessage). As in the widgets
 	// client: send it at most every few minutes, on real user activity.

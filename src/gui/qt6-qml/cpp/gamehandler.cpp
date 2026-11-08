@@ -27,8 +27,11 @@
 #include <QFileInfo>
 #include <QDateTime>
 #include <QRegularExpression>
+#include <QtGlobal>
+#include <exception>
 #include "chatcolors.h"
 #include "styleprovider.h"
+#include "wallethandler.h"
 
 #include <QCoreApplication>
 #include <QEvent>
@@ -221,6 +224,11 @@ void GameHandler::setStyleProvider(StyleProvider *styleProvider)
 	connect(styleProvider, &StyleProvider::changed,
 			this, &GameHandler::refreshTableChatPalette);
 	refreshTableChatPalette();
+}
+
+void GameHandler::setWallet(WalletHandler *wallet)
+{
+	m_wallet = wallet;
 }
 
 void GameHandler::refreshTableChatPalette()
@@ -1632,12 +1640,41 @@ bool GameHandler::checkLocalGameOver()
 			winner = *it;
 		}
 	}
-	if (playersWithCash > 1) return false;
+
+	// Where does the player stand? The seats list always contains seat 0, also
+	// after the human dropped out of the hand.
+	int humanCash = -1;
+	if (m_game) {
+		PlayerList seats = m_game->getSeatsList();
+		if (seats) {
+			for (auto it = seats->begin(); it != seats->end(); ++it) {
+				if ((*it)->getMyID() == 0) {
+					humanCash = (*it)->getMyCash();
+					break;
+				}
+			}
+		}
+	}
+	const bool humanBroke = (humanCash <= 0);
+
+	if (playersWithCash > 1 && !humanBroke) return false;
 
 	m_localGameOver = true;
 
+	// Nobody is left to play against - or the player is broke: the table is
+	// over, the stack goes back into the balance right away (the popup below
+	// only reports it).
+	if (m_wallet)
+		m_wallet->leaveTable(myStack());
+
+	// A cash table without money in front of the player is finished; the bots
+	// would otherwise play on among themselves and never reach an end.
+	const bool outOfChips = humanBroke && playersWithCash > 1;
+
 	// A log entry as in the widgets client ("<name> wins game <n>!").
-	if (winner)
+	if (outOfChips)
+		appendGameLog(QStringLiteral("You are out of chips."), LogGameWin);
+	else if (winner)
 		appendGameLog(QString::fromStdString(winner->getMyName())
 					  + QStringLiteral(" wins game ")
 					  + QString::number(game->getMyGameID())
@@ -1659,13 +1696,35 @@ bool GameHandler::checkLocalGameOver()
 	qDeleteAll(m_bustedLocalTimers);
 	m_bustedLocalTimers.clear();
 
-	emit localGameFinished(winner ? QString::fromStdString(winner->getMyName()) : QString(),
-						   winner ? winner->getMyID() : -1);
+	emit localGameFinished(outOfChips ? QString()
+									  : (winner ? QString::fromStdString(winner->getMyName())
+												: QString()),
+						   outOfChips ? -1 : (winner ? winner->getMyID() : -1));
 	return true;
 }
 
 void GameHandler::onLocalHandFinished()
 {
+	// The hand is over here - the pot is distributed and no initHand() of the
+	// next hand has reset it yet. That is the moment to book the money: the
+	// stack of seat 0 is stored (so that a crash costs at most this hand) and
+	// the hand counters grow.
+	if (m_wallet && m_session && !m_session->isNetworkClientRunning()) {
+		bool won = false;
+		if (m_game) {
+			PlayerList seats = m_game->getSeatsList();
+			if (seats) {
+				for (auto it = seats->begin(); it != seats->end(); ++it) {
+					if ((*it)->getMyID() == 0) {
+						won = (*it)->getLastMoneyWon() > 0;
+						break;
+					}
+				}
+			}
+		}
+		m_wallet->noteHandFinished(myStack(), won);
+	}
+
 	// The end of the tournament? As in the widgets client (gameTableImpl::postRiverRun-
 	// Animation6) NO further hand may follow the last one if only
 	// one player has chips left – otherwise the winner plays on alone endlessly
@@ -2106,71 +2165,103 @@ void GameHandler::showMyCards()
 
 // ─── Local game startup ──────────────────────────────────────────────────────
 
-void GameHandler::startLocalGame()
+// A cash table (PLAN.md section 2): the player pays the buy-in out of the
+// balance and everybody at the table - the player and the bots alike - starts
+// with that stack. Money and chips are 1:1 here.
+//
+// The engine gives every seat the same starting stack (Session::startLocalGame
+// builds the players from the GameData), so the stack of the bots cannot be set
+// per seat yet; they buy in for what the player brought. A cash table also
+// keeps its blinds: no interval doubling, nothing to raise.
+bool GameHandler::startCashGame(int players, int buyIn, int smallBlind)
 {
-	if (!m_session) return;
+	if (!m_session)
+		return false;
+	if (isLocalGameRunning())
+		return false;
+
+	const int seatCount = qBound(2, players, 10);
+	const int blind = qBound(1, smallBlind, 1000);
+
+	// The money leaves the balance before the engine is touched. If the game
+	// cannot be started afterwards, it goes straight back.
+	if (m_wallet) {
+		if (!m_wallet->sitDown(buyIn))
+			return false;
+	}
+
 	m_localGameExitRequested = false;
 	m_localGameOver = false;
 
-	// All values come from the configuration (settings → local game),
-	// exactly as in the widget client (startWindowImpl::startNewLocalGame without a dialog).
 	GameData gameData;
+	gameData.maxNumberOfPlayers = seatCount;
+	gameData.startMoney         = qMax(buyIn, 2 * blind);
+	gameData.firstSmallBlind    = blind;
+	// Never raise: a cash table does not play levels.
+	gameData.raiseIntervalMode              = RAISE_ON_HANDNUMBER;
+	gameData.raiseSmallBlindEveryHandsValue = 1000000000;
+	gameData.raiseMode                      = DOUBLE_BLINDS;
+	gameData.guiSpeed = 4;
 	if (m_config) {
-		gameData.maxNumberOfPlayers = m_config->readConfigInt("NumberOfPlayers");
-		gameData.startMoney         = m_config->readConfigInt("StartCash");
-		gameData.firstSmallBlind    = m_config->readConfigInt("FirstSmallBlind");
-
-		if (m_config->readConfigInt("RaiseBlindsAtHands")) {
-			gameData.raiseIntervalMode              = RAISE_ON_HANDNUMBER;
-			gameData.raiseSmallBlindEveryHandsValue = m_config->readConfigInt("RaiseSmallBlindEveryHands");
-		} else {
-			gameData.raiseIntervalMode                = RAISE_ON_MINUTES;
-			gameData.raiseSmallBlindEveryMinutesValue = m_config->readConfigInt("RaiseSmallBlindEveryMinutes");
-		}
-
-		if (m_config->readConfigInt("AlwaysDoubleBlinds")) {
-			gameData.raiseMode = DOUBLE_BLINDS;
-		} else {
-			gameData.raiseMode        = MANUAL_BLINDS_ORDER;
-			gameData.manualBlindsList = m_config->readConfigIntList("ManualBlindsList");
-
-			if (m_config->readConfigInt("AfterMBAlwaysDoubleBlinds")) {
-				gameData.afterManualBlindsMode = AFTERMB_DOUBLE_BLINDS;
-			} else if (m_config->readConfigInt("AfterMBAlwaysRaiseAbout")) {
-				gameData.afterManualBlindsMode = AFTERMB_RAISE_ABOUT;
-				gameData.afterMBAlwaysRaiseValue = m_config->readConfigInt("AfterMBAlwaysRaiseValue");
-			} else {
-				gameData.afterManualBlindsMode = AFTERMB_STAY_AT_LAST_BLIND;
-			}
-		}
-
-		gameData.guiSpeed = m_config->readConfigInt("GameSpeed");
+		const int speed = m_config->readConfigInt("GameSpeed");
+		if (speed >= 1 && speed <= 11)
+			gameData.guiSpeed = speed;
 	}
-	if (gameData.maxNumberOfPlayers < 2) gameData.maxNumberOfPlayers = 6;
-	if (gameData.startMoney <= 0)        gameData.startMoney         = 1500;
-	if (gameData.firstSmallBlind <= 0)   gameData.firstSmallBlind    = 10;
-	if (gameData.raiseSmallBlindEveryHandsValue   < 1) gameData.raiseSmallBlindEveryHandsValue   = 8;
-	if (gameData.raiseSmallBlindEveryMinutesValue < 1) gameData.raiseSmallBlindEveryMinutesValue = 5;
-	if (gameData.guiSpeed < 1 || gameData.guiSpeed > 11) gameData.guiSpeed = 4;
-
-	gameData.delayBetweenHandsSec           = 7;
-	gameData.playerActionTimeoutSec         = 20;
+	gameData.delayBetweenHandsSec   = 7;
+	gameData.playerActionTimeoutSec = 20;
 
 	StartData startData;
-	startData.numberOfPlayers     = gameData.maxNumberOfPlayers;
+	startData.numberOfPlayers     = seatCount;
 	startData.startDealerPlayerId = 0;
 
-	m_session->startLocalGame(gameData, startData);
+	try {
+		m_session->startLocalGame(gameData, startData);
 
-	// Sync m_game so action methods and refreshes work immediately
-	auto game = m_session->getCurrentGame();
-	if (game) setGame(game);
+		// Sync m_game so action methods and refreshes work immediately
+		auto game = m_session->getCurrentGame();
+		if (game)
+			setGame(game);
+	} catch (const std::exception &e) {
+		qWarning() << "startCashGame: the engine refused the table:" << e.what();
+		m_game.reset();
+		if (m_wallet)
+			m_wallet->leaveTable(0);
+		return false;
+	}
+
+	if (!isLocalGameRunning()) {
+		if (m_wallet)
+			m_wallet->leaveTable(0);
+		return false;
+	}
+	return true;
+}
+
+int GameHandler::myStack() const
+{
+	if (!m_game)
+		return 0;
+	PlayerList seats = m_game->getSeatsList();
+	if (!seats)
+		return 0;
+	for (auto it = seats->begin(); it != seats->end(); ++it) {
+		if ((*it)->getMyID() == 0)
+			return (*it)->getMyCash();
+	}
+	return 0;
 }
 
 void GameHandler::endLocalGame()
 {
 	if (!m_session) return;
 	if (m_session->isNetworkClientRunning()) return;
+
+	// Back to the lobby: whatever is left in front of the player returns into
+	// the balance (PLAN.md section 2 - the stack at a cash table IS money).
+	// Must happen before m_game is dropped, and it is a no-op if the session
+	// was already closed at the end of the game.
+	if (m_wallet)
+		m_wallet->leaveTable(myStack());
 
 	m_localGameExitRequested = true;
 	setWaitingForNextHand(false);

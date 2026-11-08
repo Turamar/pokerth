@@ -52,7 +52,7 @@
  * live inside a table or a tournament and are never stored here - a stack at a
  * cash table goes back into the balance when the table is left.
  */
-namespace GameState
+namespace PlayerState
 {
 
 struct PlayerProfile
@@ -78,6 +78,36 @@ struct PlayerProfile
 	QDateTime lastRebuyAt;
 };
 
+// A seat at a cash table. The money is already gone from the balance when the
+// session exists - it is lying in front of the player as chips. That is also
+// the crash safety net: the stack of the last finished hand is written on every
+// hand end, so a crash or a power loss costs at most one hand, and the money is
+// never lost entirely.
+struct CashSession
+{
+	CashSession() : buyIn(0), stack(0) {}
+
+	// Money that was taken from the balance when sitting down (0 = no session).
+	qint64 buyIn;
+	// Chips in front of the player as of the last finished hand.
+	qint64 stack;
+
+	QDateTime startedAt;
+
+	bool active() const
+	{
+		return buyIn > 0;
+	}
+};
+
+// One stored game state: the permanent profile plus - if the player is sitting
+// at a table - the interrupted cash session.
+struct StateDocument
+{
+	PlayerProfile profile;
+	CashSession cash;
+};
+
 // Starting balance of a new profile (PLAN.md section 2).
 const qint64 StartingBalance = 100;
 
@@ -97,19 +127,22 @@ public:
 
 	bool exists() const;
 
-	// Reads the stored profile.
+	// Reads the stored document.
 	//
 	// Returns false and sets error when the file is unreadable, not valid JSON
 	// or was written by a newer version of the game. A corrupt file is moved
 	// aside (state.json.corrupt) so that the next save does not silently
 	// overwrite what a later version might still have been able to read. A file
 	// from a newer version is left untouched.
-	bool load(PlayerProfile &profile, QString &error) const;
+	bool load(StateDocument &document, QString &error) const;
 
-	// Writes the profile atomically and refreshes its updatedAt.
-	bool save(PlayerProfile &profile, QString &error) const;
+	// Writes the document atomically and refreshes its updatedAt.
+	bool save(StateDocument &document, QString &error) const;
 
-	// The profile of a first time player.
+	// The document of a first time player: the starting balance, no cash session.
+	static StateDocument newDocument(const QString &name);
+
+	// The profile of a first time player (without the cash session).
 	static PlayerProfile newProfile(const QString &name);
 
 	// Version of the on-disk format; bump it whenever the layout changes and

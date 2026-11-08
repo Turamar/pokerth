@@ -22,6 +22,7 @@ set(POKERTH_QML_CLIENT_SRC ../../pokerth.cpp
     cpp/settingsmanager.cpp
     cpp/ziputils.cpp
     cpp/styleprovider.cpp
+    cpp/wallethandler.cpp
     cpp/serverconnectionhandler.cpp
     cpp/lobbyhandler.cpp
     cpp/gamehandler.cpp
@@ -195,6 +196,7 @@ set(QML_FILES
     pages/ServerConnectionDialog.qml
     pages/SettingsPage.qml
     pages/StartPage.qml
+    pages/WalletPage.qml
     pages/WecRankingPage.qml
     config/BbcGameDates.qml
     config/BotSuggest.qml

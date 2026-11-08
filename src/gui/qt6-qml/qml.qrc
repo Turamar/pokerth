@@ -138,6 +138,7 @@
         <file>pages/PokerthPlayerPage.qml</file>
         <file>pages/SettingsPage.qml</file>
         <file>pages/StartPage.qml</file>
+        <file>pages/WalletPage.qml</file>
         <file>pages/ServerConnectionDialog.qml</file>
         <file>pages/LobbyCreateGamePage.qml</file>
         <file>pages/GameWaitPage.qml</file>

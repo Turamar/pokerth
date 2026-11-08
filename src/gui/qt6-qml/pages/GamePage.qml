@@ -158,7 +158,15 @@ Rectangle {
             && GameTable.isLocalGameRunning())
         emojiReactionsEnabled = enabledInSettings && !isLocalGame
     }
-    Component.onCompleted: refreshEmojiReactionsEnabled()
+    Component.onCompleted: {
+        refreshEmojiReactionsEnabled()
+        // The reference point for the result shown when the game ends: the
+        // balance after the buy-in was paid, and the buy-in itself.
+        if (typeof Wallet !== "undefined" && Wallet) {
+            gameOverPopup.walletBefore = Wallet.balance
+            gameOverPopup.sessionBuyIn = Wallet.tableBuyIn
+        }
+    }
     StackView.onActivated: refreshEmojiReactionsEnabled()
 
     function sendReaction(emoji) {
@@ -1976,8 +1984,8 @@ Rectangle {
     // ── The end of the game in a local game ───────────────────────────────────────────
     // The GameHandler reports the end of the tournament (only one player with chips left)
     // and starts no further hand. Here the winner gets their
-    // message – with the choice of starting anew with the same settings or
-    // returning to the menu (the counterpart to the "start" button of the widget client).
+    // message – with the choice of sitting down again (the setup page) or
+    // returning to the menu.
     Connections {
         target: GameTable
         function onLocalGameFinished(winnerName, winnerSeatId) {
@@ -2000,6 +2008,14 @@ Rectangle {
         padding: 20
         width: Math.min((parent ? parent.width : 380) * 0.85, 380)
         closePolicy: Popup.CloseOnEscape
+
+        // The balance right after the buy-in was paid and the buy-in itself:
+        // together with the balance at the end they give the result of the
+        // session (the stack that came back minus what it cost to sit down).
+        property int walletBefore: 0
+        property int sessionBuyIn: 0
+        readonly property int netResult:
+            Wallet ? (Wallet.balance - walletBefore - sessionBuyIn) : 0
 
         property string winnerName: ""
         property bool humanWon: false
@@ -2026,9 +2042,25 @@ Rectangle {
                 Layout.fillWidth: true
                 text: gameOverPopup.humanWon
                       ? qsTr("Congratulations, you won the game!")
-                      : qsTr("%1 wins the game!").arg(gameOverPopup.winnerName)
+                      : (gameOverPopup.winnerName === ""
+                         ? qsTr("Dein Stack ist aufgebraucht.")
+                         : qsTr("%1 wins the game!").arg(gameOverPopup.winnerName))
                 color: Config.StaticData.palette.secondary.col200
                 font.pixelSize: 13
+                wrapMode: Text.WordWrap
+            }
+            // What the session did to the wallet. The stack has already gone
+            // back into the balance when this popup opens.
+            AppLabel {
+                Layout.fillWidth: true
+                text: (gameOverPopup.netResult >= 0 ? "+$" : "-$")
+                      + Math.abs(gameOverPopup.netResult)
+                      + "  ·  " + qsTr("Guthaben: $%1").arg(Wallet ? Wallet.balance : 0)
+                color: gameOverPopup.netResult >= 0
+                       ? Config.StaticData.chartColor(0, true)
+                       : Config.Theme.colorDanger
+                font.pixelSize: 13
+                font.bold: true
                 wrapMode: Text.WordWrap
             }
             RowLayout {
@@ -2045,13 +2077,14 @@ Rectangle {
                 CustomButton {
                     id: newGameButton
                     Layout.fillWidth: true
-                    text: qsTr("New Game")
+                    text: qsTr("Noch einmal")
                     onClicked: {
-                        // A new game with the same settings – the page
-                        // stays, GameHandler::setGame() resets the table,
-                        // the history and the chat.
+                        // The table is over and its stack is already back in
+                        // the wallet, so this just leaves it and returns to the
+                        // setup, where the next buy-in is chosen.
                         gameOverPopup.close()
-                        GameTable.startLocalGame()
+                        mainWindow.performLeaveGame()
+                        mainStackView.push("LocalGamePage.qml")
                     }
                 }
             }

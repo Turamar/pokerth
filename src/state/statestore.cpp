@@ -42,17 +42,24 @@
 
 using namespace std;
 
-namespace GameState
+namespace PlayerState
 {
 
 namespace
 {
 
-const int SchemaVersion = 1;
+// 1: profile only.
+// 2: the cash table session was added (see CashSession). Files of version 1 are
+//    still read - they simply have no session - and are written back as 2.
+const int SchemaVersion = 2;
 const char *StateFileName = "state.json";
 
 const char *KeySchemaVersion = "schemaVersion";
 const char *KeyProfile = "profile";
+const char *KeyCash = "cashTable";
+const char *KeyCashBuyIn = "buyIn";
+const char *KeyCashStack = "stack";
+const char *KeyCashStartedAt = "startedAt";
 const char *KeyName = "name";
 const char *KeyBalance = "balance";
 const char *KeyHandsPlayed = "handsPlayed";
@@ -108,6 +115,30 @@ PlayerProfile profileFromJson(const QJsonObject &object)
 	return profile;
 }
 
+QJsonObject cashToJson(const CashSession &cash)
+{
+	if(!cash.active()) {
+		return QJsonObject();
+	}
+	QJsonObject object;
+	object[QLatin1String(KeyCashBuyIn)] = static_cast<double>(cash.buyIn);
+	object[QLatin1String(KeyCashStack)] = static_cast<double>(cash.stack);
+	object[QLatin1String(KeyCashStartedAt)] = toIso(cash.startedAt);
+	return object;
+}
+
+CashSession cashFromJson(const QJsonObject &object)
+{
+	CashSession cash;
+	cash.buyIn = static_cast<qint64>(object.value(QLatin1String(KeyCashBuyIn)).toDouble());
+	cash.stack = static_cast<qint64>(object.value(QLatin1String(KeyCashStack)).toDouble());
+	cash.startedAt = fromIso(object.value(QLatin1String(KeyCashStartedAt)).toString());
+	if(cash.stack < 0) {
+		cash.stack = 0;
+	}
+	return cash;
+}
+
 }
 
 StateStore::StateStore(const QString &directory)
@@ -141,7 +172,14 @@ PlayerProfile StateStore::newProfile(const QString &name)
 	return profile;
 }
 
-bool StateStore::load(PlayerProfile &profile, QString &error) const
+StateDocument StateStore::newDocument(const QString &name)
+{
+	StateDocument document;
+	document.profile = newProfile(name);
+	return document;
+}
+
+bool StateStore::load(StateDocument &document, QString &error) const
 {
 	error.clear();
 
@@ -158,8 +196,8 @@ bool StateStore::load(PlayerProfile &profile, QString &error) const
 	file.close();
 
 	QJsonParseError parseError;
-	const QJsonDocument document = QJsonDocument::fromJson(content, &parseError);
-	if(parseError.error != QJsonParseError::NoError || !document.isObject()) {
+	const QJsonDocument json = QJsonDocument::fromJson(content, &parseError);
+	if(parseError.error != QJsonParseError::NoError || !json.isObject()) {
 		// Not something this version can read: keep the file for inspection and
 		// let the caller start from a fresh profile.
 		moveCorruptFileAside();
@@ -168,7 +206,7 @@ bool StateStore::load(PlayerProfile &profile, QString &error) const
 		return false;
 	}
 
-	const QJsonObject root = document.object();
+	const QJsonObject root = json.object();
 	const int version = root.value(QLatin1String(KeySchemaVersion)).toInt(-1);
 	if(version < 0) {
 		moveCorruptFileAside();
@@ -185,15 +223,18 @@ bool StateStore::load(PlayerProfile &profile, QString &error) const
 		return false;
 	}
 
-	// Only version 1 exists so far; a migration would go here.
-	profile = profileFromJson(root.value(QLatin1String(KeyProfile)).toObject());
+	// Version 1 has no cash session; it reads as "not at a table" and is written
+	// back as version 2 on the next save.
+	document.profile = profileFromJson(root.value(QLatin1String(KeyProfile)).toObject());
+	document.cash = cashFromJson(root.value(QLatin1String(KeyCash)).toObject());
 	return true;
 }
 
-bool StateStore::save(PlayerProfile &profile, QString &error) const
+bool StateStore::save(StateDocument &document, QString &error) const
 {
 	error.clear();
 
+	PlayerProfile &profile = document.profile;
 	QDir directory(m_directory);
 	if(!directory.exists() && !directory.mkpath(QStringLiteral("."))) {
 		error = QStringLiteral("cannot create %1").arg(m_directory);
@@ -208,6 +249,9 @@ bool StateStore::save(PlayerProfile &profile, QString &error) const
 	QJsonObject root;
 	root[QLatin1String(KeySchemaVersion)] = SchemaVersion;
 	root[QLatin1String(KeyProfile)] = profileToJson(profile);
+	if(document.cash.active()) {
+		root[QLatin1String(KeyCash)] = cashToJson(document.cash);
+	}
 
 	// QSaveFile writes a temporary file and only replaces the target on commit:
 	// a crash, a full disk or a killed process can leave the temporary file

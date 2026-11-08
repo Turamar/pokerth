@@ -39,6 +39,7 @@
 #include <QSettings>
 #include <QQuickWindow>
 #include <QIcon>
+#include <QFileInfo>
 #include <boost/shared_ptr.hpp>
 #include "configfile.h"
 #include "session.h"
@@ -57,6 +58,7 @@
 #include "gui/qt6-qml/cpp/qmlguiinterface.h"
 #include "gui/qt6-qml/cpp/screenhelper.h"
 #include "gui/qt6-qml/cpp/texttranslator.h"
+#include "gui/qt6-qml/cpp/wallethandler.h"
 #include "gui/qt6-qml/cpp/webnetworkfactory.h"
 #include <soundevents.h>
 #include <memory>
@@ -162,6 +164,18 @@ private:
 	QQuickWindow *m_window;
 	QTimer m_settle;
 };
+
+// The directory config.xml lives in - and with it the place where the
+// persistent game state (state.json) belongs. ConfigFile builds its paths in the
+// local 8 bit encoding (see pathToQString in configfile.cpp), so decoding has to
+// use the same one: fromUtf8 would corrupt a non-ASCII user name in the path.
+static QString stateDirectoryFor(const std::string &configFileName)
+{
+	const QString path = QString::fromLocal8Bit(configFileName.c_str());
+	if (path.endsWith(QLatin1Char('/')) || path.endsWith(QLatin1Char('\\')))
+		return path;
+	return QFileInfo(path).absolutePath();
+}
 
 int main(int argc, char *argv[])
 {
@@ -353,6 +367,17 @@ int main(int argc, char *argv[])
 	StyleProvider styleProvider(myConfig);
 	LanguageManager langMgr(&engine);
 	ScreenHelper screenHelper;
+	// The player's bank: the permanent balance, the profile counters and the
+	// cash table session. It lives in state.json next to config.xml (PLAN.md
+	// sections 2 and "Сквозные темы").
+	WalletHandler walletHandler(stateDirectoryFor(myConfig->configFileName));
+	{
+		QString playerName = QString::fromStdString(myConfig->readConfigString("MyName")).trimmed();
+		if (playerName.isEmpty())
+			playerName = QStringLiteral("Human Player");
+		walletHandler.setPlayerName(playerName);
+	}
+	gameHandler->setWallet(&walletHandler);
 	// Translation of arbitrary texts (the globe on the forum post page) – it uses
 	// the same service/switch as the chat translation, but is not bound to
 	// a chat line list.
@@ -371,6 +396,7 @@ int main(int argc, char *argv[])
 	engine.rootContext()->setContextProperty("ServerConnection", connectionHandler);
 	engine.rootContext()->setContextProperty("Lobby", lobbyHandler);
 	engine.rootContext()->setContextProperty("GameTable", gameHandler);
+	engine.rootContext()->setContextProperty("Wallet", &walletHandler);
 	engine.rootContext()->setContextProperty("LogStore", logHandler);
 	engine.rootContext()->setContextProperty("NetworkGame", networkGameHandler);
 	engine.load(QUrl(QStringLiteral("qrc:/pokerth.qml")));
@@ -423,6 +449,9 @@ int main(int argc, char *argv[])
 	connectionHandler->setSession(boost::shared_ptr<Session>());
 	lobbyHandler->setSession(boost::shared_ptr<Session>());
 	gameHandler->setSession(boost::shared_ptr<Session>());
+	// The bank is a plain stack object of this function and dies before the
+	// app-parented handlers do - drop the pointer.
+	gameHandler->setWallet(nullptr);
 	// Terminate + release the embedded network server (its ServerGuiWrapper
 	// references guiInterface) before guiInterface is deleted below.
 	networkGameHandler->shutdown();
