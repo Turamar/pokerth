@@ -277,7 +277,17 @@ AiDecision decidePreflop(const AiSituation& s, const AiPersonality& p, const Met
 
 	if(!facingRaise) {
 		const int limpers = std::max(0, (s.setsThisRound - m.bigBlind - s.smallBlind) / m.bigBlind);
-		const double openPercent = p.openPercent[positionBucket(s)];
+
+		/* The opponent model also says how tight the table is, and a table that
+		 * folds its way out is the cheapest place to steal from: the blinds pay
+		 * before anybody has a hand. Against a loose table the width is a value
+		 * question, not a steal, so it is left alone.
+		 */
+		double openPercent = p.openPercent[positionBucket(s)];
+		if(s.opponentVpipPercent >= 0 && s.opponentVpipPercent < 25) {
+			const double tightness = (25.0 - s.opponentVpipPercent) / 25.0;
+			openPercent *= 1.0 + 0.6 * tightness * p.adaptation;
+		}
 
 		if(judgedHand <= openPercent) {
 			/* Whether the range is played as a raise or as a limp is a matter of
