@@ -101,9 +101,9 @@ void printUsage()
 		"  --seat-profiles L one profile per seat, comma separated, e.g.\n"
 		"                    'novice/balanced,novice/tag,pro/tag,elite/tag';\n"
 		"                    the last entry repeats for the remaining seats\n"
-		"  --field F         a reference field of human-like opponents: micro,\n"
-		"                    low or mid; the first seat then plays the profile\n"
-		"                    given above (the hero), the rest play the field\n"
+		"  --field F         a reference field: rookie (first tournament tier),\n"
+		"                    micro, low or mid; the first seat then plays the\n"
+		"                    profile given above (the hero), the rest the field\n"
 		"  --mixed           every seat draws its own profile - the mixture the\n"
 		"                    client uses (default)\n"
 		"  --scale-open F    multiply the opening ranges by F (calibration)\n"
@@ -274,7 +274,7 @@ void printFieldHeader(const SimOptions &options)
 
 	BotPopulationTarget target;
 	if(BotProfile::populationTarget(options.fieldName, target)) {
-		printf("\nfield %s (%s): published pool VPIP %.0f%%, PFR %.0f%%, 3B %.0f%%\n",
+		printf("\nfield %s (%s): target pool VPIP %.0f%%, PFR %.0f%%, 3B %.0f%%\n",
 			   target.name, target.description, target.vpip, target.pfr, target.threeBet);
 	}
 	printf("seat 1 plays the hero (%s), seats 2..%d play the field\n",

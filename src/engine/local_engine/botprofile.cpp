@@ -168,6 +168,13 @@ struct PopulationNumbers {
 };
 
 const PopulationNumbers POPULATIONS[BOT_POPULATION_COUNT] = {
+	{ "rookie", "first tournament table: two callers, a LAG, a nit and a careful player",
+	  26.0, 13.0, 6.0, {
+		  { BOT_STRENGTH_NOVICE, BOT_ARCHETYPE_CALLER },
+		  { BOT_STRENGTH_NOVICE, BOT_ARCHETYPE_CALLER },
+		  { BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_LAG },
+		  { BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_NIT },
+		  { BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_TAG } } },
 	{ "micro", "NL2-NL5: a crowd of callers, one player who knows the chart",
 	  40.0, 10.0, 2.0, {
 		  { BOT_STRENGTH_NOVICE, BOT_ARCHETYPE_CALLER },
@@ -291,7 +298,7 @@ static int populationIndex(const string &text)
 
 const char *BotProfile::populationList()
 {
-	return "micro, low, mid";
+	return "rookie, micro, low, mid";
 }
 
 const char *BotProfile::populationName(BotPopulation population)

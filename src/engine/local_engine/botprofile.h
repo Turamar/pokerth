@@ -88,15 +88,22 @@ enum BotArchetype {
  * statistics of a real pool), so the tables below carry those targets.
  */
 enum BotPopulation {
-	BOT_POPULATION_MICRO = 0,
+	/* The first tournament tier is a designed table, not a stake: two callers,
+	 * one loose-aggressive, one weak-tight and one careful player. Enough
+	 * weakness to be beaten, enough resistance that tight-aggressive play alone
+	 * does not run it over.
+	 */
+	BOT_POPULATION_ROOKIE = 0,
+	BOT_POPULATION_MICRO,
 	BOT_POPULATION_LOW,
 	BOT_POPULATION_MID,
 	BOT_POPULATION_COUNT
 };
 
-/* What a field is supposed to look like, in the terms a HUD uses. The numbers
- * are published population averages for the stake, not our own measurements:
- * they exist so that a measured field can be compared with them.
+/* What a field is supposed to look like, in the terms a HUD uses. For the
+ * stakes these are published population averages; for a tournament tier they
+ * are the numbers the tier is designed to have. Either way they exist so that
+ * a measured field can be compared with them.
  */
 struct BotPopulationTarget {
 	const char *name;
