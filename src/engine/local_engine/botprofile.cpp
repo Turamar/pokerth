@@ -68,22 +68,28 @@ struct ArchetypeNumbers {
 	double aggression;
 	double bluffRate;
 	double looseness;
+	/* Postflop reaction to pressure. These two are what make the fold statistic
+	 * of a style differ at all: without them every bot folds on the same
+	 * mechanical rule and there is nothing to read.
+	 */
+	double stubbornChance;   // share of the losing calls a station pays anyway
+	double giveUpChance;     // share of the profitable calls a weak-tight player folds
 	bool diagnostic;         // never dealt by the random mixture
 };
 
 const ArchetypeNumbers ARCHETYPES[BOT_ARCHETYPE_COUNT] = {
 	// maniac: raises nearly everything, keeps betting with nothing
-	{ "maniac", { 40.0, 48.0, 56.0, 64.0 }, 0.96, 16.0, 7.0, 42.0, 34.0, 62.0, 50.0, -0.09, 85.0, 1.35, 45.0, 1.55, 2.3, 1.25, false },
+	{ "maniac", { 40.0, 48.0, 56.0, 64.0 }, 0.96, 16.0, 7.0, 42.0, 34.0, 62.0, 50.0, -0.09, 85.0, 1.35, 45.0, 1.55, 2.3, 1.25, 30.0, 3.0, false },
 	// LAG: wide and aggressive, but with a plan
-	{ "lag",    { 23.0, 29.0, 36.0, 45.0 }, 0.88, 7.5, 3.5, 22.0, 14.0, 50.0, 30.0, -0.05, 70.0, 1.15, 18.0, 1.30, 1.5, 1.10, false },
+	{ "lag",    { 23.0, 29.0, 36.0, 45.0 }, 0.88, 7.5, 3.5, 22.0, 14.0, 50.0, 30.0, -0.05, 70.0, 1.15, 18.0, 1.30, 1.5, 1.10, 12.0, 4.0, false },
 	// TAG: tight and aggressive -- the solid default
-	{ "tag",    { 13.0, 18.0, 25.0, 34.0 }, 0.95, 4.0, 1.5, 13.0, 8.0, 28.0, 18.0, -0.005, 60.0, 1.00, 6.0, 1.05, 0.9, 1.0, false },
+	{ "tag",    { 13.0, 18.0, 25.0, 34.0 }, 0.95, 4.0, 1.5, 13.0, 8.0, 28.0, 18.0, -0.005, 60.0, 1.00, 6.0, 1.05, 0.9, 1.0, 5.0, 5.0, false },
 	// nit: waits for premium hands and gives up early
-	{ "nit",    { 7.0, 10.0, 14.0, 20.0 }, 0.92, 1.5, 0.3, 6.0, 4.0, 12.0, 9.0, 0.03, 45.0, 0.85, 2.0, 0.95, 0.35, 0.9, false },
+	{ "nit",    { 7.0, 10.0, 14.0, 20.0 }, 0.92, 1.5, 0.3, 6.0, 4.0, 12.0, 9.0, 0.03, 45.0, 0.85, 2.0, 0.95, 0.35, 0.9, 0.0, 22.0, false },
 	// caller: loose and passive, calls far too much, raises almost never
-	{ "caller", { 22.0, 30.0, 40.0, 52.0 }, 0.15, 0.7, 0.3, 34.0, 30.0, 55.0, 12.0, -0.10, 20.0, 0.35, 1.0, 0.45, 0.25, 1.15, false },
+	{ "caller", { 22.0, 30.0, 40.0, 52.0 }, 0.15, 0.7, 0.3, 34.0, 30.0, 55.0, 12.0, -0.10, 20.0, 0.35, 1.0, 0.45, 0.25, 1.15, 45.0, 2.0, false },
 	// balanced: no clear leak, the reference point
-	{ "balanced", { 13.0, 19.0, 26.0, 34.0 }, 0.88, 4.0, 1.8, 15.0, 10.0, 32.0, 18.0, -0.01, 58.0, 1.05, 7.0, 1.15, 1.1, 1.0, false },
+	{ "balanced", { 13.0, 19.0, 26.0, 34.0 }, 0.88, 4.0, 1.8, 15.0, 10.0, 32.0, 18.0, -0.01, 58.0, 1.05, 7.0, 1.15, 1.1, 1.0, 5.0, 5.0, false },
 
 	/* Diagnostic styles, never dealt (see ARCHETYPE_WEIGHTS). Each one holds
 	 * everything else at a solid level and does the one thing that punishes its
@@ -97,9 +103,9 @@ const ArchetypeNumbers ARCHETYPES[BOT_ARCHETYPE_COUNT] = {
 	 * exploit-maniac: they bet air, so call down far below the pot odds and let
 	 * them bloat the pot; raise only a made hand.
 	 */
-	{ "exploit-nit",    { 40.0, 50.0, 60.0, 70.0 }, 0.95, 12.0, 8.0, 22.0, 15.0, 40.0, 25.0, 0.06, 95.0, 1.20, 35.0, 1.55, 2.2, 1.05, true },
-	{ "exploit-caller", { 20.0, 26.0, 32.0, 40.0 }, 0.95, 6.0, 0.5, 12.0, 7.0, 28.0, 16.0, 0.08, 80.0, 1.30, 2.0, 1.30, 0.35, 0.95, true },
-	{ "exploit-maniac", { 12.0, 16.0, 22.0, 30.0 }, 0.95, 9.0, 3.0, 20.0, 16.0, 32.0, 14.0, -0.16, 50.0, 0.70, 6.0, 0.90, 0.60, 1.0, true }
+	{ "exploit-nit",    { 40.0, 50.0, 60.0, 70.0 }, 0.95, 12.0, 8.0, 22.0, 15.0, 40.0, 25.0, 0.06, 95.0, 1.20, 35.0, 1.55, 2.2, 1.05, 2.0, 3.0, true },
+	{ "exploit-caller", { 20.0, 26.0, 32.0, 40.0 }, 0.95, 6.0, 0.5, 12.0, 7.0, 28.0, 16.0, 0.08, 80.0, 1.30, 2.0, 1.30, 0.35, 0.95, 5.0, 5.0, true },
+	{ "exploit-maniac", { 12.0, 16.0, 22.0, 30.0 }, 0.95, 9.0, 3.0, 20.0, 16.0, 32.0, 14.0, -0.16, 50.0, 0.70, 6.0, 0.90, 0.60, 1.0, 12.0, 3.0, true }
 };
 
 /* What a strength level changes. The weak levels are not given worse cards,
@@ -226,6 +232,8 @@ AiPersonality BotProfile::personality() const
 	p.defendBigBlindPercent = style.defendBigBlind * level.callScale;
 	p.pushPercent = style.pushPercent;
 	p.callMargin = style.callMargin + level.callMarginShift;
+	p.stubbornChance = style.stubbornChance;
+	p.giveUpChance = style.giveUpChance;
 	p.cbetPercent = style.cbetPercent * level.cbetScale;
 	p.raiseFrequency = style.raiseFrequency;
 	p.raiseBluffPercent = style.raiseBluff;

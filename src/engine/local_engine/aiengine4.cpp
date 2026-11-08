@@ -363,12 +363,13 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 	 * in this engine and no model of a bet size, but the opponents' fold rate
 	 * says which way to lean: against opponents who give up, pressure pays;
 	 * against opponents who call, bluffs burn money and value bets can be
-	 * thinner. The shift stays small on purpose -- it is a bias on top of the
-	 * equity basis, nothing more (see PLAN.md, the fold step).
+	 * thinner. The pivot is where a balanced style ends up (28 %, measured);
+	 * the shift stays small on purpose -- it is a bias on top of the equity
+	 * basis, nothing more (see PLAN.md, the fold step).
 	 */
 	double pressure = 0.0;
 	if(s.opponentFoldToBetPercent >= 0) {
-		pressure = (s.opponentFoldToBetPercent - 50) / 50.0;
+		pressure = (s.opponentFoldToBetPercent - 28) / 22.0;
 		pressure = std::max(-0.8, std::min(0.8, pressure * p.adaptation));
 	}
 
@@ -435,6 +436,16 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 		const bool clearlyAhead = equity > fairShare * 1.9;
 		const bool strong = equity > fairShare * 1.25;
 
+		/* A weak-tight player folds hands that were worth a call: the board
+		 * looks scary, the bet is big, so the hand goes into the muck although
+		 * the price is fine. That leak has to exist before anybody can aim a
+		 * bet at it, and it is what the fold statistic of the opponent model
+		 * measures (PLAN.md, the fold step).
+		 */
+		if(p.giveUpChance > 0.0 && randomPercent() <= static_cast<int>(p.giveUpChance)) {
+			return fold(m);
+		}
+
 		/* Putting the money in now instead of just calling. Without this a table
 		 * of bots is one long series of calls and every style ends up with the
 		 * same aggression factor.
@@ -459,6 +470,13 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 			randomPercent() <= static_cast<int>(12 * p.bluffRate)) {
 		const int amount = std::max(s.minimumRaise, static_cast<int>(m.pot * 0.6));
 		return raiseTo(s, m, s.highestSet + amount);
+	}
+
+	/* And the opposite leak: a station pays even when the price is against
+	 * him. Bluffing into him is pointless, value betting is not.
+	 */
+	if(p.stubbornChance > 0.0 && randomPercent() <= static_cast<int>(p.stubbornChance)) {
+		return call(m);
 	}
 
 	return fold(m);

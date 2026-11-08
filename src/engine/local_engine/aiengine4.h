@@ -110,6 +110,8 @@ struct AiPersonality {
 
 	// --- after the flop ---
 	double callMargin;           // added to the equity a call needs (> 0 folds more)
+	double stubbornChance;       // pays anyway when the price is against him
+	double giveUpChance;         // folds anyway when the price is fine
 	double cbetPercent;          // chance to bet a checked pot, by hand only in part
 	double raiseFrequency;       // how often a made hand raises instead of calling
 	double raiseBluffPercent;    // chance to raise a hand that would only be called
@@ -129,7 +131,8 @@ struct AiPersonality {
 	AiPersonality()
 		: openRaiseChance(0.90), threeBetPercent(4.0), lightThreeBet(0.0),
 		  callRaisePercent(16.0), callRaisePercentOop(9.0), defendBigBlindPercent(30.0),
-		  pushPercent(18.0), callMargin(0.0), cbetPercent(55.0), raiseFrequency(1.0),
+		  pushPercent(18.0), callMargin(0.0), stubbornChance(5.0), giveUpChance(5.0),
+		  cbetPercent(55.0), raiseFrequency(1.0),
 		  raiseBluffPercent(5.0), aggression(1.0), bluffRate(1.0), looseness(1.0),
 		  thresholdNoise(0.0), adaptation(1.0)
 	{
