@@ -88,10 +88,10 @@ enum BotArchetype {
  * statistics of a real pool), so the tables below carry those targets.
  */
 enum BotPopulation {
-	/* The first tournament tier is a designed table, not a stake: two callers,
-	 * one loose-aggressive, one weak-tight and one careful player. Enough
-	 * weakness to be beaten, enough resistance that tight-aggressive play alone
-	 * does not run it over.
+	/* A designed tournament table that sits between the micro anchor and the
+	 * low stakes: two callers, one loose-aggressive, one weak-tight and one
+	 * careful player. Enough weakness to be beaten, enough resistance that
+	 * tight-aggressive play alone does not run it over.
 	 */
 	BOT_POPULATION_ROOKIE = 0,
 	BOT_POPULATION_MICRO,

@@ -168,7 +168,7 @@ struct PopulationNumbers {
 };
 
 const PopulationNumbers POPULATIONS[BOT_POPULATION_COUNT] = {
-	{ "rookie", "first tournament table: two callers, a LAG, a nit and a careful player",
+	{ "rookie", "between the micro anchor and the low stakes: two callers, a LAG, a nit and a careful player",
 	  26.0, 13.0, 6.0, {
 		  { BOT_STRENGTH_NOVICE, BOT_ARCHETYPE_CALLER },
 		  { BOT_STRENGTH_NOVICE, BOT_ARCHETYPE_CALLER },
