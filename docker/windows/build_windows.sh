@@ -67,6 +67,18 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Fast dev loop: the caller only wants the executable, not a deployable tree.
+# The deploy collection below copies every Qt DLL, the whole qml/ import tree
+# and data/ — minutes of pure I/O that a dev build does not need: the Qt
+# runtime, qml/ and data/ come from the installed PokerTH release, only the
+# exe changes. Keeps the release path byte-identical when the variable is unset.
+if [ "${SKIP_DEPLOY:-0}" = "1" ]; then
+    echo "SKIP_DEPLOY=1 -> Deploy-Erstellung uebersprungen."
+    echo "Executables:"
+    ls -lh ${BUILD_DIR}/bin/*.exe 2>/dev/null || echo "  (none in ${BUILD_DIR}/bin/)"
+    exit 0
+fi
+
 echo "Build successful! Collecting DLLs and data files..."
 
 # Create deployment directory

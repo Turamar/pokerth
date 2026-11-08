@@ -1,0 +1,268 @@
+name: Dev build (fast, no installer)
+
+# Быстрый цикл «правка -> сборка -> запуск» для повседневной работы.
+#
+# Чем отличается от windows.yml (релизная сборка установщика):
+#   * собирается только клиент: по умолчанию QML, виджет-клиент — по запросу;
+#   * deploy-дерево (Qt-DLL + qml/ + plugins) не собирается: SKIP_DEPLOY=1;
+#   * нет NSIS, нет подписи SignPath, не нужен imagick;
+#   * артефакт маленький: обычно один exe вместо 167 МБ установщика.
+#
+# Запуск собранного exe (package=exe):
+#   1. один раз поставить dist\PokerTH-Combined-...-Setup.exe;
+#   2. скачать артефакт, распаковать и положить pokerth_qml-client.exe
+#      поверх файла в папке установленного PokerTH;
+#   3. запускать установленный PokerTH.
+#   Qt-DLL, qml/ и data/ остаются от установленной 2.1.11 и не меняются.
+#   Меняются только C++ и QML (QML зашит в exe через qrc).
+#
+# package=exe+data  — то же плюс актуальный data/ (стили стола, колоды, шрифты).
+# package=deploy    — всё дерево (exe + Qt + qml + plugins + data): можно
+#                     распаковать в любую папку и запускать без установки.
+#
+# Время: тёплый кэш vcpkg + один клиент ≈ 10 минут (у релизной сборки ~31).
+# Если кэш vcpkg протух (7 дней без обращений) — плюс ~19 минут на порты.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Что собирать"
+        type: choice
+        options:
+          - qml
+          - both
+        default: qml
+      package:
+        description: "Что положить в артефакт"
+        type: choice
+        options:
+          - exe
+          - exe+data
+          - deploy
+        default: exe
+
+run-name: "dev ${{ inputs.target }} / ${{ inputs.package }} @ ${{ github.ref_name }}"
+
+# Новая итерация на той же ветке отменяет предыдущую: ждать нечего.
+concurrency:
+  group: dev-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dev-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    permissions:
+      contents: read
+
+    env:
+      # Держим одинаково с windows.yml: тот же Qt и та же цепочка кэша vcpkg.
+      QT_VERSION: "6.9.3"
+      SKIP_NSIS: "1"
+      TZ: Europe/Berlin
+      # deploy-дерево собираем только по запросу (package=deploy).
+      SKIP_DEPLOY: ${{ inputs.package == 'deploy' && '0' || '1' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Qt-киты плюс kэш vcpkg не помещаются рядом с предустановленными
+      # тулчейнами раннера. Набор тот же, что в windows.yml, без NSIS/ImageMagick.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Install cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            mingw-w64 ninja-build \
+            cmake git wget curl \
+            zip unzip p7zip-full \
+            build-essential pkg-config \
+            autoconf automake libtool \
+            python3 python3-pip python3-venv
+          # Qt нужен std::thread -> только POSIX-вариант MinGW.
+          for tool in gcc g++; do
+            if [ -e "/usr/bin/x86_64-w64-mingw32-${tool}-posix" ]; then
+              sudo update-alternatives --set "x86_64-w64-mingw32-${tool}" \
+                   "/usr/bin/x86_64-w64-mingw32-${tool}-posix"
+            fi
+          done
+          x86_64-w64-mingw32-g++ -v 2>&1 | tail -3
+
+      # build_windows.sh работает в ${ROOT}/pokerth и выводит все пути из ${ROOT}.
+      - name: Set up build root
+        run: |
+          set -euo pipefail
+          echo "ROOT=$HOME/pokerth-windows" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/pokerth-windows/Qt"
+          ln -sfn "$GITHUB_WORKSPACE" "$HOME/pokerth-windows/pokerth"
+
+      # Тот же префикс ключа, что у windows.yml: берём самый свежий сохранённый
+      # экземпляр, независимо от того, какой workflow его сохранил.
+      - name: Restore vcpkg
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/pokerth-windows/vcpkg
+          key: windows-vcpkg-${{ github.run_id }}
+          restore-keys: |
+            windows-vcpkg-
+
+      # Если порты пришли из кэша — не трогаем vcpkg вообще: именно этот шаг
+      # стоит ~19 минут, когда порты пересобираются.
+      - name: Build vcpkg dependencies
+        id: vcpkg
+        run: |
+          set -euo pipefail
+          INST="$ROOT/vcpkg/installed/x64-mingw-static"
+          have_ports() {
+            [ -f "$INST/lib/libprotobuf.a" ] || return 1
+            [ -f "$INST/lib/libssl.a" ] || return 1
+            ls "$INST"/lib/libboost_thread*.a >/dev/null 2>&1 || return 1
+            # Host-protoc для кросс-сборки: путь внутри триплета — дело рук
+            # vcpkg, поэтому ищем, а не хардкодим.
+            find "$ROOT/vcpkg/installed" -maxdepth 5 -name protoc -type f \
+                | grep -q . || return 1
+            return 0
+          }
+          echo "vcpkg tree: $(du -sh "$ROOT/vcpkg" 2>/dev/null | cut -f1 || echo 'отсутствует')"
+          echo "  libprotobuf.a : $([ -f "$INST/lib/libprotobuf.a" ] && echo yes || echo no)"
+          echo "  libssl.a      : $([ -f "$INST/lib/libssl.a" ] && echo yes || echo no)"
+          echo "  boost_thread  : $(ls "$INST"/lib/libboost_thread*.a 2>/dev/null | head -1 || echo no)"
+          echo "  protoc (host) : $(find "$ROOT/vcpkg/installed" -maxdepth 5 -name protoc -type f 2>/dev/null | head -1 || echo no)"
+          if have_ports; then
+            echo "vcpkg: порты из кэша — сборка пропущена"
+            echo "VCPKG_WARM=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "vcpkg: кэша нет или он неполный — собираем порты (~19 минут)"
+          echo "VCPKG_WARM=0" >> "$GITHUB_ENV"
+          if [ ! -x "$ROOT/vcpkg/vcpkg" ]; then
+            git clone https://github.com/Microsoft/vcpkg.git "$ROOT/vcpkg"
+            "$ROOT/vcpkg/bootstrap-vcpkg.sh"
+          fi
+          "$ROOT/vcpkg/vcpkg" install --triplet=x64-mingw-static \
+              boost-system \
+              boost-thread \
+              boost-program-options \
+              boost-filesystem \
+              boost-chrono \
+              boost-date-time \
+              boost-asio \
+              boost-interprocess \
+              boost-iostreams \
+              boost-lambda \
+              boost-foreach \
+              boost-uuid \
+              protobuf \
+              openssl
+          "$ROOT/vcpkg/vcpkg" install protobuf:x64-linux
+
+      - name: Save vcpkg (только если собирали порты)
+        if: env.VCPKG_WARM == '0'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/pokerth-windows/vcpkg
+          key: windows-vcpkg-${{ github.run_id }}
+
+      - name: Install Qt (win64_mingw target + linux host)
+        run: |
+          set -euo pipefail
+          python3 -m venv "$ROOT/venv"
+          "$ROOT/venv/bin/pip" install --upgrade pip
+          "$ROOT/venv/bin/pip" install aqtinstall
+
+          # Тот же список модулей, что в windows.yml: dev-сборка должна
+          # собирать то же самое, иначе она перестаёт что-то проверять.
+          QT_MODULES="qt3d qt5compat qtcharts qtconnectivity qtdatavis3d
+                      qtgraphs qtgrpc qthttpserver qtimageformats qtlocation
+                      qtlottie qtmultimedia qtnetworkauth qtpositioning
+                      qtquick3d qtquick3dphysics qtquicktimeline
+                      qtremoteobjects qtscxml qtsensors qtserialbus
+                      qtserialport qtshadertools qtspeech qtvirtualkeyboard
+                      qtwebchannel qtwebsockets qtwebview"
+
+          "$ROOT/venv/bin/aqt" install-qt windows desktop "$QT_VERSION" win64_mingw \
+              --outputdir "$ROOT/Qt" --autodesktop --modules $QT_MODULES
+          "$ROOT/venv/bin/aqt" install-qt linux desktop "$QT_VERSION" linux_gcc_64 \
+              --outputdir "$ROOT/Qt" --modules $QT_MODULES
+
+          test -d "$ROOT/Qt/$QT_VERSION/mingw_64"
+          test -x "$ROOT/Qt/$QT_VERSION/gcc_64/bin/qt-cmake"
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.target }}" = "both" ]; then
+            export TARGET="pokerth_client pokerth_qml-client"
+          else
+            export TARGET="pokerth_qml-client"
+          fi
+          echo "TARGET=$TARGET  SKIP_DEPLOY=$SKIP_DEPLOY  SKIP_NSIS=$SKIP_NSIS"
+          START=$(date +%s)
+          bash docker/windows/build_windows.sh
+          echo "BUILD_SECONDS=$(( $(date +%s) - START ))" >> "$GITHUB_ENV"
+
+      - name: List artifacts
+        run: |
+          set -euo pipefail
+          ls -lh build/bin/*.exe
+          test -f build/bin/pokerth_qml-client.exe
+          if [ "${{ inputs.target }}" = "both" ]; then
+            test -f build/bin/pokerth_client.exe
+          fi
+
+      - name: Upload exe
+        if: inputs.package == 'exe'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pokerth-dev-${{ github.sha }}
+          path: build/bin/*.exe
+          if-no-files-found: error
+          retention-days: 7
+          # exe уже содержит сжатые ресурсы — упаковка ничего не даст.
+          compression-level: 0
+
+      - name: Upload exe + data
+        if: inputs.package == 'exe+data'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pokerth-dev-${{ github.sha }}
+          path: |
+            build/bin/*.exe
+            data/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Upload deploy tree
+        if: inputs.package == 'deploy'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pokerth-dev-deploy-${{ github.sha }}
+          path: build/deploy/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Dev build: ${{ inputs.target }} / ${{ inputs.package }}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| ref | \`${{ github.ref_name }}\` |"
+            echo "| commit | \`${{ github.sha }}\` |"
+            echo "| vcpkg | ${{ env.VCPKG_WARM == '1' && 'из кэша (порты не собирались)' || 'собирался заново' }} |"
+            echo "| сборка | ${BUILD_SECONDS:-?} с |"
+            echo ""
+            echo "Артефакт: \`pokerth-dev-${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
