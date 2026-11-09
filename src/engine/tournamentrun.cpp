@@ -529,7 +529,9 @@ bool TournamentRun::consolidateOne()
 
 	vector<int> people = m_tables[victim].ids;
 	const int lastBigBlind = m_tables[victim].lastBigBlind;
-	if(lastBigBlind >= 0) {
+	// Only somebody who is still in the broken table: the big blind payer may
+	// have just busted, and a bust is collected before the tables are moved.
+	if(lastBigBlind >= 0 && contains(people, lastBigBlind)) {
 		people.erase(remove(people.begin(), people.end(), lastBigBlind), people.end());
 		people.push_back(lastBigBlind);
 	}
