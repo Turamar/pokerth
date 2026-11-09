@@ -2606,6 +2606,7 @@ bool GameHandler::seat(const std::vector<int> &ids, int button, std::string &err
 	startData.numberOfPlayers     = seats;
 	startData.startDealerPlayerId = buttonSeat;
 
+	qInfo().noquote() << "[MTT] seat: my table gets" << seats << "players";
 	try {
 		// The hand is the controller's to start (startHand): a rebuilt table must
 		// not deal one at the blind the event started with.
@@ -2627,6 +2628,7 @@ bool GameHandler::seat(const std::vector<int> &ids, int button, std::string &err
 	qDeleteAll(m_bustedLocalTimers);
 	m_bustedLocalTimers.clear();
 	refreshPlayerData();
+	qInfo().noquote() << "[MTT] seat done:" << seatLine(m_localSeatIds);
 	if (rebuild) {
 		qInfo().noquote() << "tournament" << m_tournamentKey << "reseats my table:"
 						  << seatLine(m_localSeatIds);
@@ -2646,6 +2648,8 @@ bool GameHandler::startHand(int blind, std::string &error)
 	// The blind of the level, not of the table: the controller says how high the
 	// level is and every table of the field posts the same.
 	game->setCurrentSmallBlind(blind);
+	qInfo().noquote() << "[MTT] startHand: blind" << blind << "hand"
+					  << (m_tournament ? m_tournament->result().handsPlayed + 1 : 0);
 	try {
 		game->initHand();
 		game->startHand();
@@ -2653,6 +2657,7 @@ bool GameHandler::startHand(int blind, std::string &error)
 		error = e.what();
 		return false;
 	}
+	qInfo().noquote() << "[MTT] startHand done";
 	return true;
 }
 
@@ -2694,6 +2699,9 @@ void GameHandler::advanceTournament()
 	if (!m_tournament || m_localGameOver)
 		return;
 
+	qInfo().noquote() << "[MTT] advance: step" << (m_tournament->result().handsPlayed + 1)
+					  << "of" << m_tournament->tableCount() << "table(s),"
+					  << m_tournament->playersLeft() << "players left";
 	std::string error;
 	if (!m_tournament->step(error)) {
 		qWarning().noquote() << "tournament" << m_tournamentKey
@@ -2703,6 +2711,9 @@ void GameHandler::advanceTournament()
 		finishTournament(place);
 		return;
 	}
+	qInfo().noquote() << "[MTT] advance: step done, hand" << m_tournament->result().handsPlayed
+					  << "level" << m_tournament->result().level
+					  << "blind" << m_tournament->blind();
 	m_roster = m_tournament->roster();
 	m_localSeatIds = m_tournament->localIds();
 
