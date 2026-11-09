@@ -55,10 +55,19 @@ struct PlayerStatistics {
 	 */
 	int facedBets;
 	int foldedToBets;
+	/* After the flop: the free decisions (bet or check) and how they were used,
+	 * and the raises facing a bet. They say whether a style only calls or
+	 * actually opens a street -- the difference between a station and a
+	 * passive-but-alive player, which the plain aggression factor cannot show.
+	 */
+	int postflopBets;
+	int postflopChecks;
+	int postflopRaises;
 
 	PlayerStatistics()
 		: hands(0), voluntary(0), preflopRaises(0), threeBetOpportunities(0), threeBets(0),
-		  aggressive(0), passive(0), facedBets(0), foldedToBets(0) {}
+		  aggressive(0), passive(0), facedBets(0), foldedToBets(0),
+		  postflopBets(0), postflopChecks(0), postflopRaises(0) {}
 };
 
 class PlayerInterface

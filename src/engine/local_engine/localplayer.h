@@ -369,6 +369,15 @@ public:
 					|| action == PLAYER_ACTION_ALLIN) ++myStatistics.aggressive;
 			else if(action == PLAYER_ACTION_CALL) ++myStatistics.passive;
 
+			/* The free decisions and the raises of their own: a caller that
+			 * only checks and calls is "passive", a caller that bets a made
+			 * hand once in a while is not -- the two must be distinguishable,
+			 * otherwise a calibration cannot tell the styles apart.
+			 */
+			if(action == PLAYER_ACTION_BET) ++myStatistics.postflopBets;
+			else if(action == PLAYER_ACTION_CHECK) ++myStatistics.postflopChecks;
+			else if(action == PLAYER_ACTION_RAISE) ++myStatistics.postflopRaises;
+
 			/* A bet in front of us is a chance to give up. How often a player
 			 * takes it is what the opponent model reads as "this one folds too
 			 * much" -- the input of the fold-equity step.

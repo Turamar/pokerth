@@ -218,6 +218,9 @@ void accumulate(SimTotals &totals, const SimReport &report)
 		target.passive += source.passive;
 		target.facedBets += source.facedBets;
 		target.foldedToBets += source.foldedToBets;
+		target.postflopBets += source.postflopBets;
+		target.postflopChecks += source.postflopChecks;
+		target.postflopRaises += source.postflopRaises;
 		target.handsWon += source.handsWon;
 		target.chipsWon += source.chipsWon;
 		target.netChips += source.netChips;
@@ -296,11 +299,37 @@ void printFieldHeader(const SimOptions &options)
 		   options.profile.label().c_str(), options.players);
 }
 
+// Share of the free postflop decisions (bet or check) that were bets. This is
+// the number that tells a station from a passive-but-alive style: a caller that
+// never bets sits at 0 %, a caller that bets a made hand once in a while does
+// not, while both show the same low aggression factor.
+void formatBetShare(const SimSeatStats &seat, char *buffer, size_t size)
+{
+	const long long free = seat.postflopBets + seat.postflopChecks;
+	if(free > 0) {
+		snprintf(buffer, size, "%.0f", percentage(seat.postflopBets, free));
+	} else {
+		snprintf(buffer, size, "-");
+	}
+}
+
+void formatRaiseShare(const SimSeatStats &seat, char *buffer, size_t size)
+{
+	// facesBets already counts every spot with a bet in front, and a raise is
+	// one of them -- so the share is raises over faced bets, not over their sum.
+	if(seat.facedBets > 0) {
+		snprintf(buffer, size, "%.0f", percentage(seat.postflopRaises, seat.facedBets));
+	} else {
+		snprintf(buffer, size, "-");
+	}
+}
+
 void printSeatTable(const vector<SimSeatStats> &seats, bool detailed, int smallBlind)
 {
-	printf("\n%-6s %-14s %8s %7s %7s %6s %6s %6s %8s %6s %7s\n",
+	printf("\n%-6s %-14s %8s %7s %7s %6s %6s %6s %6s %5s %8s %6s %7s\n",
 		   "seat", "profile", "hands", "VPIP%", "PFR%", "3B%", "F2B%", "AF",
-		   detailed ? "net" : "bb/100", "won", detailed ? "busted" : "busts");
+		   "bet%", "rais%", detailed ? "net" : "bb/100", "won",
+		   detailed ? "busted" : "busts");
 
 	for(size_t i = 0; i < seats.size(); i++) {
 		const SimSeatStats &seat = seats[i];
@@ -310,6 +339,10 @@ void printSeatTable(const vector<SimSeatStats> &seats, bool detailed, int smallB
 		formatThreeBet(seat, threeBet, sizeof(threeBet));
 		char foldToBet[8];
 		formatFoldToBet(seat, foldToBet, sizeof(foldToBet));
+		char betShare[8];
+		formatBetShare(seat, betShare, sizeof(betShare));
+		char raiseShare[8];
+		formatRaiseShare(seat, raiseShare, sizeof(raiseShare));
 
 		char net[16];
 		if(detailed) {
@@ -326,11 +359,12 @@ void printSeatTable(const vector<SimSeatStats> &seats, bool detailed, int smallB
 			snprintf(busted, sizeof(busted), "%d", seat.busts);
 		}
 
-		printf("%-6s %-14s %8lld %7.1f %7.1f %6s %6s %6s %8s %6lld %7s\n",
+		printf("%-6s %-14s %8lld %7.1f %7.1f %6s %6s %6s %6s %5s %8s %6lld %7s\n",
 			   seat.name.c_str(), seat.profile.c_str(), seat.hands,
 			   percentage(seat.vpip, seat.hands),
 			   percentage(seat.pfr, seat.hands),
-			   threeBet, foldToBet, aggression, net, seat.handsWon, busted);
+			   threeBet, foldToBet, aggression, betShare, raiseShare,
+			   net, seat.handsWon, busted);
 	}
 }
 
@@ -402,6 +436,9 @@ bool writeJson(const string &fileName, const SimTotals &totals, const SimOptions
 		entry[QStringLiteral("facedBets")] = static_cast<qint64>(seat.facedBets);
 		entry[QStringLiteral("foldedToBets")] = static_cast<qint64>(seat.foldedToBets);
 		entry[QStringLiteral("foldToBetPercent")] = percentage(seat.foldedToBets, seat.facedBets);
+		entry[QStringLiteral("postflopBets")] = static_cast<qint64>(seat.postflopBets);
+		entry[QStringLiteral("postflopChecks")] = static_cast<qint64>(seat.postflopChecks);
+		entry[QStringLiteral("postflopRaises")] = static_cast<qint64>(seat.postflopRaises);
 		entry[QStringLiteral("handsWon")] = static_cast<qint64>(seat.handsWon);
 		entry[QStringLiteral("chipsWon")] = static_cast<qint64>(seat.chipsWon);
 		entry[QStringLiteral("busts")] = seat.busts;

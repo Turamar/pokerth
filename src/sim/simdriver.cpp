@@ -150,6 +150,9 @@ void collectStatistics(const boost::shared_ptr<Game> &game, SimReport &report)
 		stats.passive = statistics.passive;
 		stats.facedBets = statistics.facedBets;
 		stats.foldedToBets = statistics.foldedToBets;
+		stats.postflopBets = statistics.postflopBets;
+		stats.postflopChecks = statistics.postflopChecks;
+		stats.postflopRaises = statistics.postflopRaises;
 		stats.chips = (*it)->getMyCash();
 	}
 }

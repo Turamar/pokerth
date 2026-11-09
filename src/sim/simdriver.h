@@ -108,7 +108,8 @@ struct SimSeatStats
 	SimSeatStats()
 		: seat(0), hands(0), vpip(0), pfr(0), threeBets(0), threeBetOpportunities(0),
 		  aggressive(0), passive(0), facedBets(0), foldedToBets(0), handsWon(0),
-		  chipsWon(0), netChips(0), chips(0), bustedAtHand(-1), busts(0) {}
+		  chipsWon(0), netChips(0), chips(0), bustedAtHand(-1), busts(0),
+		  postflopBets(0), postflopChecks(0), postflopRaises(0) {}
 
 	int seat;
 	std::string name;
@@ -122,6 +123,11 @@ struct SimSeatStats
 	long long passive;    // calls after the flop
 	long long facedBets;  // faced a bet after the flop: a chance to give up
 	long long foldedToBets;  // of those: folded
+	// The free decisions after the flop and the raises: bets and checks answer
+	// "does this style ever open a street", raises answer "does it fight back".
+	long long postflopBets;
+	long long postflopChecks;
+	long long postflopRaises;
 	long long handsWon;
 	long long chipsWon;
 	long long netChips;   // chips at the end minus the starting stack, summed over runs
