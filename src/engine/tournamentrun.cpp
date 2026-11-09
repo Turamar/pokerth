@@ -67,6 +67,14 @@ int TournamentRun::blind() const
 	return small;
 }
 
+int TournamentRun::tableCapacity() const
+{
+	// Nine-handed, the size of the smaller events: the engine has ten seats but
+	// a tournament table never uses the tenth. A smaller event is its own size.
+	return m_event.seats < PlayerState::MaxTournamentTableSeats
+		   ? m_event.seats : PlayerState::MaxTournamentTableSeats;
+}
+
 int TournamentRun::playersLeft() const
 {
 	int left = 0;
@@ -167,8 +175,9 @@ bool TournamentRun::begin(const PlayerState::Roster &roster, LocalTableHost *hos
 
 bool TournamentRun::seatTables(string &error)
 {
-	// The tables of a full field: 10 seats (the engine maximum), the field
-	// spread as evenly as the seats allow. 18 players are two tables of nine.
+	// A full field: nine seats at a table (the tournament maximum, one less
+	// than the engine's), spread as evenly as the seats allow. 18 players are
+	// two tables of nine, 45 are five of nine, 180 is twenty of nine.
 	vector<int> ids;
 	for(int id = 0; id < m_roster.count(); ++id) {
 		const PlayerState::RosterEntry *who = m_roster.entry(id);
@@ -179,7 +188,7 @@ bool TournamentRun::seatTables(string &error)
 		return false;
 	}
 
-	const int perTable = MAX_NUMBER_OF_PLAYERS;
+	const int perTable = tableCapacity();
 	const int tables = (static_cast<int>(ids.size()) + perTable - 1) / perTable;
 	const int base = static_cast<int>(ids.size()) / tables;
 	const int extra = static_cast<int>(ids.size()) % tables;
@@ -224,10 +233,10 @@ bool TournamentRun::buildTable(Table &table, string &error)
 	table.dirty = false;
 	if(table.local) return true;
 	if(table.ids.size() < 2) return true;
-	if(table.ids.size() > static_cast<size_t>(MAX_NUMBER_OF_PLAYERS)) {
+	if(table.ids.size() > static_cast<size_t>(tableCapacity())) {
 		ostringstream oss;
 		oss << "table " << table.number << ": " << table.ids.size()
-			<< " players do not fit into " << MAX_NUMBER_OF_PLAYERS << " seats";
+			<< " players do not fit into " << tableCapacity() << " seats";
 		error = oss.str();
 		return false;
 	}
@@ -488,39 +497,91 @@ int TournamentRun::largestTable() const
 }
 
 
+/* The final table: while the field fits into one table fewer than there are,
+ * the smallest table is broken and its people are seated at the others.
+ *
+ * This is the standard MTT rule - 18 seats play 9+9 and the field comes
+ * together when nine are left - and it is what the balancing alone cannot do:
+ * two balanced tables shrink together and would play 2+2 to the end. The rule
+ * only ever breaks a table that is not the player's: he stays where he sits and
+ * the others come to him. Breaking his table would rebuild the felt in front of
+ * him for no reason he could see, which is exactly what the player noticed.
+ *
+ * Who waits where: the one who paid the big blind at the broken table arrives
+ * last. The seats after the button are the blinds, so he is the one who takes
+ * the blinds furthest from here - he does not pay the big blind twice in a row.
+ */
+bool TournamentRun::consolidateOne()
+{
+	const int tables = static_cast<int>(m_tables.size());
+	if(tables < 2) return false;
+
+	const int capacity = tableCapacity();
+	if(playersLeft() > capacity * (tables - 1)) return false;
+
+	int victim = -1;
+	for(int i = 0; i < tables; ++i) {
+		if(m_tables[i].local || m_tables[i].ids.empty()) continue;
+		if(victim < 0 || m_tables[i].ids.size() < m_tables[victim].ids.size()) victim = i;
+	}
+	if(victim < 0) return false;
+
+	vector<int> people = m_tables[victim].ids;
+	const int lastBigBlind = m_tables[victim].lastBigBlind;
+	if(lastBigBlind >= 0) {
+		people.erase(remove(people.begin(), people.end(), lastBigBlind), people.end());
+		people.push_back(lastBigBlind);
+	}
+
+	for(size_t k = 0; k < people.size(); ++k) {
+		// The fullest table with room: the people fill the tables up instead of
+		// spreading thin again.
+		int to = -1;
+		for(int i = 0; i < tables; ++i) {
+			if(i == victim) continue;
+			if(static_cast<int>(m_tables[i].ids.size()) >= capacity) continue;
+			if(to < 0 || m_tables[i].ids.size() > m_tables[to].ids.size()) to = i;
+		}
+		if(to < 0) return false;   // the numbers said there is room
+		// The button of the table stays with the person who had it: a rebuild
+		// keeps it by roster id, so the newcomers fall after it in seat order.
+		m_tables[to].ids.push_back(people[k]);
+		m_tables[to].dirty = true;
+		++m_moves;
+		if(people[k] >= 0 && people[k] < static_cast<int>(m_result.movesById.size())) {
+			m_result.movesById[people[k]] += 1;
+		}
+	}
+	m_tables[victim].ids.clear();
+	m_tables[victim].dirty = true;
+	closeEmptyTables();
+	if(m_tables.size() == 1 && m_result.finalTableAt < 0) {
+		// The field is in one room now: from here on the tournament is a single
+		// table, which is the shape the players know as the final table.
+		m_result.finalTableAt = playersLeft();
+	}
+	return true;
+}
+
 void TournamentRun::rebalance()
 {
+	// The flag says which table is the player's: the merge must not break it,
+	// and the player may have just busted (then no table is his).
+	updateLocalFlags();
+
 	for(;;) {
 		closeEmptyTables();
 		const int tables = static_cast<int>(m_tables.size());
 		if(playersLeft() < 2 || tables < 2) break;
 
-		// A player alone at a table cannot play. His table is broken and he is
-		// seated at the fullest table that still has room - the one that gives
-		// the most company and the fewest moves.
-		int lone = -1;
-		for(int i = 0; i < tables; ++i) {
-			if(m_tables[i].ids.size() == 1) {
-				lone = i;
-				break;
-			}
-		}
-		if(lone >= 0) {
-			int to = -1;
-			for(int i = 0; i < tables; ++i) {
-				if(i == lone || m_tables[i].ids.size() >= static_cast<size_t>(MAX_NUMBER_OF_PLAYERS)) {
-					continue;
-				}
-				if(to < 0 || m_tables[i].ids.size() > m_tables[to].ids.size()) to = i;
-			}
-			if(to >= 0) {
-				moveOne(m_tables[lone], m_tables[to]);
-				continue;
-			}
-		}
+		// The final table comes first: while the field fits into fewer tables,
+		// one table is broken and the rest is balancing among the others.
+		if(consolidateOne()) continue;
 
 		// Otherwise one move per two seats of difference: one move fixes two
-		// seats, so after it the sizes differ by one at most.
+		// seats, so after it the sizes differ by one at most. A player who is
+		// left alone at his table is not moved himself - the balancing sends
+		// somebody over, so his table fills up.
 		const int full = largestTable();
 		int thin = -1;
 		for(int i = 0; i < tables; ++i) {
@@ -562,14 +623,13 @@ int TournamentRun::moveOne(Table &from, Table &to)
 	// the longest wait for the button anyway, so moving costs him least - and it
 	// cannot make him pay the big blind twice in a row.
 	//
-	// Never the host's player while somebody else is at his table: moving him
-	// means rebuilding his table in front of him. He moves only when his table
-	// is broken, i.e. when he is the only one left there.
+	// Never the host's player: his table is never the one the merge breaks, and
+	// the balancing never takes from it while somebody else is seated there.
+	// The felt he sees is rebuilt only when people arrive, never because he
+	// left: he plays the whole tournament in the same chair.
 	int mover = -1;
-	if(from.ids.size() == 1) {
-		mover = from.ids.front();
-	} else if(from.lastBigBlind >= 0 && from.lastBigBlind != m_hostId
-			  && contains(from.ids, from.lastBigBlind)) {
+	if(from.lastBigBlind >= 0 && from.lastBigBlind != m_hostId
+	   && contains(from.ids, from.lastBigBlind)) {
 		mover = from.lastBigBlind;
 	} else {
 		for(size_t i = from.ids.size(); i > 0; --i) {
@@ -637,4 +697,9 @@ void TournamentRun::fillResult()
 		chips += m_roster.stack(id);
 	}
 	m_result.chipsConserved = chips == m_chipsInPlay;
+
+	for(size_t i = 0; i < m_tables.size(); ++i) {
+		const int size = static_cast<int>(m_tables[i].ids.size());
+		if(size > m_result.biggestTable) m_result.biggestTable = size;
+	}
 }

@@ -99,6 +99,13 @@ public:
 		bool blindsAligned = true;
 		// The largest difference in table size seen after a rebalance.
 		int worstImbalance = 0;
+		// The largest table of the whole run, in people: nine is the tournament
+		// limit, so a larger number means a seating bug.
+		int biggestTable = 0;
+		// How many players were left when the field came together at the final
+		// table, -1 if it never did. The merge is due at nine, but two busts in
+		// one step can bring it down harder, so this is a range in the tests.
+		int finalTableAt = -1;
 	};
 
 	TournamentRun(ConfigFile *config, const PlayerState::TournamentEvent &event, Log *log);
@@ -142,6 +149,10 @@ public:
 	{
 		return static_cast<int>(m_tables.size());
 	}
+	// How many seats a table of this event has: the field is spread evenly, so
+	// 18 seats are two tables of nine, 45 are five of nine, 180 is eighteen of
+	// ten. The final table is formed when the field fits into fewer tables.
+	int tableCapacity() const;
 	// The people at the host's table, in seat order (the host's player first).
 	std::vector<int> localIds() const;
 	// The people at any table, in seat order; empty for a table number the
@@ -181,6 +192,9 @@ private:
 	bool playSilentTables(std::string &error);
 	void collectBusts();
 	void rebalance();
+	// Breaks one table if the field fits into fewer tables than there are now.
+	// True when a table was broken and its people were seated elsewhere.
+	bool consolidateOne();
 	int moveOne(Table &from, Table &to);
 	void closeEmptyTables();
 	int largestTable() const;

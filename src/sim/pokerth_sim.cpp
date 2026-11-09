@@ -517,9 +517,9 @@ public:
 			error = "the player's table does not start with him";
 			return false;
 		}
-		if(ids.size() > static_cast<size_t>(MAX_NUMBER_OF_PLAYERS)) {
+		if(ids.size() > static_cast<size_t>(PlayerState::MaxTournamentTableSeats)) {
 			m_sane = false;
-			error = "more players than the engine has seats";
+			error = "more players than a tournament table has seats";
 			return false;
 		}
 
@@ -942,14 +942,28 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 				check(result.worstImbalance <= 1,
 					  QStringLiteral("%1 seats: tables never differed by more than one (%2)")
 					  .arg(event.seats).arg(result.worstImbalance));
-				if(event.seats > 10) {
+				check(result.biggestTable <= PlayerState::MaxTournamentTableSeats,
+					  QStringLiteral("%1 seats: no table ever seated more than nine (%2)")
+					  .arg(event.seats).arg(result.biggestTable));
+				if(event.seats > PlayerState::MaxTournamentTableSeats) {
+					check(tournament.tableCount() == 1,
+						  QStringLiteral("%1 seats: the field ends at one table (%2)")
+						  .arg(event.seats).arg(tournament.tableCount()));
+					check(result.finalTableAt >= 3
+						  && result.finalTableAt <= PlayerState::MaxTournamentTableSeats,
+						  QStringLiteral("%1 seats: the final table is formed while the "
+										 "field still has people (%2 left)")
+						  .arg(event.seats).arg(result.finalTableAt));
+				}
+				if(event.seats > PlayerState::MaxTournamentTableSeats) {
 					check(result.moves > 0,
 						  QStringLiteral("18 seats: players were moved between tables (%1)")
 						  .arg(result.moves));
 				}
-				printf("  tournament %d seats: %d hands, level %d, %d moves, hero place %d\n",
+				printf("  tournament %d seats: %d hands, level %d, %d moves, "
+					   "final table at %d, hero place %d\n",
 					   event.seats, result.handsPlayed, result.level, result.moves,
-					   result.places.at(0));
+					   result.finalTableAt, result.places.at(0));
 			}
 		}
 
@@ -989,6 +1003,9 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 				check(dealt, QStringLiteral("the first hand at my table starts (%1)")
 					  .arg(QString::fromStdString(error)));
 				int steps = 0;
+				// How many were left when the field came together at one table:
+				// a final table, not the last two of a broken one.
+				int mergedAt = -1;
 				while(dealt && tournament.playersLeft() > 1 && tournament.hostStillIn()
 					  && steps < 2000) {
 					if(!tournament.step(error)) {
@@ -997,6 +1014,9 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 						break;
 					}
 					++steps;
+					if(mergedAt < 0 && tournament.tableCount() == 1) {
+						mergedAt = tournament.playersLeft();
+					}
 					if(tournament.playersLeft() <= 1 || !tournament.hostStillIn()) break;
 					if(!tournament.startLocalHand(error)) {
 						check(false, QStringLiteral("the hand after step %1 (%2)").arg(steps)
@@ -1020,13 +1040,28 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 				check(result.worstImbalance <= 1,
 					  QStringLiteral("the client's tables never differed by more than one (%1)")
 					  .arg(result.worstImbalance));
+				check(mergedAt < 0
+					  || (mergedAt >= 2 && mergedAt <= tournament.tableCapacity()),
+					  QStringLiteral("the field came together at one table with %1 players "
+									 "(%2 seats at a table)").arg(mergedAt)
+					  .arg(tournament.tableCapacity()));
+				check(result.finalTableAt == mergedAt,
+					  QStringLiteral("the controller and my table saw the same final "
+									 "table (%1 / %2)").arg(result.finalTableAt)
+					  .arg(mergedAt));
+				check(result.biggestTable <= PlayerState::MaxTournamentTableSeats,
+					  QStringLiteral("my table never seated more than nine (%1)")
+					  .arg(result.biggestTable));
+				check(result.movesById.at(0) == 0,
+					  QStringLiteral("the balancing and the merge never moved the player (%1)")
+					  .arg(result.movesById.at(0)));
 				const int place = tournament.placeOf(0);
 				check(place >= 1 && place <= event.seats,
 					  QStringLiteral("the player has a place (%1 of %2)")
 					  .arg(place).arg(event.seats));
 				printf("  client-style tournament: %d steps, %d reseats, %d moves, "
-					   "hero place %d of %d\n", steps, host.seated() - 1, result.moves,
-					   place, event.seats);
+					   "final table at %d, hero place %d of %d\n", steps,
+					   host.seated() - 1, result.moves, mergedAt, place, event.seats);
 			}
 		}
 		{

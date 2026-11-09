@@ -2559,8 +2559,8 @@ bool GameHandler::seat(const std::vector<int> &ids, int button, std::string &err
 		return false;
 	}
 	const int seats = static_cast<int>(ids.size());
-	if (seats > MAX_NUMBER_OF_PLAYERS) {
-		error = "more players than the engine has seats";
+	if (seats > static_cast<int>(PlayerState::MaxTournamentTableSeats)) {
+		error = "more players than a tournament table has seats";
 		return false;
 	}
 

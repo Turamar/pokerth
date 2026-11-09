@@ -26,6 +26,12 @@ namespace PlayerState
 
 const int MaxTournamentPayouts = 5;
 
+/* Nine seats at a tournament table, not the engine's ten (MAX_NUMBER_OF_PLAYERS).
+ * Decision 2026-11-10: MTT never seats ten, so a table is nine-handed, 18 seats
+ * are two tables of nine, and the final table is formed when nine players are
+ * left. The engine still creates its ten seats; the tenth is the empty one. */
+const int MaxTournamentTableSeats = 9;
+
 struct TournamentPayout
 {
 	int place;      // 1-based
