@@ -243,9 +243,13 @@ set(TS_FILES
     i18n/pokerth_uk_UA.ts
 )
 
+# The catalogue of tournaments keeps its words as QT_TRANSLATE_NOOP sources in
+# src/state/tournament.cpp; that file is listed here so that a lupdate run finds
+# them (SOURCES is only scanned, not compiled).
 qt_add_translations(pokerth_qml-client
     TS_FILES        ${TS_FILES}
     SOURCES         ${POKERTH_QML_CLIENT_SRC} ${QML_FILES}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/../../state/tournament.cpp
     RESOURCE_PREFIX "/i18n"
 )
 

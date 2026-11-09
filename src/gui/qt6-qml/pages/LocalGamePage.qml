@@ -354,10 +354,12 @@ Rectangle {
                                                          localGamePagePage.buyInChips(buyIn.value),
                                                          localGamePagePage.selectedLimit)) {
                                 // The bank refused (balance changed meanwhile):
-                                // show why, and refresh what the page displays.
+                                // show the plain fact and refresh what the page
+                                // displays. The reason itself is English engine
+                                // diagnostics – it goes to the log ("Wallet: ..."),
+                                // not onto a screen that speaks one language.
                                 localGamePagePage.errorText =
-                                        qsTr("Der Platz konnte nicht gekauft werden: %1")
-                                        .arg(Wallet.lastError)
+                                        qsTr("Der Platz konnte nicht gekauft werden.")
                                 localGamePagePage.cashBalance = Wallet.balance
                                 localGamePagePage.selectLimit(localGamePagePage.bestLimit())
                                 buyIn.value = localGamePagePage.defaultBuyInBB()

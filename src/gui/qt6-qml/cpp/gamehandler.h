@@ -188,6 +188,14 @@ class GameHandler : public QObject
 	Q_PROPERTY(int tournamentPlace READ tournamentPlace NOTIFY tournamentStateChanged)
 	Q_PROPERTY(int tournamentSeats READ tournamentSeats NOTIFY tournamentStateChanged)
 	Q_PROPERTY(int tournamentPrize READ tournamentPrize NOTIFY tournamentStateChanged)
+	// The blinds of the running table and, in a tournament, the level they belong
+	// to (1 = the starting blind, +1 per doubling). They are chips, so the status
+	// bar prints them without a currency sign; the money formatter is for the
+	// wallet, not for a stack. NOTIFY is handNumberChanged: the engine can only
+	// raise the blinds between hands. blindLevel is 0 away from a tournament.
+	Q_PROPERTY(int blindLevel READ blindLevel NOTIFY handNumberChanged)
+	Q_PROPERTY(int smallBlind READ smallBlind NOTIFY handNumberChanged)
+	Q_PROPERTY(int bigBlind READ bigBlind NOTIFY handNumberChanged)
 	// The card odds of your own hand (seat 0) – analogous to the CardsChanceMonitor
 	// of the widgets client. A list with 10 entries, index 0 = high card …
 	// 9 = royal flush; every entry is a map {"prob": int %, "possible": bool}.
@@ -388,6 +396,10 @@ public:
 	{
 		return static_cast<int>(m_tournamentPrize);
 	}
+	// Implemented in the .cpp: they ask the engine for the running blinds.
+	int blindLevel() const;
+	int smallBlind() const;
+	int bigBlind() const;
 	QVariantList cardsChance() const
 	{
 		return m_cardsChance;
@@ -802,6 +814,9 @@ private:
 	int m_tournamentPlace = 0;
 	int m_tournamentSeats = 0;
 	qint64 m_tournamentPrize = 0;
+	// The blind the event started at: the level is counted from it (the engine
+	// doubles the blind every level, so the current blind says the level).
+	int m_tournamentStartSmallBlind = 0;
 };
 
 #endif // GAMEHANDLER_H

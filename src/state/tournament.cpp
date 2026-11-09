@@ -5,10 +5,16 @@
 
 #include "tournament.h"
 
+#include <QCoreApplication>
+
 #include <cstring>
 
 namespace PlayerState
 {
+
+// The words of an event travel through QT_TRANSLATE_NOOP so that the UI can ask
+// for them in the running language (WalletHandler::tournaments does).
+#define TOURNAMENT_TEXT(text) QT_TRANSLATE_NOOP("TournamentEvent", text)
 
 /* The starting pair (PLAN.md, "Каталог: стартовая пятёрка").
  *
@@ -21,12 +27,16 @@ namespace PlayerState
  */
 static const TournamentEvent TOURNAMENTS[] = {
 	{
-		"sng6", "Шестёрка", "6 Plätze, zwei werden bezahlt: das Geld ist nah, die Blinds warten nicht",
+		"sng6",
+		TOURNAMENT_TEXT("Sechser"),
+		TOURNAMENT_TEXT("6 Plätze, zwei werden bezahlt: das Geld ist nah, die Blinds warten nicht"),
 		40, 6, "micro", 20, 1500, 10,
 		{ { 1, 650 }, { 2, 350 } }, 2
 	},
 	{
-		"sng9", "Девятка", "9 Plätze, drei werden bezahlt: voller Tisch und eine echte Bubble",
+		"sng9",
+		TOURNAMENT_TEXT("Neuner"),
+		TOURNAMENT_TEXT("9 Plätze, drei werden bezahlt: voller Tisch und eine echte Bubble"),
 		100, 9, "rookie", 20, 1500, 10,
 		{ { 1, 500 }, { 2, 300 }, { 3, 200 } }, 3
 	},

@@ -2312,6 +2312,7 @@ bool GameHandler::startCashGame(int players, int buyIn, int limitIndex)
 	m_tournamentPlace = 0;
 	m_tournamentSeats = 0;
 	m_tournamentPrize = 0;
+	m_tournamentStartSmallBlind = 0;
 	emit tournamentStateChanged();
 
 	GameData gameData;
@@ -2408,6 +2409,7 @@ bool GameHandler::startTournament(const QString &key)
 	m_tournamentPlace = 0;
 	m_tournamentSeats = event.seats;
 	m_tournamentPrize = 0;
+	m_tournamentStartSmallBlind = event.smallBlind;
 	emit tournamentStateChanged();
 
 	GameData gameData;
@@ -2460,6 +2462,7 @@ bool GameHandler::startTournament(const QString &key)
 		m_tournamentMode = false;
 		m_tournamentKey.clear();
 		m_tournamentSeats = 0;
+		m_tournamentStartSmallBlind = 0;
 		emit tournamentStateChanged();
 		if (m_wallet)
 			m_wallet->refundTournament(key);
@@ -2470,12 +2473,44 @@ bool GameHandler::startTournament(const QString &key)
 		m_tournamentMode = false;
 		m_tournamentKey.clear();
 		m_tournamentSeats = 0;
+		m_tournamentStartSmallBlind = 0;
 		emit tournamentStateChanged();
 		if (m_wallet)
 			m_wallet->refundTournament(key);
 		return false;
 	}
 	return true;
+}
+
+// The blinds of the running table, in chips. The engine keeps the current small
+// blind and doubles it every level in a tournament; a cash table starts at the
+// blind of its limit and never raises it.
+int GameHandler::smallBlind() const
+{
+	if (!m_game)
+		return 0;
+	return m_game->getCurrentSmallBlind();
+}
+
+int GameHandler::bigBlind() const
+{
+	return smallBlind() * 2;
+}
+
+// The level of a tournament: the starting blind is level 1, every doubling is
+// one more. Counting back from the current blind (instead of the hand number)
+// keeps the display right even if the engine misses a raise.
+int GameHandler::blindLevel() const
+{
+	if (!m_tournamentMode || m_tournamentStartSmallBlind <= 0)
+		return 0;
+	int level = 1;
+	int blind = m_tournamentStartSmallBlind;
+	while (blind * 2 <= smallBlind() && level < 99) {
+		blind *= 2;
+		++level;
+	}
+	return level;
 }
 
 int GameHandler::myStack() const
@@ -2529,6 +2564,7 @@ void GameHandler::endLocalGame()
 		m_tournamentPlace = 0;
 		m_tournamentSeats = 0;
 		m_tournamentPrize = 0;
+		m_tournamentStartSmallBlind = 0;
 		emit tournamentStateChanged();
 	}
 

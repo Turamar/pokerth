@@ -209,7 +209,8 @@ Rectangle {
             }
         }
 
-        // Right: phase + game ID + hand number (1:1 like the widget client to the right of the community cards)
+        // Right: phase + game ID + level + hand number (1:1 like the widget client to
+        // the right of the community cards; the level only in a tournament).
         Column {
             Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
             spacing: 0
@@ -225,10 +226,26 @@ Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: 8
                 AppText {
+                    // Local games have no game ID (0) – the field stays empty there.
+                    visible: GameTable ? GameTable.gameId > 0 : false
                     text: qsTr("Game: %1").arg(GameTable ? GameTable.gameId : 0)
                     color: "#9e9e9e"
                     font.pixelSize: Config.Responsive.landscapeCompact ? 9 : 11
                     font.weight: Font.Medium
+                }
+                // A tournament plays levels: which one is running and what it
+                // costs to see a flop. Chips, so no currency sign (a cash table
+                // keeps the blinds of the limit it was bought at – mentioning
+                // them every hand would only take room).
+                AppText {
+                    visible: GameTable ? GameTable.tournamentMode : false
+                    text: qsTr("Level %1 · %2/%3")
+                              .arg(GameTable ? GameTable.blindLevel : 0)
+                              .arg(GameTable ? GameTable.smallBlind : 0)
+                              .arg(GameTable ? GameTable.bigBlind : 0)
+                    color: "#99D500"
+                    font.pixelSize: Config.Responsive.landscapeCompact ? 9 : 11
+                    font.weight: Font.DemiBold
                 }
                 AppText {
                     text: qsTr("Hand: %1").arg(GameTable ? GameTable.handNumber : 1)

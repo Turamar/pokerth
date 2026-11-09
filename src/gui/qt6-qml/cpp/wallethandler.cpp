@@ -5,6 +5,7 @@
 
 #include "wallethandler.h"
 
+#include <QCoreApplication>
 #include <QDebug>
 #include <QTimer>
 #include <QVariantMap>
@@ -140,7 +141,8 @@ int WalletHandler::unlockedLimits() const
 
 // The tournament catalogue for the page: one map per event. The prize of every
 // paid place is computed here (from the pool, no rake), so that QML never does
-// money arithmetic.
+// money arithmetic. Label and note are QT_TRANSLATE_NOOP sources in the
+// catalogue (state/tournament.cpp) and get their words here.
 QVariantList WalletHandler::tournaments() const
 {
 	QVariantList list;
@@ -149,8 +151,10 @@ QVariantList WalletHandler::tournaments() const
 		const PlayerState::TournamentEvent &event = PlayerState::tournamentEvent(i);
 		QVariantMap entry;
 		entry[QStringLiteral("key")] = QString::fromLatin1(event.key);
-		entry[QStringLiteral("label")] = QString::fromUtf8(event.label);
-		entry[QStringLiteral("note")] = QString::fromUtf8(event.note);
+		entry[QStringLiteral("label")] =
+			QCoreApplication::translate("TournamentEvent", event.label);
+		entry[QStringLiteral("note")] =
+			QCoreApplication::translate("TournamentEvent", event.note);
 		entry[QStringLiteral("seats")] = event.seats;
 		entry[QStringLiteral("buyIn")] = static_cast<int>(event.buyIn);
 		entry[QStringLiteral("field")] = QString::fromLatin1(event.field);

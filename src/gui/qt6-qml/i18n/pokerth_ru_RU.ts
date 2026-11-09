@@ -866,6 +866,34 @@
         <source>Dein Stack ist aufgebraucht.</source>
         <translation>Стек закончился.</translation>
     </message>
+    <message>
+        <source>Turnier beendet</source>
+        <translation>Турнир окончен</translation>
+    </message>
+    <message>
+        <source>Du hast das Turnier gewonnen!</source>
+        <translation>Вы выиграли турнир!</translation>
+    </message>
+    <message>
+        <source>Ausgeschieden: Platz %1 von %2</source>
+        <translation>Вы выбыли: место %1 из %2</translation>
+    </message>
+    <message>
+        <source>Preis: %1</source>
+        <translation>Приз: %1</translation>
+    </message>
+    <message>
+        <source>Kein Preis</source>
+        <translation>Без приза</translation>
+    </message>
+    <message>
+        <source>Guthaben: %1</source>
+        <translation>Баланс: %1</translation>
+    </message>
+    <message>
+        <source>Der Platz konnte nicht gekauft werden.</source>
+        <translation>Не удалось купить место.</translation>
+    </message>
 </context>
 <context>
     <name>GamePlayerBox</name>
@@ -970,6 +998,10 @@
         <location line="+6"/>
         <source>Hand: %1</source>
         <translation>Раздача: %1</translation>
+    </message>
+    <message>
+        <source>Level %1 · %2/%3</source>
+        <translation>Уровень %1 · %2/%3</translation>
     </message>
 </context>
 <context>
@@ -3001,6 +3033,38 @@ PokerTH может уменьшить его. Новый аватар вступ
         <source>Der Platz konnte nicht gekauft werden: %1</source>
         <translation>Не удалось купить место: %1</translation>
     </message>
+    <message>
+        <source>Limit (Blinds, ab wie viel Guthaben):</source>
+        <translation>Лимит (блайнды, от какого баланса):</translation>
+    </message>
+    <message>
+        <source>Buy-in %1–%2</source>
+        <translation>Бай-ин %1–%2</translation>
+    </message>
+    <message>
+        <source>offen</source>
+        <translation>открыт</translation>
+    </message>
+    <message>
+        <source>ab %1</source>
+        <translation>от %1</translation>
+    </message>
+    <message>
+        <source>Buy-in (Big Blinds):</source>
+        <translation>Бай-ин (в больших блайндах):</translation>
+    </message>
+    <message>
+        <source>%1 Big Blinds = %2 · Blinds %3 / %4, keine Erhöhung</source>
+        <translation>%1 больших блайндов = %2 · блайнды %3 / %4, без повышения</translation>
+    </message>
+    <message>
+        <source>Kein offenes Limit: für die unterste Stufe sind %1 nötig, dein Guthaben ist %2. Der Rebuy auf der Guthaben-Seite füllt bis dahin auf.</source>
+        <translation>Нет открытого лимита: для нижней ступени нужно %1, ваш баланс — %2. Ребай на странице баланса пополнит его до нужной суммы.</translation>
+    </message>
+    <message>
+        <source>Der Platz konnte nicht gekauft werden.</source>
+        <translation>Не удалось купить место.</translation>
+    </message>
 </context>
 <context>
     <name>LocalGameSettings</name>
@@ -3148,6 +3212,12 @@ PokerTH может уменьшить его. Новый аватар вступ
         <location line="+16"/>
         <source>Gilt für lokale Spiele. Bei Netzwerkspielen bestimmt der Server die Stärke seiner Computerspieler.</source>
         <translation>Действует для локальных игр. В сетевых играх уровень своих компьютерных игроков определяет сервер.</translation>
+    </message>
+    <message>
+        <source>Zeitlimit pro Aktion
+(Sekunden, 0 = aus):</source>
+        <translation>Лимит времени на ход
+(секунды, 0 = выкл.):</translation>
     </message>
 </context>
 <context>
@@ -5076,6 +5146,10 @@ Please check your username and password.</source>
         <source>Logs</source>
         <translation>Журналы</translation>
     </message>
+    <message>
+        <source>Turniere</source>
+        <translation>Турниры</translation>
+    </message>
 </context>
 <context>
     <name>StaticData</name>
@@ -5567,6 +5641,76 @@ and disconnect from the server?</source>
     <message>
         <source>Zurück</source>
         <translation>Назад</translation>
+    </message>
+    <message>
+        <source>Rebuy bis %1 aufstocken</source>
+        <translation>Ребай до %1</translation>
+    </message>
+    <message>
+        <source>Das Guthaben liegt unter %1 – der Rebuy füllt es wieder auf.</source>
+        <translation>Баланс ниже %1 — ребай пополнит его.</translation>
+    </message>
+    <message>
+        <source>Der Rebuy wird angeboten, wenn das Guthaben unter %1 liegt.</source>
+        <translation>Ребай доступен, когда баланс ниже %1.</translation>
+    </message>
+</context>
+<context>
+    <name>TournamentsPage</name>
+    <message>
+        <source>Platz %1: %2</source>
+        <translation>Место %1: %2</translation>
+    </message>
+    <message>
+        <source>Turniere</source>
+        <translation>Турниры</translation>
+    </message>
+    <message>
+        <source>Guthaben</source>
+        <translation>Баланс</translation>
+    </message>
+    <message>
+        <source>Plätze</source>
+        <translation>мест</translation>
+    </message>
+    <message>
+        <source>Spielen</source>
+        <translation>Играть</translation>
+    </message>
+    <message>
+        <source>Der Platz konnte nicht gekauft werden.</source>
+        <translation>Не удалось купить место.</translation>
+    </message>
+    <message>
+        <source>Buy-in %1  ·  %2 BB  ·  Level alle %3 Hände  ·  Feld: %4</source>
+        <translation>Бай-ин %1  ·  %2 BB  ·  уровень каждые %3 раздач  ·  поле: %4</translation>
+    </message>
+    <message>
+        <source>Nicht genug Guthaben: nötig sind %1.</source>
+        <translation>Не хватает баланса: нужно %1.</translation>
+    </message>
+    <message>
+        <source>Zurück</source>
+        <translation>Назад</translation>
+    </message>
+</context>
+<context>
+    <name>TournamentEvent</name>
+    <message>
+        <source>Sechser</source>
+        <translation>Шестёрка</translation>
+    </message>
+    <message>
+        <source>Neuner</source>
+        <translation>Девятка</translation>
+    </message>
+    <message>
+        <source>6 Plätze, zwei werden bezahlt: das Geld ist nah, die Blinds warten nicht</source>
+        <translation>6 мест, платят двоим: деньги близко, блайнды не ждут</translation>
+    </message>
+    <message>
+        <source>9 Plätze, drei werden bezahlt: voller Tisch und eine echte Bubble</source>
+        <translation>9 мест, платят троим: полный стол и настоящий пузырь</translation>
     </message>
 </context>
 <context>

@@ -130,9 +130,12 @@ Rectangle {
                                             && mainStackView.currentItem.objectName === "gamePage")
                                         return
                                     if (!GameTable.startTournament(modelData.key)) {
+                                        // The bank refused: the reason is English
+                                        // (engine diagnostics, "Wallet: ..." in the
+                                        // log), so the player gets the plain fact
+                                        // instead of a second language on screen.
                                         tournamentsPage.errorText =
-                                                qsTr("Der Platz konnte nicht gekauft werden: %1")
-                                                .arg(Wallet.lastError)
+                                                qsTr("Der Platz konnte nicht gekauft werden.")
                                         return
                                     }
                                     mainStackView.push("GamePage.qml")
