@@ -1,8 +1,8 @@
-# POKERTH.sim - headless bot/game simulator.
+﻿# POKERTH.sim - headless bot/game simulator.
 #
 # Console only, no window, no network: it links the same engine library the
-# clients use and replaces the GUI with SimGui, which drives the game loop
-# instead of showing it (see simguiinterface.h).
+# clients use and replaces the GUI with SilentGui, which drives the game loop
+# instead of showing it (see engine/silentgui.h).
 #
 # EXCLUDE_FROM_ALL: the release builds must not compile it. Build it explicitly
 # with `cmake --build build --target pokerth_sim`.
@@ -10,7 +10,6 @@
 add_executable(pokerth_sim EXCLUDE_FROM_ALL
     pokerth_sim.cpp
     simdriver.cpp
-    simguiinterface.cpp
     # pokerth_lib ships neither a log implementation nor a Qt tools wrapper:
     # every executable picks its own flavour (see the note in the root
     # CMakeLists.txt). The simulator is client side, so it takes the client

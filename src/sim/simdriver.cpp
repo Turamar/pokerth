@@ -1,4 +1,4 @@
-/*****************************************************************************
+﻿/*****************************************************************************
  * PokerTH - The open source texas holdem engine                             *
  * Copyright (C) 2006-2012 Felix Hammer, Florian Thauer, Lothar May          *
  *                                                                           *
@@ -30,7 +30,7 @@
  *****************************************************************************/
 
 #include "simdriver.h"
-#include "simguiinterface.h"
+#include <silentgui.h>
 
 #include <algorithm>
 #include <chrono>
@@ -219,7 +219,7 @@ bool runSimulation(ConfigFile *config, const SimOptions &options, SimReport &rep
 		playerDataList.push_back(playerData);
 	}
 
-	SimGui gui(config);
+	SilentGui gui(config);
 	boost::shared_ptr<EngineFactory> factory(new LocalEngineFactory(config));
 
 	boost::shared_ptr<Game> game;

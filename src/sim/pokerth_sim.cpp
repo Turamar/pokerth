@@ -34,7 +34,7 @@
  * Plays games with nothing but computer players and prints what they did:
  * VPIP, PFR, aggression, wins, chips. No window, no server, no network - the
  * same engine and the same LocalEngineFactory the local game uses, only with a
- * GUI that does not show anything (see simguiinterface.h).
+ * GUI that does not show anything (see silentgui.h).
  *
  * Why: the strength levels and playing styles (PLAN.md section 4) are meant to
  * be calibrated, not guessed, and a 180 seat tournament (section 3) cannot be
@@ -76,6 +76,8 @@
 #include <statestore.h>
 #include <wallet.h>
 #include <roster.h>
+#include <tournamentrun.h>
+#include <tools.h>
 
 using namespace std;
 
@@ -121,6 +123,9 @@ void printUsage()
 		"  --margin F        postflop calling margin in equity points, e.g. -0.05\n"
 		"                    (calibration; overrides the value of the profile)\n"
 		"  --quiet           only the summary line, no table\n"
+		"  --tournament K    play the catalogue event K (sng6, sng9, ...) instead\n"
+		"                    of a cash table: the whole field on as many tables as\n"
+		"                    it needs, --runs tournaments, report ITM and ROI\n"
 		"  --state-selftest DIR\n"
 		"                    check the state store in DIR instead of simulating\n"
 		"\n"
@@ -468,7 +473,7 @@ bool writeJson(const string &fileName, const SimTotals &totals, const SimOptions
  * cash table limits and the rebuy cooldown have to hold, and a damaged or too
  * new file must never be overwritten silently. Runs without a GUI and without
  * Qt application state, so it can be part of a build check. */
-bool runStateSelfTest(const QString &directory)
+bool runStateSelfTest(const QString &directory, ConfigFile *config)
 {
 	int failures = 0;
 	auto check = [&failures](bool condition, const QString &message) {
@@ -538,7 +543,7 @@ bool runStateSelfTest(const QString &directory)
 	check(reloaded.profile.createdAt == createdBefore,
 		  QStringLiteral("the creation time is not touched by saving"));
 
-	// ── The bank: the ladder, buy-in, stack, leaving, rebuy ─────────────────
+	// в”Ђв”Ђ The bank: the ladder, buy-in, stack, leaving, rebuy в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 	{
 		// Money is cents (see StartingBalance); the test reasons in dollars.
 		const qint64 D = 100;
@@ -566,7 +571,7 @@ bool runStateSelfTest(const QString &directory)
 				  .arg(QString::fromLatin1(step.key)));
 		}
 
-		// ── The tournament catalogue (PLAN.md section 3) ────────────────────
+		// в”Ђв”Ђ The tournament catalogue (PLAN.md section 3) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 		check(PlayerState::tournamentCount() >= 2,
 			  QStringLiteral("the catalogue has at least two events"));
 		for(int i = 0; i < PlayerState::tournamentCount(); ++i) {
@@ -587,7 +592,7 @@ bool runStateSelfTest(const QString &directory)
 				  QStringLiteral("tournament %1 pays out exactly its pool").arg(key));
 		}
 
-		// ── The roster of a tournament (PLAN.md section 3, "Ростер") ────────
+		// в”Ђв”Ђ The roster of a tournament (PLAN.md section 3, "Р РѕСЃС‚РµСЂ") в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 		{
 			// The strength and the archetype are chosen when the seat is taken and
 			// live in the roster, not in the seat number: without this, a rebuilt
@@ -661,6 +666,74 @@ bool runStateSelfTest(const QString &directory)
 			check(roster.idAt(2, 0) == 2, QStringLiteral("a seat holds exactly one player"));
 			check(roster.entry(1)->seat == -1,
 				  QStringLiteral("the player who lost the seat is unseated"));
+		}
+
+		// ── A whole tournament, on one table and on two (PLAN.md section 3) ─
+		if(config) {
+			for(int variant = 0; variant < 2; ++variant) {
+				// The first variant is the shipped event: six seats, one table. The
+				// second stretches the same numbers to 18 seats, which is two tables
+				// of nine - the only way to watch the balancing work.
+				PlayerState::TournamentEvent event = PlayerState::tournamentEvent(0);
+				event.seats = variant == 0 ? 6 : 18;
+				std::vector<BotProfile> field;
+				check(BotProfile::dealTier(event.field, event.seats - 1, field),
+					  QStringLiteral("tournament variant %1 deals its field").arg(variant));
+				PlayerState::Roster roster;
+				roster.add(QStringLiteral("Hero"),
+						   QString::fromStdString(field.at(0).label()), event.startStack);
+				for(int i = 1; i < event.seats; ++i) {
+					roster.add(QStringLiteral("Bot%1").arg(i),
+							   QString::fromStdString(field.at(static_cast<size_t>(i - 1)).label()),
+							   event.startStack);
+				}
+				for(int seat = 0; seat < event.seats; ++seat) roster.seat(seat, 0, seat);
+
+				TournamentRun tournament(config, event, NULL);
+				std::string error;
+				const bool played = tournament.run(roster, 2000, error);
+				check(played, QStringLiteral("a %1-seat tournament plays out (%2)")
+					  .arg(event.seats).arg(QString::fromStdString(error)));
+				if(!played) continue;
+
+				const TournamentRun::Result &result = tournament.result();
+				check(result.finished, QStringLiteral("%1 seats: one winner at the end")
+					  .arg(event.seats));
+				std::vector<int> seen(static_cast<size_t>(event.seats) + 1, 0);
+				int given = 0;
+				bool unique = true;
+				for(int id = 0; id < event.seats; ++id) {
+					const int place = result.places.at(static_cast<size_t>(id));
+					if(place >= 1 && place <= event.seats && seen[static_cast<size_t>(place)] == 0) {
+						seen[static_cast<size_t>(place)] = 1;
+						++given;
+					} else {
+						unique = false;
+					}
+				}
+				check(given == event.seats && unique,
+					  QStringLiteral("%1 seats: every seat gets its own place (%2)")
+					  .arg(event.seats).arg(given));
+				check(result.winner >= 0
+					  && result.places.at(static_cast<size_t>(result.winner)) == 1,
+					  QStringLiteral("%1 seats: the winner takes first place").arg(event.seats));
+				check(result.chipsConserved,
+					  QStringLiteral("%1 seats: the rebuilds lost no chips").arg(event.seats));
+				check(result.blindsAligned,
+					  QStringLiteral("%1 seats: every table played the same blind")
+					  .arg(event.seats));
+				check(result.worstImbalance <= 1,
+					  QStringLiteral("%1 seats: tables never differed by more than one (%2)")
+					  .arg(event.seats).arg(result.worstImbalance));
+				if(event.seats > 10) {
+					check(result.moves > 0,
+						  QStringLiteral("18 seats: players were moved between tables (%1)")
+						  .arg(result.moves));
+				}
+				printf("  tournament %d seats: %d hands, level %d, %d moves, hero place %d\n",
+					   event.seats, result.handsPlayed, result.level, result.moves,
+					   result.places.at(0));
+			}
 		}
 		{
 			const PlayerState::TournamentEvent &event = PlayerState::tournamentEvent(0);
@@ -898,6 +971,147 @@ bool runStateSelfTest(const QString &directory)
 	return failures == 0;
 }
 
+/* A tournament of the catalogue, headless (PLAN.md section 3, "Технические
+ * решения"). The whole field plays on as many tables as it needs, in lockstep:
+ * one step is one hand at every table, so the level and the blinds are shared.
+ * The report is a tournament report - where the hero finished and what he got
+ * back - not chips per hundred hands. */
+bool runTournaments(ConfigFile *config, const std::string &key, const SimOptions &options,
+					const std::string &jsonFile, std::string &error)
+{
+	const int index = PlayerState::tournamentIndex(QString::fromStdString(key));
+	if(index < 0) {
+		error = "unknown tournament '" + key + "' (see PLAN.md, section 3)";
+		return false;
+	}
+	const PlayerState::TournamentEvent &event = PlayerState::tournamentEvent(index);
+
+	long long handsSum = 0;
+	int handsMax = 0;
+	long long placeSum = 0;
+	int itm = 0;
+	long long payout = 0;
+	double movesSum = 0.0;
+	int movesMax = 0;
+	int worstImbalance = 0;
+	int finished = 0;
+	int chipsOk = 0;
+	int blindsOk = 0;
+	vector<int> places(event.seats + 1, 0);
+
+	for(int run = 0; run < options.runs; ++run) {
+		if(options.seed != 0) {
+			Tools::SetRandomSeed(options.seed + static_cast<unsigned long long>(run));
+		}
+
+		vector<BotProfile> field;
+		if(!BotProfile::dealTier(event.field, event.seats - 1, field)) {
+			error = string("the event names an unknown field: ") + event.field;
+			return false;
+		}
+
+		// The roster of one tournament: the hero in seat 0, the field everywhere
+		// else. Strength and archetype are chosen here, once, and travel with the
+		// player through every rebuild.
+		PlayerState::Roster roster;
+		roster.add(QStringLiteral("Hero"),
+				   QString::fromStdString(options.profile.label()), event.startStack);
+		for(int i = 0; i < event.seats - 1; ++i) {
+			roster.add(QStringLiteral("Bot%1").arg(i + 1),
+					   QString::fromStdString(field[static_cast<size_t>(i)].label()),
+					   event.startStack);
+		}
+		for(int seat = 0; seat < event.seats; ++seat) roster.seat(seat, 0, seat);
+
+		TournamentRun tournament(config, event, NULL);
+		std::string runError;
+		if(!tournament.run(roster, options.maxHands, runError)) {
+			ostringstream oss;
+			oss << "tournament " << (run + 1) << ": " << runError;
+			error = oss.str();
+			return false;
+		}
+
+		const TournamentRun::Result &result = tournament.result();
+		if(result.finished) ++finished;
+		if(result.chipsConserved) ++chipsOk;
+		if(result.blindsAligned) ++blindsOk;
+		if(result.worstImbalance > worstImbalance) worstImbalance = result.worstImbalance;
+		handsSum += result.handsPlayed;
+		if(result.handsPlayed > handsMax) handsMax = result.handsPlayed;
+		movesSum += result.moves;
+		for(int id = 0; id < event.seats; ++id) {
+			const int moves = result.movesById.at(static_cast<size_t>(id));
+			if(moves > movesMax) movesMax = moves;
+		}
+
+		const int place = result.places.at(0);
+		if(place >= 1) {
+			placeSum += place;
+			places[static_cast<size_t>(place)] += 1;
+			if(place <= event.payoutCount) ++itm;
+			payout += event.prizeForPlace(place);
+		}
+	}
+	if(options.seed != 0) Tools::ClearRandomSeed();
+
+	const int runs = options.runs;
+	const double avgPlace = static_cast<double>(placeSum) / runs;
+	const double itmShare = 100.0 * itm / runs;
+	const double buyIns = static_cast<double>(runs) * static_cast<double>(event.buyIn);
+	const double roi = buyIns > 0.0
+			? 100.0 * (static_cast<double>(payout) - buyIns) / buyIns : 0.0;
+
+	printf("tournament %s — %d seats, %.2f buy-in, %s field, %d hands per level, "
+		   "%d run(s), seed %llu\n",
+		   event.key, event.seats, static_cast<double>(event.buyIn) / 100.0, event.field,
+		   event.levelHands, runs, options.seed);
+	printf("  hands      : avg %.1f, max %d\n", static_cast<double>(handsSum) / runs, handsMax);
+	printf("  hero       : %s, ITM %.1f%%, ROI %+.1f%%, avg place %.2f\n",
+		   options.profile.label().c_str(), itmShare, roi, avgPlace);
+	printf("  places     :");
+	for(int place = 1; place <= event.seats; ++place) {
+		printf(" %d:%d", place, places[static_cast<size_t>(place)]);
+	}
+	printf("\n");
+	printf("  moves      : avg %.2f per tournament, max %d for one player\n",
+		   movesSum / runs, movesMax);
+	printf("  balance    : worst seat difference %d, blinds aligned in %d/%d\n",
+		   worstImbalance, blindsOk, runs);
+	printf("  chips      : conserved in %d/%d, finished in %d/%d\n",
+		   chipsOk, runs, finished, runs);
+
+	if(!jsonFile.empty()) {
+		QJsonObject object;
+		object.insert(QStringLiteral("tournament"), QString::fromLatin1(event.key));
+		object.insert(QStringLiteral("runs"), runs);
+		object.insert(QStringLiteral("seats"), event.seats);
+		object.insert(QStringLiteral("buyInCents"), static_cast<double>(event.buyIn));
+		object.insert(QStringLiteral("hero"), QString::fromStdString(options.profile.label()));
+		object.insert(QStringLiteral("itm"), itmShare / 100.0);
+		object.insert(QStringLiteral("roi"), roi / 100.0);
+		object.insert(QStringLiteral("avgPlace"), avgPlace);
+		object.insert(QStringLiteral("handsAvg"), static_cast<double>(handsSum) / runs);
+		object.insert(QStringLiteral("movesAvg"), movesSum / runs);
+		object.insert(QStringLiteral("worstImbalance"), worstImbalance);
+		object.insert(QStringLiteral("finished"), finished);
+		object.insert(QStringLiteral("chipsConserved"), chipsOk);
+		QJsonArray placeArray;
+		for(int place = 1; place <= event.seats; ++place) {
+			placeArray.append(places[static_cast<size_t>(place)]);
+		}
+		object.insert(QStringLiteral("places"), placeArray);
+
+		QFile file(QString::fromStdString(jsonFile));
+		if(!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			error = "cannot write " + jsonFile;
+			return false;
+		}
+		file.write(QJsonDocument(object).toJson(QJsonDocument::Indented));
+	}
+	return true;
+}
+
 }
 
 int main(int argc, char *argv[])
@@ -905,6 +1119,7 @@ int main(int argc, char *argv[])
 	SimOptions options;
 	string jsonFile;
 	string stateSelfTestDir;
+	string tournamentKey;
 	bool quiet = false;
 
 	// Parse before QCoreApplication exists so that nothing can strip our
@@ -937,6 +1152,12 @@ int main(int argc, char *argv[])
 
 		if(strcmp(arg, "--state-selftest") == 0) {
 			stateSelfTestDir = value;
+			i++;
+			continue;
+		}
+
+		if(strcmp(arg, "--tournament") == 0) {
+			tournamentKey = value;
 			i++;
 			continue;
 		}
@@ -1111,13 +1332,24 @@ int main(int argc, char *argv[])
 	QCoreApplication app(argc, argv);
 	QCoreApplication::setApplicationName(QStringLiteral("pokerth_sim"));
 
+	ConfigFile config(argv[0], true);
+
 	if(!stateSelfTestDir.empty()) {
-		const bool passed = runStateSelfTest(QString::fromStdString(stateSelfTestDir));
+		const bool passed = runStateSelfTest(QString::fromStdString(stateSelfTestDir), &config);
 		printf("\nstate self test: %s\n", passed ? "PASS" : "FAILED");
 		return passed ? 0 : 1;
 	}
 
-	ConfigFile config(argv[0], true);
+	// A tournament is not a cash game with a bigger blind: the report is a place
+	// and a payout, and the field plays on several tables.
+	if(!tournamentKey.empty()) {
+		string tournamentError;
+		if(!runTournaments(&config, tournamentKey, options, jsonFile, tournamentError)) {
+			fprintf(stderr, "pokerth_sim: %s\n", tournamentError.c_str());
+			return 1;
+		}
+		return 0;
+	}
 
 	SimTotals totals;
 	SimReport lastReport;
