@@ -173,6 +173,17 @@ Rectangle {
                             Layout.preferredHeight: startPage.buttonHeight
                             onClicked: mainStackView.push("LocalGamePage.qml")
                         }
+
+                        // The tournament catalogue (PLAN.md section 3): single
+                        // tables with rising blinds and a prize for a place.
+                        CustomButton {
+                            id: tournamentsButton
+                            text: qsTr("Turniere")
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 100
+                            Layout.preferredHeight: startPage.buttonHeight
+                            onClicked: mainStackView.push("TournamentsPage.qml")
+                        }
                     }
                 }
             }

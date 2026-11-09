@@ -187,6 +187,7 @@ set(QML_FILES
     pages/LobbyCreateGamePage.qml
     pages/LobbyPage.qml
     pages/LocalGamePage.qml
+    pages/TournamentsPage.qml
     pages/LogsPage.qml
     pages/NetworkGameCreatePage.qml
     pages/NetworkGameEnterPage.qml

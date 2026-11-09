@@ -121,6 +121,7 @@ set(POKERTH_LIB_SRC
     src/config/configfile.cpp 
     src/state/statestore.cpp
     src/state/wallet.cpp
+    src/state/tournament.cpp
     src/engine/boardinterface.cpp 
     src/engine/enginefactory.cpp 
     src/engine/handinterface.cpp 

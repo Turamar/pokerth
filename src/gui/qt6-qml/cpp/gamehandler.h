@@ -181,6 +181,13 @@ class GameHandler : public QObject
 	// finished hand stays on the table until the player starts the next hand
 	// (continueToNextHand) – like the start button of the Qt widgets client.
 	Q_PROPERTY(bool waitingForNextHand READ waitingForNextHand NOTIFY waitingForNextHandChanged)
+	// The running local game is a tournament (PLAN.md section 3): no cash
+	// session, and the result is a place and a prize instead of a stack. They
+	// are set when the table ends and read by the result popup.
+	Q_PROPERTY(bool tournamentMode READ tournamentMode NOTIFY tournamentStateChanged)
+	Q_PROPERTY(int tournamentPlace READ tournamentPlace NOTIFY tournamentStateChanged)
+	Q_PROPERTY(int tournamentSeats READ tournamentSeats NOTIFY tournamentStateChanged)
+	Q_PROPERTY(int tournamentPrize READ tournamentPrize NOTIFY tournamentStateChanged)
 	// The card odds of your own hand (seat 0) – analogous to the CardsChanceMonitor
 	// of the widgets client. A list with 10 entries, index 0 = high card …
 	// 9 = royal flush; every entry is a map {"prob": int %, "possible": bool}.
@@ -231,6 +238,12 @@ public:
 	// they are (a cash table does not raise them). False if the game could not
 	// be started - the buy-in is returned in that case.
 	Q_INVOKABLE bool startCashGame(int players, int buyIn, int limitIndex);
+	// Called from QML to enter a tournament (PLAN.md section 3): the buy-in is
+	// taken out of the balance, the seats come from the catalogue, the blinds
+	// rise every levelHands hands and the bots are the field of the event. The
+	// result is a place and a prize, not a stack. False if the game could not
+	// be started - the buy-in is returned in that case.
+	Q_INVOKABLE bool startTournament(const QString &key);
 	Q_INVOKABLE void endLocalGame();
 	Q_INVOKABLE bool isLocalGameRunning() const;
 	// The chips in front of the player (seat 0) right now.
@@ -358,6 +371,22 @@ public:
 	bool waitingForNextHand() const
 	{
 		return m_waitingForNextHand;
+	}
+	bool tournamentMode() const
+	{
+		return m_tournamentMode;
+	}
+	int tournamentPlace() const
+	{
+		return m_tournamentPlace;
+	}
+	int tournamentSeats() const
+	{
+		return m_tournamentSeats;
+	}
+	int tournamentPrize() const
+	{
+		return static_cast<int>(m_tournamentPrize);
 	}
 	QVariantList cardsChance() const
 	{
@@ -550,6 +579,11 @@ signals:
 	// the winner message (a new game / back to the menu). winnerSeatId == 0
 	// means: the human player has won.
 	void localGameFinished(const QString &winnerName, int winnerSeatId);
+	// A local tournament is over: place (1-based), the number of seats and the
+	// prize in cents (0 when the place was not paid). The place and the prize
+	// are also readable as properties for the popup.
+	void tournamentFinished(int place, int seats, int prizeCents);
+	void tournamentStateChanged();
 
 protected:
 	// An app-wide filter: real user activity (mouse/keyboard) → a ResetTimeout
@@ -761,6 +795,13 @@ private:
 	// The local game is finished (only one player with chips left). It prevents
 	// checkLocalGameOver() from reporting the end of the game several times.
 	bool m_localGameOver = false;
+	// The tournament of the running local game (PLAN.md section 3). The key stays
+	// set until the table is left; place and prize are filled when it ends.
+	bool m_tournamentMode = false;
+	QString m_tournamentKey;
+	int m_tournamentPlace = 0;
+	int m_tournamentSeats = 0;
+	qint64 m_tournamentPrize = 0;
 };
 
 #endif // GAMEHANDLER_H

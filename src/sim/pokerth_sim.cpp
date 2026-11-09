@@ -528,6 +528,44 @@ bool runStateSelfTest(const QString &directory)
 				  .arg(QString::fromLatin1(step.key)));
 		}
 
+		// ── The tournament catalogue (PLAN.md section 3) ────────────────────
+		check(PlayerState::tournamentCount() >= 2,
+			  QStringLiteral("the catalogue has at least two events"));
+		for(int i = 0; i < PlayerState::tournamentCount(); ++i) {
+			const PlayerState::TournamentEvent &event = PlayerState::tournamentEvent(i);
+			const QString key = QString::fromLatin1(event.key);
+			check(BotProfile::hasTier(event.field),
+				  QStringLiteral("tournament %1 names a known field (%2)").arg(key)
+				  .arg(QString::fromLatin1(event.field)));
+			std::vector<BotProfile> dealt;
+			check(BotProfile::dealTier(event.field, event.seats - 1, dealt)
+				  && dealt.size() == static_cast<size_t>(event.seats - 1),
+				  QStringLiteral("tournament %1 deals a whole table").arg(key));
+			qint64 paidOut = 0;
+			for(int p = 1; p <= event.seats; ++p) {
+				paidOut += event.prizeForPlace(p);
+			}
+			check(paidOut == event.pool(),
+				  QStringLiteral("tournament %1 pays out exactly its pool").arg(key));
+		}
+		{
+			const PlayerState::TournamentEvent &event = PlayerState::tournamentEvent(0);
+			PlayerState::Wallet entering(
+				PlayerState::StateStore::newDocument(QStringLiteral("SelfTest")));
+			const qint64 before = entering.balance();
+			check(entering.enterTournament(event),
+				  QStringLiteral("a tournament takes the buy-in"));
+			check(entering.balance() == before - event.buyIn,
+				  QStringLiteral("the balance drops by the tournament buy-in (%1)")
+				  .arg(entering.balance()));
+			check(entering.payTournamentPrize(event, 1) == event.prizeForPlace(1),
+				  QStringLiteral("the first prize is paid"));
+			check(entering.balance() == before - event.buyIn + event.prizeForPlace(1),
+				  QStringLiteral("the balance grows by the prize (%1)").arg(entering.balance()));
+			check(entering.payTournamentPrize(event, event.seats) == 0,
+				  QStringLiteral("an unpaid place pays nothing"));
+		}
+
 		PlayerState::Wallet wallet;
 		check(wallet.balance() == PlayerState::StartingBalance,
 			  QStringLiteral("an empty wallet starts with the starting balance"));

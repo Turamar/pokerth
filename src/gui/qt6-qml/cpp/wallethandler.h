@@ -59,6 +59,10 @@ class WalletHandler : public QObject
 	// maxBuyIn, gate and unlocked - the last one says whether the balance is
 	// high enough to sit down there (PLAN.md section 2).
 	Q_PROPERTY(QVariantList limits READ limits NOTIFY balanceChanged)
+	// The tournament catalogue (PLAN.md section 3), one map per event: key,
+	// label, note, seats, buyIn, field, levelHands, stackInBB, firstPrize,
+	// prizes (place/amount pairs) and unlocked (the balance covers the buy-in).
+	Q_PROPERTY(QVariantList tournaments READ tournaments NOTIFY balanceChanged)
 	// How many limits the balance opens; 0 means "no seat at all".
 	Q_PROPERTY(int unlockedLimits READ unlockedLimits NOTIFY balanceChanged)
 
@@ -80,6 +84,17 @@ public:
 	void noteHandFinished(qint64 stack, bool won);
 	// Back to the lobby: the stack returns into the balance.
 	void leaveTable(qint64 stack);
+
+	// ── tournament (PLAN.md section 3) ───────────────────────────────────────
+	// The buy-in leaves the balance; there is no session to keep, so a
+	// tournament that is left, lost or crashed is simply gone.
+	bool enterTournament(const QString &key);
+	// The buy-in returns if the table could not be started after all.
+	void refundTournament(const QString &key);
+	// Pays the prize of a place; returns what was paid (0 for an unpaid one).
+	qint64 payTournamentPrize(const QString &key, int place);
+	// One hand of a tournament: only the profile counters move.
+	void noteTournamentHand(bool won);
 
 	// ── QML ──────────────────────────────────────────────────────────────────
 	// Money as the player reads it: cents in, "$0.40" out, cents left off when
@@ -108,6 +123,7 @@ public:
 	QString tableLimit() const;
 	int tableLimitIndex() const;
 	QVariantList limits() const;
+	QVariantList tournaments() const;
 	int unlockedLimits() const;
 	int rebuyTarget() const;
 	bool canRebuy() const;

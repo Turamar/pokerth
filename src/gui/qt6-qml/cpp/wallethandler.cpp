@@ -138,6 +138,40 @@ int WalletHandler::unlockedLimits() const
 	return PlayerState::unlockedCashLimits(m_wallet->balance());
 }
 
+// The tournament catalogue for the page: one map per event. The prize of every
+// paid place is computed here (from the pool, no rake), so that QML never does
+// money arithmetic.
+QVariantList WalletHandler::tournaments() const
+{
+	QVariantList list;
+	const qint64 balanceNow = m_wallet->balance();
+	for(int i = 0; i < PlayerState::tournamentCount(); ++i) {
+		const PlayerState::TournamentEvent &event = PlayerState::tournamentEvent(i);
+		QVariantMap entry;
+		entry[QStringLiteral("key")] = QString::fromLatin1(event.key);
+		entry[QStringLiteral("label")] = QString::fromUtf8(event.label);
+		entry[QStringLiteral("note")] = QString::fromUtf8(event.note);
+		entry[QStringLiteral("seats")] = event.seats;
+		entry[QStringLiteral("buyIn")] = static_cast<int>(event.buyIn);
+		entry[QStringLiteral("field")] = QString::fromLatin1(event.field);
+		entry[QStringLiteral("levelHands")] = event.levelHands;
+		entry[QStringLiteral("stackInBB")] = event.stackInBB();
+		entry[QStringLiteral("firstPrize")] = static_cast<int>(event.prizeForPlace(1));
+		entry[QStringLiteral("unlocked")] = balanceNow >= event.buyIn;
+		QVariantList prizes;
+		for(int p = 0; p < event.payoutCount; ++p) {
+			QVariantMap prize;
+			prize[QStringLiteral("place")] = event.payouts[p].place;
+			prize[QStringLiteral("amount")] =
+				static_cast<int>(event.prizeForPlace(event.payouts[p].place));
+			prizes.append(prize);
+		}
+		entry[QStringLiteral("prizes")] = prizes;
+		list.append(entry);
+	}
+	return list;
+}
+
 int WalletHandler::rebuyTarget() const
 {
 	return static_cast<int>(PlayerState::StartingBalance);
@@ -217,6 +251,64 @@ void WalletHandler::leaveTable(qint64 stack)
 	emit balanceChanged();
 	emit tableChanged();
 	refresh();
+}
+
+bool WalletHandler::enterTournament(const QString &key)
+{
+	const int index = PlayerState::tournamentIndex(key);
+	if(index < 0) {
+		fail(QStringLiteral("there is no such tournament"));
+		return false;
+	}
+	const PlayerState::TournamentEvent &event = PlayerState::tournamentEvent(index);
+	QString reason;
+	if(!m_wallet->canEnterTournament(event, &reason)) {
+		fail(reason);
+		return false;
+	}
+	if(!m_wallet->enterTournament(event)) {
+		fail(QStringLiteral("buy-in refused"));
+		return false;
+	}
+	m_lastError.clear();
+	save();
+	emit balanceChanged();
+	refresh();
+	return true;
+}
+
+void WalletHandler::refundTournament(const QString &key)
+{
+	const int index = PlayerState::tournamentIndex(key);
+	if(index < 0) {
+		return;
+	}
+	m_wallet->refundTournament(PlayerState::tournamentEvent(index).buyIn);
+	save();
+	emit balanceChanged();
+	refresh();
+}
+
+qint64 WalletHandler::payTournamentPrize(const QString &key, int place)
+{
+	const int index = PlayerState::tournamentIndex(key);
+	if(index < 0) {
+		return 0;
+	}
+	const qint64 prize =
+		m_wallet->payTournamentPrize(PlayerState::tournamentEvent(index), place);
+	save();
+	emit balanceChanged();
+	refresh();
+	return prize;
+}
+
+void WalletHandler::noteTournamentHand(bool won)
+{
+	// A tournament moves no money per hand - only the profile counters.
+	m_wallet->recordHand(won);
+	save();
+	emit profileChanged();
 }
 
 bool WalletHandler::rebuy()

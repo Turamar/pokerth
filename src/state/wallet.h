@@ -37,6 +37,7 @@
 #include <QString>
 
 #include "statestore.h"
+#include "tournament.h"
 
 /* The player's bank (PLAN.md section 2).
  *
@@ -176,6 +177,17 @@ public:
 	bool recoverInterruptedSession(const QDateTime &now);
 
 	void recordHand(bool won);
+
+	// ── tournament ───────────────────────────────────────────────────────────
+	// A tournament has no session on disk: the buy-in leaves the balance when
+	// the table starts, and a tournament that is left or lost is gone
+	// (PLAN.md, "Экономика" - no save, no resume).
+	bool canEnterTournament(const TournamentEvent &event, QString *reason = nullptr) const;
+	bool enterTournament(const TournamentEvent &event);
+	// The buy-in goes back when the table could not be started after all.
+	void refundTournament(qint64 amount);
+	// Pays the prize of a place; returns what was paid (0 for an unpaid place).
+	qint64 payTournamentPrize(const TournamentEvent &event, int place);
 
 	// ── rebuy ────────────────────────────────────────────────────────────────
 	// Only while the balance is below the bottom gate and the cooldown has

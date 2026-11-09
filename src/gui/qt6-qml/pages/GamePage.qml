@@ -1993,6 +1993,15 @@ Rectangle {
             gameOverPopup.humanWon = (winnerSeatId === 0)
             gameOverPopup.open()
         }
+        // The same moment in a tournament: the result is a place and a prize,
+        // not a winner name and a stack.
+        function onTournamentFinished(place, seats, prizeCents) {
+            gameOverPopup.tournament = true
+            gameOverPopup.place = place
+            gameOverPopup.seats = seats
+            gameOverPopup.prize = prizeCents
+            gameOverPopup.open()
+        }
     }
 
     Popup {
@@ -2019,6 +2028,11 @@ Rectangle {
 
         property string winnerName: ""
         property bool humanWon: false
+        // A tournament reports a place and a prize instead.
+        property bool tournament: false
+        property int place: 0
+        property int seats: 0
+        property int prize: 0
 
         background: Rectangle {
             color: Config.Theme.colorBox
@@ -2033,33 +2047,45 @@ Rectangle {
 
             AppLabel {
                 Layout.fillWidth: true
-                text: qsTr("Game Over")
+                text: gameOverPopup.tournament ? qsTr("Turnier beendet") : qsTr("Game Over")
                 color: Config.StaticData.palette.secondary.col100
                 font.pixelSize: 15
                 font.bold: true
             }
             AppLabel {
                 Layout.fillWidth: true
-                text: gameOverPopup.humanWon
-                      ? qsTr("Congratulations, you won the game!")
-                      : (gameOverPopup.winnerName === ""
-                         ? qsTr("Dein Stack ist aufgebraucht.")
-                         : qsTr("%1 wins the game!").arg(gameOverPopup.winnerName))
+                text: gameOverPopup.tournament
+                      ? (gameOverPopup.place === 1
+                         ? qsTr("Du hast das Turnier gewonnen!")
+                         : qsTr("Ausgeschieden: Platz %1 von %2")
+                           .arg(gameOverPopup.place).arg(gameOverPopup.seats))
+                      : (gameOverPopup.humanWon
+                         ? qsTr("Congratulations, you won the game!")
+                         : (gameOverPopup.winnerName === ""
+                            ? qsTr("Dein Stack ist aufgebraucht.")
+                            : qsTr("%1 wins the game!").arg(gameOverPopup.winnerName)))
                 color: Config.StaticData.palette.secondary.col200
                 font.pixelSize: 13
                 wrapMode: Text.WordWrap
             }
             // What the session did to the wallet. The stack has already gone
-            // back into the balance when this popup opens.
+            // back into the balance when this popup opens; a tournament paid a
+            // prize instead (or nothing at all).
             AppLabel {
                 Layout.fillWidth: true
-                text: (gameOverPopup.netResult >= 0 ? "+" : "")
-                      + (Wallet ? Wallet.money(gameOverPopup.netResult) : "")
-                      + "  ·  " + qsTr("Guthaben: %1")
-                        .arg(Wallet ? Wallet.money(Wallet.balance) : "–")
-                color: gameOverPopup.netResult >= 0
-                       ? Config.StaticData.chartColor(0, true)
-                       : Config.Theme.colorDanger
+                text: gameOverPopup.tournament
+                      ? ((gameOverPopup.prize > 0
+                          ? qsTr("Preis: %1").arg(Wallet.money(gameOverPopup.prize))
+                          : qsTr("Kein Preis"))
+                         + "  ·  " + qsTr("Guthaben: %1").arg(Wallet.money(Wallet.balance)))
+                      : ((gameOverPopup.netResult >= 0 ? "+" : "")
+                         + (Wallet ? Wallet.money(gameOverPopup.netResult) : "")
+                         + "  ·  " + qsTr("Guthaben: %1").arg(Wallet ? Wallet.money(Wallet.balance) : "–"))
+                color: gameOverPopup.tournament
+                       ? (gameOverPopup.prize > 0 ? Config.StaticData.chartColor(0, true)
+                                                  : Config.Theme.colorDanger)
+                       : (gameOverPopup.netResult >= 0 ? Config.StaticData.chartColor(0, true)
+                                                       : Config.Theme.colorDanger)
                 font.pixelSize: 13
                 font.bold: true
                 wrapMode: Text.WordWrap
@@ -2082,10 +2108,12 @@ Rectangle {
                     onClicked: {
                         // The table is over and its stack is already back in
                         // the wallet, so this just leaves it and returns to the
-                        // setup, where the next buy-in is chosen.
+                        // setup, where the next buy-in is chosen. A tournament
+                        // returns to its catalogue instead.
                         gameOverPopup.close()
                         mainWindow.performLeaveGame()
-                        mainStackView.push("LocalGamePage.qml")
+                        mainStackView.push(gameOverPopup.tournament
+                                           ? "TournamentsPage.qml" : "LocalGamePage.qml")
                     }
                 }
             }

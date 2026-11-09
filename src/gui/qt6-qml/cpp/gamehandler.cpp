@@ -1747,25 +1747,40 @@ bool GameHandler::checkLocalGameOver()
 	// No further action in this game - the clock must not outlive it.
 	stopLocalActionTimer();
 
-	// Nobody is left to play against - or the player is broke: the table is
-	// over, the stack goes back into the balance right away (the popup below
-	// only reports it).
-	if (m_wallet)
-		m_wallet->leaveTable(myStack());
-
 	// A cash table without money in front of the player is finished; the bots
 	// would otherwise play on among themselves and never reach an end.
 	const bool outOfChips = humanBroke && playersWithCash > 1;
 
-	// A log entry as in the widgets client ("<name> wins game <n>!").
-	if (outOfChips)
-		appendGameLog(QStringLiteral("You are out of chips."), LogGameWin);
-	else if (winner)
-		appendGameLog(QString::fromStdString(winner->getMyName())
-					  + QStringLiteral(" wins game ")
-					  + QString::number(game->getMyGameID())
-					  + QStringLiteral("!"),
+	if (m_tournamentMode) {
+		// A tournament does not return a stack: it pays a place. The players
+		// who still have chips are the ones ahead of me - if I am one of them,
+		// I am the winner (playersWithCash == 1 by the guard above).
+		const int place = humanBroke ? playersWithCash + 1 : 1;
+		const qint64 prize = m_wallet ? m_wallet->payTournamentPrize(m_tournamentKey, place) : 0;
+		m_tournamentPlace = place;
+		m_tournamentPrize = prize;
+		emit tournamentStateChanged();
+		appendGameLog(QStringLiteral("Tournament over: place ")
+						  + QString::number(place) + QStringLiteral(" of ")
+						  + QString::number(m_tournamentSeats),
 					  LogGameWin);
+	} else {
+		// Nobody is left to play against - or the player is broke: the table is
+		// over, the stack goes back into the balance right away (the popup
+		// below only reports it).
+		if (m_wallet)
+			m_wallet->leaveTable(myStack());
+
+		// A log entry as in the widgets client ("<name> wins game <n>!").
+		if (outOfChips)
+			appendGameLog(QStringLiteral("You are out of chips."), LogGameWin);
+		else if (winner)
+			appendGameLog(QString::fromStdString(winner->getMyName())
+						  + QStringLiteral(" wins game ")
+						  + QString::number(game->getMyGameID())
+						  + QStringLiteral("!"),
+						  LogGameWin);
+	}
 
 	// No turn is possible any more – shut the action bar down.
 	closeMyTurnWindow();
@@ -1782,10 +1797,15 @@ bool GameHandler::checkLocalGameOver()
 	qDeleteAll(m_bustedLocalTimers);
 	m_bustedLocalTimers.clear();
 
-	emit localGameFinished(outOfChips ? QString()
-									  : (winner ? QString::fromStdString(winner->getMyName())
-												: QString()),
-						   outOfChips ? -1 : (winner ? winner->getMyID() : -1));
+	if (m_tournamentMode) {
+		emit tournamentFinished(m_tournamentPlace, m_tournamentSeats,
+								static_cast<int>(m_tournamentPrize));
+	} else {
+		emit localGameFinished(outOfChips ? QString()
+										  : (winner ? QString::fromStdString(winner->getMyName())
+													: QString()),
+							   outOfChips ? -1 : (winner ? winner->getMyID() : -1));
+	}
 	return true;
 }
 
@@ -1808,7 +1828,10 @@ void GameHandler::onLocalHandFinished()
 				}
 			}
 		}
-		m_wallet->noteHandFinished(myStack(), won);
+		if (m_tournamentMode)
+			m_wallet->noteTournamentHand(won);   // chips are not money here
+		else
+			m_wallet->noteHandFinished(myStack(), won);
 	}
 
 	// The end of the tournament? As in the widgets client (gameTableImpl::postRiverRun-
@@ -2283,6 +2306,13 @@ bool GameHandler::startCashGame(int players, int buyIn, int limitIndex)
 
 	m_localGameExitRequested = false;
 	m_localGameOver = false;
+	// A cash table is not a tournament, whatever ran before.
+	m_tournamentMode = false;
+	m_tournamentKey.clear();
+	m_tournamentPlace = 0;
+	m_tournamentSeats = 0;
+	m_tournamentPrize = 0;
+	emit tournamentStateChanged();
 
 	GameData gameData;
 	gameData.maxNumberOfPlayers = seatCount;
@@ -2348,6 +2378,106 @@ bool GameHandler::startCashGame(int players, int buyIn, int limitIndex)
 	return true;
 }
 
+// A tournament (PLAN.md section 3).
+//
+// The chips are not money: the buy-in leaves the balance once, the stack lives
+// only on the table, and what comes back at the end is a prize for a place. The
+// blinds rise every levelHands hands (the engine doubles them), which is what
+// turns a deep stack into a short one - the thing that makes a tournament a
+// tournament and not a cash table with a bigger blind.
+bool GameHandler::startTournament(const QString &key)
+{
+	if (!m_session)
+		return false;
+	if (isLocalGameRunning())
+		return false;
+	const int index = PlayerState::tournamentIndex(key);
+	if (index < 0)
+		return false;
+	const PlayerState::TournamentEvent &event = PlayerState::tournamentEvent(index);
+
+	// The buy-in leaves the balance first; if the table cannot be built
+	// afterwards, it goes back.
+	if (m_wallet && !m_wallet->enterTournament(key))
+		return false;
+
+	m_localGameExitRequested = false;
+	m_localGameOver = false;
+	m_tournamentMode = true;
+	m_tournamentKey = key;
+	m_tournamentPlace = 0;
+	m_tournamentSeats = event.seats;
+	m_tournamentPrize = 0;
+	emit tournamentStateChanged();
+
+	GameData gameData;
+	gameData.maxNumberOfPlayers     = event.seats;
+	gameData.startMoney             = event.startStack;   // chips, not cents
+	gameData.firstSmallBlind        = event.smallBlind;
+	// The levels: the engine doubles the blinds every levelHands hands.
+	gameData.raiseIntervalMode              = RAISE_ON_HANDNUMBER;
+	gameData.raiseSmallBlindEveryHandsValue = event.levelHands;
+	gameData.raiseMode                      = DOUBLE_BLINDS;
+	gameData.guiSpeed = 4;
+	if (m_config) {
+		const int speed = m_config->readConfigInt("GameSpeed");
+		if (speed >= 1 && speed <= 11)
+			gameData.guiSpeed = speed;
+	}
+	gameData.delayBetweenHandsSec   = 7;
+	gameData.playerActionTimeoutSec = 30;
+
+	// The field of the event (botprofile.h), dealt anew for every sitting.
+	std::vector<BotProfile> field;
+	if (BotProfile::dealTier(event.field, event.seats - 1, field)) {
+		QString dealt;
+		for (const BotProfile &profile : field) {
+			gameData.botProfiles.push_back(profile.label());
+			if (!dealt.isEmpty())
+				dealt += QStringLiteral(", ");
+			dealt += QString::fromStdString(profile.label());
+		}
+		qInfo().noquote() << "tournament" << event.key << "deals the" << event.field
+						  << "field:" << dealt;
+	} else {
+		qWarning() << "startTournament: the event names an unknown field" << event.field
+				   << "- the default mixture is used";
+	}
+
+	StartData startData;
+	startData.numberOfPlayers     = event.seats;
+	startData.startDealerPlayerId = 0;
+
+	try {
+		m_session->startLocalGame(gameData, startData);
+
+		auto game = m_session->getCurrentGame();
+		if (game)
+			setGame(game);
+	} catch (const std::exception &e) {
+		qWarning() << "startTournament: the engine refused the table:" << e.what();
+		m_game.reset();
+		m_tournamentMode = false;
+		m_tournamentKey.clear();
+		m_tournamentSeats = 0;
+		emit tournamentStateChanged();
+		if (m_wallet)
+			m_wallet->refundTournament(key);
+		return false;
+	}
+
+	if (!isLocalGameRunning()) {
+		m_tournamentMode = false;
+		m_tournamentKey.clear();
+		m_tournamentSeats = 0;
+		emit tournamentStateChanged();
+		if (m_wallet)
+			m_wallet->refundTournament(key);
+		return false;
+	}
+	return true;
+}
+
 int GameHandler::myStack() const
 {
 	if (!m_game)
@@ -2374,7 +2504,10 @@ void GameHandler::endLocalGame()
 	// the balance (PLAN.md section 2 - the stack at a cash table IS money).
 	// Must happen before m_game is dropped, and it is a no-op if the session
 	// was already closed at the end of the game.
-	if (m_wallet)
+	//
+	// A tournament has no stack to return: leaving it is a forfeit, the buy-in
+	// is gone (PLAN.md section 3, "Экономика" - no save, no resume).
+	if (m_wallet && !m_tournamentMode)
 		m_wallet->leaveTable(myStack());
 
 	m_localGameExitRequested = true;
@@ -2388,6 +2521,15 @@ void GameHandler::endLocalGame()
 	if (m_myTurn) {
 		m_myTurn = false;
 		emit myTurnChanged();
+	}
+
+	if (m_tournamentMode) {
+		m_tournamentMode = false;
+		m_tournamentKey.clear();
+		m_tournamentPlace = 0;
+		m_tournamentSeats = 0;
+		m_tournamentPrize = 0;
+		emit tournamentStateChanged();
 	}
 
 	refreshPlayerData();

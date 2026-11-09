@@ -242,6 +242,58 @@ void Wallet::recordHand(bool won)
 	}
 }
 
+bool Wallet::canEnterTournament(const TournamentEvent &event, QString *reason) const
+{
+	QString why;
+	bool ok = false;
+
+	if(m_document.cash.active()) {
+		why = QStringLiteral("already sitting at a table");
+	} else if(event.buyIn <= 0) {
+		why = QStringLiteral("the buy-in has to be positive");
+	} else if(event.buyIn > m_document.profile.balance) {
+		why = QStringLiteral("the balance does not cover this buy-in");
+	} else {
+		ok = true;
+	}
+
+	if(reason) {
+		*reason = why;
+	}
+	return ok;
+}
+
+bool Wallet::enterTournament(const TournamentEvent &event)
+{
+	if(!canEnterTournament(event)) {
+		return false;
+	}
+	m_document.profile.balance -= event.buyIn;
+	m_document.profile.tournamentsPlayed++;
+	m_document.profile.updatedAt = QDateTime::currentDateTimeUtc();
+	return true;
+}
+
+void Wallet::refundTournament(qint64 amount)
+{
+	if(amount > 0) {
+		m_document.profile.balance += amount;
+	}
+}
+
+qint64 Wallet::payTournamentPrize(const TournamentEvent &event, int place)
+{
+	const qint64 prize = event.prizeForPlace(place);
+	if(prize > 0) {
+		m_document.profile.balance += prize;
+	}
+	if(place == 1) {
+		m_document.profile.tournamentsWon++;
+	}
+	m_document.profile.updatedAt = QDateTime::currentDateTimeUtc();
+	return prize;
+}
+
 bool Wallet::rebuyAvailable(const QDateTime &now,
 							qint64 *secondsLeft, QString *reason) const
 {
