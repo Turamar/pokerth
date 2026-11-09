@@ -391,11 +391,23 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 		 * bluffs stop; against a table that gives up the pressure goes up while
 		 * the value threshold barely moves -- they do not pay off thin value,
 		 * but there is no reason to stop betting for it either.
+		 *
+		 * The strength bar is a multiple of the fair share, but capped on both
+		 * sides: the fair share is 1/(opponents+1), so a bare multiple means
+		 * 75 % equity heads up and 25 % six-way for the same style. The bar is
+		 * deliberately NOT divided by the aggression any more. That division
+		 * made a passive style unable to bet a made hand at all: a caller
+		 * needed 4.4x the fair share, i.e. more than 100 % heads up, so a
+		 * caller could only call for ever. Aggression decides how often and how
+		 * big now; the equity decides whether.
 		 */
 		const double valueShift = (pressure < 0.0) ? 0.30 * pressure : 0.10 * pressure;
-		if(equity > fairShare * (1.5 + valueShift) / p.aggression) {
+		const double valueBar = std::max(0.22, std::min(fairShare * (1.5 + valueShift), 0.62));
+		const double betChance = std::min(100.0, 25.0 + 55.0 * p.aggression);
+		if(equity > valueBar && randomPercent() <= static_cast<int>(betChance)) {
 			// The clearer the lead, the larger the bet.
-			double fraction = (equity > fairShare * 2.2) ? 0.75 : 0.55;
+			const double bigBetBar = std::min(fairShare * 2.2, 0.80);
+			double fraction = (equity > bigBetBar) ? 0.75 : 0.55;
 			fraction *= p.aggression;
 			const int amount = std::max(m.bigBlind, static_cast<int>(m.pot * fraction));
 			return raiseTo(s, m, s.mySet + amount);
@@ -447,8 +459,14 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 	margin += p.callMargin;
 
 	if(equity >= m.potOdds + margin) {
-		const bool clearlyAhead = equity > fairShare * 1.9;
-		const bool strong = equity > fairShare * 1.25;
+		/* The same cap as above: a multiple of the fair share alone means
+		 * "95 % equity heads up", which no made hand reaches -- and heads up is
+		 * exactly where a tournament is decided. The bars stay low enough that
+		 * a real hand can raise at a short table, and high enough that a
+		 * six-way pot needs two pair, not a pair.
+		 */
+		const bool clearlyAhead = equity > std::max(0.45, std::min(fairShare * 1.9, 0.78));
+		const bool strong = equity > std::max(0.30, std::min(fairShare * 1.25, 0.60));
 
 		/* A weak-tight player folds hands that were worth a call: the board
 		 * looks scary, the bet is big, so the hand goes into the muck although
@@ -466,7 +484,7 @@ AiDecision decidePostflop(const AiSituation& s, const AiPersonality& p, const Me
 		 */
 		double raiseChance = 0.0;
 		if(clearlyAhead && s.raisesThisRound < 3) raiseChance = 60.0 + 40.0 * p.aggression;
-		else if(strong && s.raisesThisRound < 2) raiseChance = 25.0 * p.aggression;
+		else if(strong && s.raisesThisRound < 2) raiseChance = 25.0 + 30.0 * p.aggression;
 		else if(s.raisesThisRound < 2) raiseChance = p.raiseBluffPercent;
 		raiseChance *= p.raiseFrequency;
 
