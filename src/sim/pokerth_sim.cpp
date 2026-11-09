@@ -570,8 +570,11 @@ public:
 			return false;
 		}
 		m_gui->setGame(m_game.get());
-		// The people keep their character across a rebuild.
-		for(size_t seat = 1; seat < ids.size(); ++seat) {
+		// The people keep their character across a rebuild. The player's own
+		// seat gets one too: in the test the AI plays his seat (the client lets
+		// the human do it), and without a profile he would draw the default
+		// mixture and often be the first one out.
+		for(size_t seat = 0; seat < ids.size(); ++seat) {
 			const PlayerState::RosterEntry *who = people.entry(ids[seat]);
 			if(!who || who->profile.isEmpty()) continue;
 			LocalPlayer *player = dynamic_cast<LocalPlayer*>(
@@ -964,7 +967,7 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 				check(BotProfile::dealTier(event.field, event.seats - 1, field),
 					  QStringLiteral("the client's tournament deals its field"));
 				PlayerState::Roster roster;
-				roster.add(QStringLiteral("Hero"), QString(), event.startStack);
+				roster.add(QStringLiteral("Hero"), QStringLiteral("pro/tag"), event.startStack);
 				for(int i = 1; i < event.seats; ++i) {
 					roster.add(QStringLiteral("Bot%1").arg(i),
 							   QString::fromStdString(field[static_cast<size_t>(i - 1)].label()),
