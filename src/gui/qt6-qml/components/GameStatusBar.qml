@@ -226,8 +226,9 @@ Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: 8
                 AppText {
-                    // Local games have no game ID (0) – the field stays empty there.
-                    visible: GameTable ? GameTable.gameId > 0 : false
+                    // Only a network game has a meaningful game ID; a local game
+                    // counts its tables from 1, which says nothing to the player.
+                    visible: GameTable ? GameTable.isInternetGameRunning() : false
                     text: qsTr("Game: %1").arg(GameTable ? GameTable.gameId : 0)
                     color: "#9e9e9e"
                     font.pixelSize: Config.Responsive.landscapeCompact ? 9 : 11

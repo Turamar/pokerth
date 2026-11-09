@@ -196,11 +196,6 @@ class GameHandler : public QObject
 	Q_PROPERTY(int blindLevel READ blindLevel NOTIFY handNumberChanged)
 	Q_PROPERTY(int smallBlind READ smallBlind NOTIFY handNumberChanged)
 	Q_PROPERTY(int bigBlind READ bigBlind NOTIFY handNumberChanged)
-
-	// An amount as the table talks about it: cents ("$40") at a cash table,
-	// chips ("1 500") in a tournament (PLAN.md section 3 - chips are not money,
-	// a stack is not a prize). Every number on the felt goes through this.
-	Q_INVOKABLE QString amount(qint64 value) const;
 	// The card odds of your own hand (seat 0) – analogous to the CardsChanceMonitor
 	// of the widgets client. A list with 10 entries, index 0 = high card …
 	// 9 = royal flush; every entry is a map {"prob": int %, "possible": bool}.
@@ -259,6 +254,11 @@ public:
 	Q_INVOKABLE bool startTournament(const QString &key);
 	Q_INVOKABLE void endLocalGame();
 	Q_INVOKABLE bool isLocalGameRunning() const;
+	// An amount as the table talks about it: cents ("$40") at a cash table,
+	// chips ("1 500") in a tournament (PLAN.md section 3 - chips are not money,
+	// a stack is not a prize). Every number on the felt goes through this, so
+	// it has to be public: QML cannot call a private Q_INVOKABLE.
+	Q_INVOKABLE QString amount(qint64 value) const;
 	// The chips in front of the player (seat 0) right now.
 	Q_INVOKABLE int myStack() const;
 	// Is an internet game running (a network client, the game type internet)? Only then
