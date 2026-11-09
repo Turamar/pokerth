@@ -32,6 +32,6 @@ Row {
         color: betChip.textColor
         font.pixelSize: betChip.fontSize
         font.bold: true
-        text: Wallet ? Wallet.money(betChip.amount) : ""
+        text: GameTable ? GameTable.amount(betChip.amount) : ""
     }
 }

@@ -4,6 +4,7 @@
  *****************************************************************************/
 
 #include "gamehandler.h"
+#include "amountformat.h"
 #include "chattranslator.h"
 #include "chatemotes.h"
 #include "gui/chat_emote_shortcuts.h"
@@ -2513,6 +2514,15 @@ int GameHandler::blindLevel() const
 	return level;
 }
 
+// The unit of the felt: a cash table counts cents (what the wallet holds), a
+// tournament counts chips (what the buy-in bought once). Chips never reach the
+// wallet, so they are printed as plain numbers - "$15.00" for 1500 chips would
+// read like a prize.
+QString GameHandler::amount(qint64 value) const
+{
+	return m_tournamentMode ? AmountFormat::chips(value) : AmountFormat::money(value);
+}
+
 int GameHandler::myStack() const
 {
 	if (!m_game)
@@ -2909,7 +2919,7 @@ void GameHandler::onShowdown()
 		// With an all-in with several winners: the best hand = the main pot, the rest a side pot.
 		const bool isMainPot = isMainPotWinner(*it);
 		QString msg = QString::fromStdString((*it)->getMyName())
-					  + " wins $" + QString::number((*it)->getLastMoneyWon());
+					  + QStringLiteral(" wins ") + amount((*it)->getLastMoneyWon());
 		if (!isMainPot)
 			msg += QStringLiteral(" (side pot)");
 		appendGameLog(msg, isMainPot ? LogWinnerMain : LogWinnerSide);

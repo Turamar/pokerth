@@ -188,12 +188,12 @@ Item {
     // (new values from computeCallAndRaiseAmounts) do amounts appear again.
     readonly property string checkCallText: (GameTable === null || !actionsArmed) ? callWord
         : (canCheck ? checkWord
-                    : callWord + _amountSep + (Wallet ? Wallet.money(GameTable.callAmount) : ""))
+                    : callWord + _amountSep + (GameTable ? GameTable.amount(GameTable.callAmount) : ""))
     readonly property string betRaiseText: {
         if (GameTable === null || !actionsArmed) return raiseWord
         var word = (!isPreflop && canCheck) ? betWord : raiseWord
         return raiseAvailable
-                ? (word + _amountSep + (Wallet ? Wallet.money(raiseAmount) : ""))
+                ? (word + _amountSep + (GameTable ? GameTable.amount(raiseAmount) : ""))
                 : word
     }
 

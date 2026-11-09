@@ -159,7 +159,7 @@ SeatBox {
                     font.pixelSize: 15
                     font.bold: true
                     text: root.seatData
-                          ? (Wallet ? Wallet.money(root.seatData.stack) : "") : ""
+                          ? (GameTable ? GameTable.amount(root.seatData.stack) : "") : ""
                 }
             }
 
@@ -205,7 +205,7 @@ SeatBox {
                     font.pixelSize: 15
                     font.bold: true
                     text: root.seatData
-                          ? (Wallet ? Wallet.money(root.seatData.stack) : "") : ""
+                          ? (GameTable ? GameTable.amount(root.seatData.stack) : "") : ""
                 }
             }
         }

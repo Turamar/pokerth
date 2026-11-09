@@ -125,7 +125,7 @@ Rectangle {
                     font.weight: Font.Medium
                 }
                 AppText {
-                    text: Wallet ? Wallet.money(GameTable ? GameTable.pot : 0) : ""
+                    text: GameTable ? GameTable.amount(GameTable.pot) : ""
                     color: "#99D500"
                     font.pixelSize: Config.Responsive.landscapeCompact ? 11 : 13
                     font.bold: true
@@ -140,7 +140,7 @@ Rectangle {
                     font.weight: Font.Medium
                 }
                 AppText {
-                    text: Wallet ? Wallet.money(GameTable ? (GameTable.totalPot - GameTable.pot) : 0) : ""
+                    text: GameTable ? GameTable.amount(GameTable.totalPot - GameTable.pot) : ""
                     color: "#7aa800"
                     font.pixelSize: Config.Responsive.landscapeCompact ? 10 : 11
                     font.weight: Font.Medium
