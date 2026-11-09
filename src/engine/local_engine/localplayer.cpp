@@ -5310,6 +5310,10 @@ bool LocalPlayer::isMuted() const
 
 bool LocalPlayer::checkIfINeedToShowCards()
 {
+	// A table that was just built has no hand yet: the players exist, the hand
+	// does not (the tournament rebuilds a table between two hands). Nobody has
+	// to show anything then, and reading the hand here would be a null access.
+	if(!currentHand) return false;
 	std::list<unsigned> playerNeedToShowCardsList = currentHand->getBoard()->getPlayerNeedToShowCards();
 	for(std::list<unsigned>::iterator it = playerNeedToShowCardsList.begin(); it != playerNeedToShowCardsList.end(); ++it) {
 		if(*it == myUniqueID) return true;

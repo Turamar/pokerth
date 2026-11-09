@@ -2533,6 +2533,8 @@ bool GameHandler::startTournament(const QString &key)
 		return refuse(QStringLiteral("the first hand could not be started: ")
 					  + QString::fromStdString(error));
 	m_roster = m_tournament->roster();
+	// Now that there is a hand, the table can be drawn.
+	refreshPlayerData();
 
 	if (!isLocalGameRunning())
 		return refuse(QStringLiteral("the table did not start"));
@@ -2623,11 +2625,12 @@ bool GameHandler::seat(const std::vector<int> &ids, int button, std::string &err
 		m_localSeatIds.clear();
 		return false;
 	}
-	// The same window and the same history - only the seats are new.
+	// The same window and the same history - only the seats are new. The player
+	// list is NOT refreshed here: the table has no hand yet, and the hand is what
+	// the list is read from (the caller refreshes once the hand is dealt).
 	m_leftPlayers.clear();
 	qDeleteAll(m_bustedLocalTimers);
 	m_bustedLocalTimers.clear();
-	refreshPlayerData();
 	qInfo().noquote() << "[MTT] seat done:" << seatLine(m_localSeatIds);
 	if (rebuild) {
 		qInfo().noquote() << "tournament" << m_tournamentKey << "reseats my table:"
@@ -2714,8 +2717,10 @@ void GameHandler::advanceTournament()
 	qInfo().noquote() << "[MTT] advance: step done, hand" << m_tournament->result().handsPlayed
 					  << "level" << m_tournament->result().level
 					  << "blind" << m_tournament->blind();
+	// The seating of my table may have changed, but the table itself is rebuilt
+	// when the next hand starts (the hand is what the drawn table is read from),
+	// so the seat map stays as the engine has it until then.
 	m_roster = m_tournament->roster();
-	m_localSeatIds = m_tournament->localIds();
 
 	// Out of chips, or the last one standing: the place is decided.
 	if (!m_tournament->hostStillIn() || m_tournament->playersLeft() <= 1) {

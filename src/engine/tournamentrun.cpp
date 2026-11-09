@@ -335,6 +335,8 @@ bool TournamentRun::startLocalHand(string &error)
 		error = "the player's table has nobody to play against";
 		return false;
 	}
+	// The rebuild happens here, right before the hand: a table without a hand
+	// cannot be drawn by the client (its player list needs the hand's data).
 	if(table->dirty && !seatLocalTable(error)) return false;
 	return m_host->startHand(blind(), error);
 }
@@ -363,9 +365,10 @@ bool TournamentRun::step(string &error)
 	rebalance();
 	assignPlaces();
 
-	// 3. The seating of the host's table may have changed (a bust, a move):
-	// it is rebuilt now, before the next hand.
-	if(!seatLocalTable(error)) return false;
+	// The seating of the host's table may have changed (a bust, a move). It is
+	// NOT rebuilt here: the host rebuilds it when the next hand starts, so that
+	// the table is never left without a hand (the client draws it, and a table
+	// without a hand cannot be drawn). startLocalHand() does the rebuild.
 
 	fillResult();
 	return true;
