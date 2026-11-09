@@ -76,6 +76,11 @@ struct CashLimit
 {
 	const char *key;     // "nl2" - stored in the session, never shown
 	const char *label;   // "$0.01/$0.02" - what the interface shows
+	/* The field the table deals, i.e. the tier of the ladder (botprofile.h):
+	 * "micro", "rookie", "low", "mid", "high". A step is harder not only
+	 * because its blinds are bigger - the opponents are the other half of it.
+	 */
+	const char *field;
 	qint64 smallBlind;   // cents
 	// The bankroll the step needs, in big blinds of this limit.
 	//

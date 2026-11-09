@@ -100,6 +100,25 @@ enum BotPopulation {
 	BOT_POPULATION_COUNT
 };
 
+/* A step of the ladder as a distribution (PLAN.md sections 2 and 3).
+ *
+ * The reference fields above are five named seats: a measuring instrument,
+ * always the same table. A tier is what a table actually deals -- every seat
+ * draws its own profile from the tier's weights, so each new table is a new
+ * draw while the average composition stays the one the tier was designed
+ * with. The names repeat the reference fields, because the tier of the same
+ * name has the same average composition, and add "high": the top of the cash
+ * ladder, where every seat is an elite regular.
+ */
+enum BotTier {
+	BOT_TIER_MICRO = 0,
+	BOT_TIER_ROOKIE,
+	BOT_TIER_LOW,
+	BOT_TIER_MID,
+	BOT_TIER_HIGH,
+	BOT_TIER_COUNT
+};
+
 /* What a field is supposed to look like, in the terms a HUD uses. For the
  * stakes these are published population averages; for a tournament tier they
  * are the numbers the tier is designed to have. Either way they exist so that
@@ -140,6 +159,18 @@ struct BotProfile {
 	static const char *populationName(BotPopulation population);
 	static bool populationTarget(const std::string &text, BotPopulationTarget &out);
 	static bool parsePopulation(const std::string &text, std::vector<BotProfile> &seats);
+
+	/* The ladder's tiers: "micro, rookie, low, mid, high". A tier is dealt
+	 * seat by seat, so one table is one sample of its distribution.
+	 */
+	static const char *tierList();
+	static const char *tierName(BotTier tier);
+	static bool hasTier(const std::string &text);
+	// One seat drawn from the tier, and a whole table of them.
+	static bool drawTier(const std::string &text, BotProfile &out);
+	static bool dealTier(const std::string &text, int seats, std::vector<BotProfile> &out);
+	// The composition a tier is designed to have, in HUD terms.
+	static bool tierTarget(const std::string &text, BotPopulationTarget &out);
 
 	static bool parseStrength(const std::string &text, BotStrength &out);
 	static bool parseArchetype(const std::string &text, BotArchetype &out);

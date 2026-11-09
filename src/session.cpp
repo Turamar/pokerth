@@ -157,7 +157,7 @@ void Session::startLocalGame(const GameData &gameData, const StartData &startDat
 		playerDataList.push_back(playerData);
 	}
 	// EngineFactory erstellen
-	boost::shared_ptr<EngineFactory> factory(new LocalEngineFactory(myConfig)); // LocalEngine erstellen
+	boost::shared_ptr<EngineFactory> factory(new LocalEngineFactory(myConfig, gameData.botProfiles)); // LocalEngine erstellen
 
 	currentGame.reset(new Game(myGui, factory, playerDataList, gameData, startData, currentGameNum, myLog.get()));
 

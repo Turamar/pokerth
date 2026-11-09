@@ -71,6 +71,7 @@
 #include <QJsonObject>
 #include <QString>
 
+#include <botprofile.h>
 #include <configfile.h>
 #include <statestore.h>
 #include <wallet.h>
@@ -104,6 +105,9 @@ void printUsage()
 		"  --field F         a reference field: rookie (between micro and low),\n"
 		"                    micro, low or mid; the first seat then plays the\n"
 		"                    profile given above (the hero), the rest the field\n"
+		"  --tier T          a tier of the ladder: micro, rookie, low, mid or high;\n"
+		"                    every game deals a new table from the tier's weights,\n"
+		"                    the first seat plays the hero\n"
 		"  --mixed           every seat draws its own profile - the mixture the\n"
 		"                    client uses (default)\n"
 		"  --scale-open F    multiply the opening ranges by F (calibration)\n"
@@ -270,6 +274,17 @@ double bigBlindsPer100(const SimSeatStats &seat, int smallBlind)
 // measured field meaningful, not decoration.
 void printFieldHeader(const SimOptions &options)
 {
+	if(!options.tierName.empty()) {
+		BotPopulationTarget target;
+		if(BotProfile::tierTarget(options.tierName, target)) {
+			printf("\ntier %s (%s): target VPIP %.0f%%, PFR %.0f%%, 3B %.0f%%\n",
+				   target.name, target.description, target.vpip, target.pfr, target.threeBet);
+		}
+		printf("seat 1 plays the hero (%s), seats 2..%d draw from the tier; "
+			   "every game deals a new table\n",
+			   options.profile.label().c_str(), options.players);
+		return;
+	}
 	if(options.fieldProfiles.empty()) return;
 
 	BotPopulationTarget target;
@@ -363,8 +378,10 @@ bool writeJson(const string &fileName, const SimTotals &totals, const SimOptions
 	setup[QStringLiteral("raiseEveryHands")] = options.raiseEveryHands;
 	setup[QStringLiteral("maxHands")] = options.maxHands;
 	setup[QStringLiteral("field")] = QString::fromStdString(options.fieldName);
+	setup[QStringLiteral("tier")] = QString::fromStdString(options.tierName);
 	setup[QStringLiteral("hero")] =
-			options.fieldProfiles.empty() ? QString() : QString::fromStdString(options.profile.label());
+			(options.fieldProfiles.empty() && options.tierName.empty())
+			? QString() : QString::fromStdString(options.profile.label());
 	root[QStringLiteral("setup")] = setup;
 
 	QJsonArray seats;
@@ -496,6 +513,20 @@ bool runStateSelfTest(const QString &directory)
 			   static_cast<long long>(limit.smallBlind), static_cast<long long>(limit.bigBlind()),
 			   static_cast<long long>(limit.minBuyIn()), static_cast<long long>(limit.maxBuyIn()),
 			   static_cast<long long>(limit.gate()));
+
+		// A step is blinds plus composition: every limit has to name a field
+		// that botprofile knows and that deals a whole table.
+		for(int i = 0; i < PlayerState::cashLimitCount(); ++i) {
+			const PlayerState::CashLimit &step = PlayerState::cashLimit(i);
+			check(BotProfile::hasTier(step.field),
+				  QStringLiteral("limit %1 names a known field (%2)")
+				  .arg(QString::fromLatin1(step.key))
+				  .arg(QString::fromLatin1(step.field)));
+			std::vector<BotProfile> dealt;
+			check(BotProfile::dealTier(step.field, 5, dealt) && dealt.size() == 5,
+				  QStringLiteral("limit %1 deals five opponents")
+				  .arg(QString::fromLatin1(step.key)));
+		}
 
 		PlayerState::Wallet wallet;
 		check(wallet.balance() == PlayerState::StartingBalance,
@@ -822,6 +853,18 @@ int main(int argc, char *argv[])
 			continue;
 		}
 
+		if(strcmp(arg, "--tier") == 0) {
+			if(!BotProfile::hasTier(value)) {
+				fprintf(stderr, "pokerth_sim: unknown tier '%s' (%s)\n",
+						value, BotProfile::tierList());
+				return 2;
+			}
+			options.tierName = value;
+			options.mixedProfiles = false;
+			i++;
+			continue;
+		}
+
 		if(strcmp(arg, "--scale-open") == 0 || strcmp(arg, "--scale-3bet") == 0
 				|| strcmp(arg, "--scale-call") == 0 || strcmp(arg, "--scale-raise") == 0
 				|| strcmp(arg, "--scale-cbet") == 0 || strcmp(arg, "--scale-adapt") == 0
@@ -884,9 +927,17 @@ int main(int argc, char *argv[])
 		return 2;
 	}
 
+	// A tier deals the opponents itself, so a fixed list of them has no place
+	// next to it.
+	if(!options.tierName.empty()
+			&& (!options.fieldProfiles.empty() || !options.seatProfiles.empty())) {
+		fprintf(stderr, "pokerth_sim: --tier, --field and --seat-profiles are exclusive\n");
+		return 2;
+	}
+
 	// A diagnostic style is an instrument: one seat of it next to the opponents
 	// it punishes. A table of five of them measures nothing.
-	if(options.fieldProfiles.empty() && options.seatProfiles.empty()
+	if(options.fieldProfiles.empty() && options.seatProfiles.empty() && options.tierName.empty()
 			&& !options.mixedProfiles && BotProfile::isDiagnostic(options.profile.archetype)) {
 		fprintf(stderr, "pokerth_sim: '%s' is a diagnostic style, "
 				"give it one seat with --seat-profiles\n",

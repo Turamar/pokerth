@@ -43,13 +43,16 @@ namespace
  * number plus the bankroll it asks for. The bottom step needs only a seat:
  * "$20 opens the micro limit" is where the ladder becomes comfortable, but
  * losing one buy-in there must not lock the player out of the game.
+ *
+ * The third column is the field the table deals (botprofile.h): the ladder is
+ * blinds plus composition, and the composition is what makes a step harder.
  */
 const CashLimit LADDER[] = {
-	{ "nl2",   "$0.01/$0.02", 1,   MinBuyInBB },
-	{ "nl4",   "$0.02/$0.04", 2,   GateBB },
-	{ "nl10",  "$0.05/$0.10", 5,   GateBB },
-	{ "nl50",  "$0.25/$0.50", 25,  GateBB },
-	{ "nl200", "$1/$2", 100, GateBB }
+	{ "nl2",   "$0.01/$0.02", "micro",  1,   MinBuyInBB },
+	{ "nl4",   "$0.02/$0.04", "rookie", 2,   GateBB },
+	{ "nl10",  "$0.05/$0.10", "low",    5,   GateBB },
+	{ "nl50",  "$0.25/$0.50", "mid",    25,  GateBB },
+	{ "nl200", "$1/$2",       "high",   100, GateBB }
 };
 const int LadderSize = static_cast<int>(sizeof(LADDER) / sizeof(LADDER[0]));
 

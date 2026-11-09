@@ -38,7 +38,10 @@
 #include <boardinterface.h>
 #include <playerinterface.h>
 
+#include <botprofile.h>
+
 #include <boost/shared_ptr.hpp>
+#include <string>
 #include <vector>
 
 class ConfigFile;
@@ -46,7 +49,10 @@ class ConfigFile;
 class LocalEngineFactory : public EngineFactory
 {
 public:
-	LocalEngineFactory(ConfigFile*);
+	/* botProfiles is what a table was dealt: one label per opponent, as
+	 * GameData carries it. Empty means the mixture each seat draws itself.
+	 */
+	LocalEngineFactory(ConfigFile*, const std::vector<std::string> &botProfiles = std::vector<std::string>());
 	~LocalEngineFactory();
 
 	virtual boost::shared_ptr<HandInterface> createHand(boost::shared_ptr<EngineFactory> f, GuiInterface *g, boost::shared_ptr<BoardInterface> b, Log *l, PlayerList sl, PlayerList apl, PlayerList rpl, int id, int sP, int dP, int sB,int sC);
@@ -56,6 +62,7 @@ public:
 
 private:
 	ConfigFile *myConfig;
+	std::vector<BotProfile> myBots;
 };
 
 #endif

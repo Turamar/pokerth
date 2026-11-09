@@ -198,6 +198,87 @@ const PopulationNumbers POPULATIONS[BOT_POPULATION_COUNT] = {
 		  { BOT_STRENGTH_ELITE, BOT_ARCHETYPE_TAG } } }
 };
 
+/* The tiers of the ladder (PLAN.md sections 2 and 3). A tier is the same row
+ * of steps as the tournament table: the average composition repeats the
+ * reference field of the name. The top step is the exception: a tournament puts
+ * five to ten percent of elites into a field of 180, but on five seats that is
+ * a quarter of a seat, so the top of the cash ladder is an all-elite table.
+ */
+struct TierEntry {
+	BotStrength strength;
+	BotArchetype archetype;
+	int weight;
+};
+
+struct TierNumbers {
+	const char *name;
+	const char *description;
+	double targetVpip;
+	double targetPfr;
+	double targetThreeBet;
+	const TierEntry *entries;
+	int count;
+};
+
+const TierEntry TIER_MICRO[] = {
+	{ BOT_STRENGTH_NOVICE, BOT_ARCHETYPE_CALLER, 36 },
+	{ BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_CALLER, 44 },
+	{ BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_TAG, 20 }
+};
+
+const TierEntry TIER_ROOKIE[] = {
+	{ BOT_STRENGTH_NOVICE, BOT_ARCHETYPE_CALLER, 40 },
+	{ BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_LAG, 20 },
+	{ BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_NIT, 20 },
+	{ BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_TAG, 20 }
+};
+
+const TierEntry TIER_LOW[] = {
+	{ BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_CALLER, 20 },
+	{ BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_LAG, 20 },
+	{ BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_TAG, 20 },
+	{ BOT_STRENGTH_PRO, BOT_ARCHETYPE_TAG, 20 },
+	{ BOT_STRENGTH_AMATEUR, BOT_ARCHETYPE_BALANCED, 20 }
+};
+
+const TierEntry TIER_MID[] = {
+	{ BOT_STRENGTH_PRO, BOT_ARCHETYPE_LAG, 40 },
+	{ BOT_STRENGTH_PRO, BOT_ARCHETYPE_TAG, 20 },
+	{ BOT_STRENGTH_PRO, BOT_ARCHETYPE_BALANCED, 20 },
+	{ BOT_STRENGTH_ELITE, BOT_ARCHETYPE_TAG, 20 }
+};
+
+/* The top of the ladder. It was first written as "mid plus a few elites",
+ * with two LAG seats in five; the measurement showed that version easier than
+ * mid: the draw often gave three or more LAGs, and a pro TAG feeds on that
+ * much aggression. The top is therefore the elite level with a steady, mostly
+ * tight table -- one LAG in five on average, never a table of five of them.
+ */
+const TierEntry TIER_HIGH[] = {
+	{ BOT_STRENGTH_ELITE, BOT_ARCHETYPE_LAG, 20 },
+	{ BOT_STRENGTH_ELITE, BOT_ARCHETYPE_TAG, 40 },
+	{ BOT_STRENGTH_ELITE, BOT_ARCHETYPE_BALANCED, 40 }
+};
+
+const int TIER_MICRO_SIZE = static_cast<int>(sizeof(TIER_MICRO) / sizeof(TIER_MICRO[0]));
+const int TIER_ROOKIE_SIZE = static_cast<int>(sizeof(TIER_ROOKIE) / sizeof(TIER_ROOKIE[0]));
+const int TIER_LOW_SIZE = static_cast<int>(sizeof(TIER_LOW) / sizeof(TIER_LOW[0]));
+const int TIER_MID_SIZE = static_cast<int>(sizeof(TIER_MID) / sizeof(TIER_MID[0]));
+const int TIER_HIGH_SIZE = static_cast<int>(sizeof(TIER_HIGH) / sizeof(TIER_HIGH[0]));
+
+const TierNumbers TIERS[BOT_TIER_COUNT] = {
+	{ "micro", "NL2: a crowd of callers and one careful player",
+	  40.0, 10.0, 2.0, TIER_MICRO, TIER_MICRO_SIZE },
+	{ "rookie", "NL4: fewer callers, one LAG, one nit, one careful TAG",
+	  26.0, 13.0, 6.0, TIER_ROOKIE, TIER_ROOKIE_SIZE },
+	{ "low", "NL10: ranges without position, still calls too much",
+	  29.0, 16.0, 4.0, TIER_LOW, TIER_LOW_SIZE },
+	{ "mid", "NL50: regulars, no obvious leak",
+	  23.0, 19.0, 6.0, TIER_MID, TIER_MID_SIZE },
+	{ "high", "NL200: elite regulars, tight and steady",
+	  20.0, 15.0, 7.0, TIER_HIGH, TIER_HIGH_SIZE }
+};
+
 string lower(const string &text)
 {
 	string result = text;
@@ -329,6 +410,74 @@ bool BotProfile::parsePopulation(const string &text, vector<BotProfile> &seats)
 		seats.push_back(BotProfile(POPULATIONS[index].seats[i].strength,
 								   POPULATIONS[index].seats[i].archetype));
 	}
+	return true;
+}
+
+// Index of a tier by name, -1 if there is no such tier.
+static int tierIndex(const string &text)
+{
+	const string key = lower(text);
+	for(int i = 0; i < BOT_TIER_COUNT; ++i) {
+		if(key == TIERS[i].name) return i;
+	}
+	return -1;
+}
+
+const char *BotProfile::tierList()
+{
+	return "micro, rookie, low, mid, high";
+}
+
+const char *BotProfile::tierName(BotTier tier)
+{
+	if(tier < 0 || tier >= BOT_TIER_COUNT) return "unknown";
+	return TIERS[tier].name;
+}
+
+bool BotProfile::hasTier(const string &text)
+{
+	return tierIndex(text) >= 0;
+}
+
+bool BotProfile::drawTier(const string &text, BotProfile &out)
+{
+	const int index = tierIndex(text);
+	if(index < 0) return false;
+
+	const TierNumbers &tier = TIERS[index];
+	int weights[16];
+	int count = 0;
+	for(int i = 0; i < tier.count && count < 16; ++i) {
+		weights[count++] = tier.entries[i].weight;
+	}
+	if(count == 0) return false;
+
+	const int pick = weightedIndex(weights, count);
+	out = BotProfile(tier.entries[pick].strength, tier.entries[pick].archetype);
+	return true;
+}
+
+bool BotProfile::dealTier(const string &text, int seats, vector<BotProfile> &out)
+{
+	out.clear();
+	if(tierIndex(text) < 0 || seats < 0) return false;
+	for(int i = 0; i < seats; ++i) {
+		BotProfile profile;
+		if(!drawTier(text, profile)) return false;
+		out.push_back(profile);
+	}
+	return true;
+}
+
+bool BotProfile::tierTarget(const string &text, BotPopulationTarget &out)
+{
+	const int index = tierIndex(text);
+	if(index < 0) return false;
+	out.name = TIERS[index].name;
+	out.description = TIERS[index].description;
+	out.vpip = TIERS[index].targetVpip;
+	out.pfr = TIERS[index].targetPfr;
+	out.threeBet = TIERS[index].targetThreeBet;
 	return true;
 }
 

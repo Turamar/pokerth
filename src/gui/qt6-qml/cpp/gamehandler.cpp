@@ -14,6 +14,7 @@
 #include <boardinterface.h>
 #include <berointerface.h>
 #include <cardsvalue.h>
+#include <botprofile.h>
 #include <playerdata.h>
 #include <game_defs.h>
 #include <gamedata.h>
@@ -2214,6 +2215,26 @@ bool GameHandler::startCashGame(int players, int buyIn, int limitIndex)
 	}
 	gameData.delayBetweenHandsSec   = 7;
 	gameData.playerActionTimeoutSec = 20;
+
+	// The opponents come from the field of the limit (botprofile.h): every
+	// session deals a new table, while the average composition is the one the
+	// step was designed with. Logged, so that a report about a table can be
+	// matched with what was dealt.
+	std::vector<BotProfile> field;
+	if (BotProfile::dealTier(limit.field, seatCount - 1, field)) {
+		QString dealt;
+		for (const BotProfile &profile : field) {
+			gameData.botProfiles.push_back(profile.label());
+			if (!dealt.isEmpty())
+				dealt += QStringLiteral(", ");
+			dealt += QString::fromStdString(profile.label());
+		}
+		qInfo().noquote() << "cash table" << limit.key << "deals the" << limit.field
+						  << "field:" << dealt;
+	} else {
+		qWarning() << "cash table: the limit names an unknown field" << limit.field
+				   << "- the default mixture is used";
+	}
 
 	StartData startData;
 	startData.numberOfPlayers     = seatCount;

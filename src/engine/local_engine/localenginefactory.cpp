@@ -43,9 +43,15 @@
 #include <configfile.h>
 
 
-LocalEngineFactory::LocalEngineFactory(ConfigFile *c)
+LocalEngineFactory::LocalEngineFactory(ConfigFile *c, const std::vector<std::string> &botProfiles)
 	: myConfig(c)
 {
+	for(size_t i = 0; i < botProfiles.size(); ++i) {
+		BotProfile profile;
+		if(BotProfile::parse(botProfiles[i], profile)) {
+			myBots.push_back(profile);
+		}
+	}
 }
 
 
@@ -69,7 +75,17 @@ LocalEngineFactory::createBoard()
 boost::shared_ptr<PlayerInterface>
 LocalEngineFactory::createPlayer(int id, unsigned uniqueId, PlayerType type, std::string name, std::string avatar, int sC, bool aS, bool sotS, int mB)
 {
-	return boost::shared_ptr<PlayerInterface> (new LocalPlayer(myConfig, id, uniqueId, type, name, avatar, sC, aS, sotS, mB));
+	LocalPlayer *player = new LocalPlayer(myConfig, id, uniqueId, type, name, avatar, sC, aS, sotS, mB);
+
+	// The table a tier was dealt into: seat 0 is the human, the others take
+	// the profiles in order. Seats beyond the list repeat it, so a table with
+	// more seats than opponents dealt still gets a full table.
+	if(type == PLAYER_TYPE_COMPUTER && id > 0 && !myBots.empty()) {
+		const size_t index = static_cast<size_t>(id - 1) % myBots.size();
+		player->setBotProfile(myBots[index]);
+	}
+
+	return boost::shared_ptr<PlayerInterface>(player);
 }
 
 std::vector<boost::shared_ptr<BeRoInterface> >

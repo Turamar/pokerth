@@ -35,6 +35,7 @@
 
 #include <list>
 #include <string>
+#include <vector>
 #ifndef Q_MOC_RUN
 #include <third_party/boost/timers.hpp>
 #endif
@@ -93,6 +94,10 @@ struct GameData {
 	int guiSpeed;
 	int delayBetweenHandsSec;
 	int playerActionTimeoutSec;
+	/* Local games only: one profile label per bot seat ("pro/tag", see
+	 * botprofile.h), the table a tier was dealt into. The labels keep this
+	 * header free of the engine; empty means the default mixture. */
+	std::vector<std::string> botProfiles;
 };
 
 struct GameInfo {

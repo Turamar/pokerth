@@ -81,6 +81,12 @@ struct SimOptions
 	std::vector<BotProfile> fieldProfiles;
 	std::string fieldName;
 
+	/* A tier of the ladder (PLAN.md section 2): every game deals a new table
+	 * from its weights, so a run measures the distribution rather than one
+	 * fixed roster. The hero still plays options.profile.
+	 */
+	std::string tierName;
+
 	/* Calibration knobs: multipliers on the ranges of the profile. They exist so
 	 * that a corridor can be searched without a new build - the numbers are
 	 * measured, not guessed (see CHANGELOG.md).

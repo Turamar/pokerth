@@ -84,6 +84,12 @@ int playersWithCash(const boost::shared_ptr<Game> &game)
  */
 BotProfile profileForSeat(const SimOptions &options, int seat)
 {
+	if(!options.tierName.empty()) {
+		if(seat == 0) return options.profile;
+		BotProfile drawn;
+		if(BotProfile::drawTier(options.tierName, drawn)) return drawn;
+		return options.profile;
+	}
 	if(!options.fieldProfiles.empty()) {
 		if(seat == 0) return options.profile;
 		const size_t index = std::min(static_cast<size_t>(seat - 1), options.fieldProfiles.size() - 1);
