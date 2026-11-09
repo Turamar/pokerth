@@ -75,6 +75,7 @@
 #include <configfile.h>
 #include <statestore.h>
 #include <wallet.h>
+#include <roster.h>
 
 using namespace std;
 
@@ -584,6 +585,82 @@ bool runStateSelfTest(const QString &directory)
 			}
 			check(paidOut == event.pool(),
 				  QStringLiteral("tournament %1 pays out exactly its pool").arg(key));
+		}
+
+		// ── The roster of a tournament (PLAN.md section 3, "Ростер") ────────
+		{
+			// The strength and the archetype are chosen when the seat is taken and
+			// live in the roster, not in the seat number: without this, a rebuilt
+			// table would deal the opponents again and a moved player would come
+			// back as somebody else.
+			const PlayerState::TournamentEvent &event = PlayerState::tournamentEvent(0);
+			std::vector<BotProfile> field;
+			check(BotProfile::dealTier(event.field, event.seats - 1, field),
+				  QStringLiteral("the roster test has a field to deal"));
+			PlayerState::Roster roster;
+			check(roster.isEmpty() && roster.count() == 0 && roster.tableCount() == 0,
+				  QStringLiteral("a new roster is empty"));
+			roster.add(QStringLiteral("Me"), QString(), event.startStack);
+			for(int i = 0; i < event.seats - 1; ++i) {
+				roster.add(QStringLiteral("Bot%1").arg(i + 1),
+						   QString::fromStdString(field.at(i).label()), event.startStack);
+			}
+			for(int seat = 0; seat < event.seats; ++seat) {
+				roster.seat(seat, 0, seat);
+			}
+			check(roster.count() == event.seats,
+				  QStringLiteral("the roster holds the whole table (%1)").arg(roster.count()));
+			check(roster.tableCount() == 1, QStringLiteral("the table is in use"));
+
+			// What the engine gets when it builds that table, in seat order.
+			const QStringList profiles = roster.seatProfiles(0);
+			const QStringList names = roster.seatNames(0);
+			const QVector<int> stacks = roster.seatStacks(0);
+			check(profiles.size() == event.seats && names.size() == event.seats
+				  && stacks.size() == event.seats,
+				  QStringLiteral("names, profiles and stacks cover every seat"));
+			check(profiles.first().isEmpty(),
+				  QStringLiteral("the human seat has no bot profile"));
+			check(roster.botProfiles(0).size() == event.seats - 1,
+				  QStringLiteral("gameData.botProfiles gets one profile per bot"));
+			check(roster.seatStacks(0).at(0) == event.startStack,
+				  QStringLiteral("every seat starts with the stack of the event"));
+
+			// A move between tables: the place changes, the person does not.
+			const int mover = 3;
+			const QString movedProfile = roster.entry(mover)->profile;
+			const QString movedName = roster.entry(mover)->name;
+			roster.setStack(mover, 275);   // he won a pot at table 0
+			check(roster.seat(mover, 1, 4), QStringLiteral("a player can be seated at another table"));
+			check(roster.idAt(0, 3) == -1, QStringLiteral("his old seat (table 0, seat 3) is free"));
+			check(roster.idAt(1, 4) == mover,
+				  QStringLiteral("the new seat belongs to the same person"));
+			check(roster.entry(mover)->profile == movedProfile,
+				  QStringLiteral("a move does not change the character"));
+			check(roster.entry(mover)->name == movedName,
+				  QStringLiteral("a move does not change the name"));
+			check(roster.stack(mover) == 275, QStringLiteral("a move does not change the stack"));
+			check(roster.tableCount() == 2, QStringLiteral("both tables are in use"));
+			// A rebuilt table takes these from the roster, not from the seat number.
+			check(roster.seatStacks(1).at(4) == 275,
+				  QStringLiteral("the rebuilt table gets the carried stack"));
+			check(roster.seatProfiles(1).at(4) == movedProfile,
+				  QStringLiteral("the rebuilt table gets the same profile"));
+			check(roster.seatNames(1).at(4) == movedName,
+				  QStringLiteral("the rebuilt table gets the same name"));
+
+			// A busted player leaves the seat but keeps the record.
+			roster.unseat(mover);
+			check(roster.idAt(1, 4) == -1, QStringLiteral("a busted player leaves the seat"));
+			check(roster.entry(mover) != nullptr && roster.stack(mover) == 275,
+				  QStringLiteral("the record and the stack of a busted player stay"));
+
+			// One seat, one person: the last one seated keeps it.
+			roster.seat(1, 2, 0);
+			roster.seat(2, 2, 0);
+			check(roster.idAt(2, 0) == 2, QStringLiteral("a seat holds exactly one player"));
+			check(roster.entry(1)->seat == -1,
+				  QStringLiteral("the player who lost the seat is unseated"));
 		}
 		{
 			const PlayerState::TournamentEvent &event = PlayerState::tournamentEvent(0);

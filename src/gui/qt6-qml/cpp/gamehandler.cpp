@@ -98,6 +98,17 @@ QString resolveAvatarSource(const std::string &raw)
 		return QString();
 	return QUrl::fromLocalFile(path).toString();
 }
+
+// The name a player is shown with: the same configuration keys session.cpp reads
+// ("MyName", "Opponent1Name", …), so that a table seated from the roster shows
+// exactly the names a plain local game would.
+QString configName(ConfigFile *config, const QString &key, const QString &fallback)
+{
+	if (!config)
+		return fallback;
+	const QString value = QString::fromStdString(config->readConfigString(key.toStdString())).trimmed();
+	return value.isEmpty() ? fallback : value;
+}
 } // namespace
 
 GameHandler::GameHandler(QObject *parent)
@@ -2380,6 +2391,27 @@ bool GameHandler::startCashGame(int players, int buyIn, int limitIndex)
 	return true;
 }
 
+// What the roster seated at a table, one entry per seat:
+// "[0] Human Player 1500 · [1] Player 1/pro/tag 1500". Written to the log so
+// that a table can be matched with the people it was built from - the same idea
+// as the cash table's "deals the field" line.
+QString GameHandler::rosterLine() const
+{
+	QStringList parts;
+	const QVector<int> seats = m_roster.seatsAt(0);
+	for (int seat = 0; seat < seats.size(); ++seat) {
+		const PlayerState::RosterEntry *who = m_roster.entry(seats.at(seat));
+		if (!who)
+			continue;
+		QString part = QStringLiteral("[%1] %2").arg(seat).arg(who->name);
+		if (!who->profile.isEmpty())
+			part += QLatin1Char('/') + who->profile;
+		part += QStringLiteral(" %1").arg(who->stack);
+		parts << part;
+	}
+	return parts.join(QStringLiteral(" · "));
+}
+
 // A tournament (PLAN.md section 3).
 //
 // The chips are not money: the buy-in leaves the balance once, the stack lives
@@ -2430,22 +2462,51 @@ bool GameHandler::startTournament(const QString &key)
 	gameData.delayBetweenHandsSec   = 7;
 	gameData.playerActionTimeoutSec = 30;
 
-	// The field of the event (botprofile.h), dealt anew for every sitting.
+	// The field of the event (botprofile.h) is dealt into the roster, not into
+	// the table: the roster is the list of people, and the table is seated from
+	// it. A table rebuilt later therefore seats the same opponents with the same
+	// strength, archetype, name and stack (PLAN.md section 3, "Ростер").
 	std::vector<BotProfile> field;
-	if (BotProfile::dealTier(event.field, event.seats - 1, field)) {
-		QString dealt;
-		for (const BotProfile &profile : field) {
-			gameData.botProfiles.push_back(profile.label());
-			if (!dealt.isEmpty())
-				dealt += QStringLiteral(", ");
-			dealt += QString::fromStdString(profile.label());
-		}
+	const bool dealt = BotProfile::dealTier(event.field, event.seats - 1, field);
+
+	m_roster.clear();
+	m_roster.add(configName(m_config, QStringLiteral("MyName"), QStringLiteral("Human Player")),
+				 QString(), event.startStack);
+	for (int i = 0; i < event.seats - 1; ++i) {
+		const QString profile = (dealt && i < static_cast<int>(field.size()))
+				? QString::fromStdString(field[i].label())
+				: QString();
+		m_roster.add(configName(m_config, QStringLiteral("Opponent%1Name").arg(i + 1),
+								QStringLiteral("Player %1").arg(i + 1)),
+					 profile, event.startStack);
+	}
+	for (int seat = 0; seat < event.seats; ++seat)
+		m_roster.seat(seat, 0, seat);
+
+	// The engine takes the name and the stack of every seat from the caller
+	// (gamedata.h), so the table is built from the roster, seat by seat.
+	const QStringList seatNames = m_roster.seatNames(0);
+	const QStringList seatProfiles = m_roster.seatProfiles(0);
+	const QVector<int> seatStacks = m_roster.seatStacks(0);
+	for (int seat = 0; seat < event.seats; ++seat) {
+		gameData.seatNames.push_back(seat < seatNames.size()
+									 ? seatNames.at(seat).toStdString()
+									 : std::string());
+		gameData.seatStacks.push_back(seat < seatStacks.size() ? seatStacks.at(seat)
+															   : event.startStack);
+		if (seat > 0 && dealt && seat < seatProfiles.size())
+			gameData.botProfiles.push_back(seatProfiles.at(seat).toStdString());
+	}
+
+	if (dealt) {
 		qInfo().noquote() << "tournament" << event.key << "deals the" << event.field
-						  << "field:" << dealt;
+						  << "field:" << seatProfiles.mid(1).join(QStringLiteral(", "));
 	} else {
 		qWarning() << "startTournament: the event names an unknown field" << event.field
 				   << "- the default mixture is used";
 	}
+	qInfo().noquote() << "tournament" << event.key << "seats" << event.seats
+					  << "at table 0:" << rosterLine();
 
 	StartData startData;
 	startData.numberOfPlayers     = event.seats;
@@ -2575,6 +2636,8 @@ void GameHandler::endLocalGame()
 		m_tournamentSeats = 0;
 		m_tournamentPrize = 0;
 		m_tournamentStartSmallBlind = 0;
+		// The people go with the tournament: there is nothing left to seat.
+		m_roster.clear();
 		emit tournamentStateChanged();
 	}
 

@@ -154,6 +154,17 @@ void Session::startLocalGame(const GameData &gameData, const StartData &startDat
 		playerData->SetName(myConfig->readConfigString(myName.str()));
 		playerData->SetAvatarFile(myConfig->readConfigString(myAvatar.str()));
 
+		// A table built from a roster brings the name and the stack of every
+		// seat (state/roster.h): the same person keeps both when the table is
+		// rebuilt, which is what makes a moved player still be that player.
+		if (i < static_cast<int>(gameData.seatNames.size())
+				&& !gameData.seatNames[i].empty()) {
+			playerData->SetName(gameData.seatNames[i]);
+		}
+		if (i < static_cast<int>(gameData.seatStacks.size())) {
+			playerData->SetStartCash(gameData.seatStacks[i]);
+		}
+
 		playerDataList.push_back(playerData);
 	}
 	// EngineFactory erstellen

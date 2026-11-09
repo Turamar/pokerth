@@ -98,6 +98,13 @@ struct GameData {
 	 * botprofile.h), the table a tier was dealt into. The labels keep this
 	 * header free of the engine; empty means the default mixture. */
 	std::vector<std::string> botProfiles;
+	/* Local games only: the name and the starting stack of every seat, in seat
+	 * order. A tournament seats a table from its roster (state/roster.h), where
+	 * a moved player keeps the character and the stack they already had, so the
+	 * engine must take both from the caller instead of handing everybody the
+	 * same startMoney. Empty means "the configured name" and startMoney. */
+	std::vector<std::string> seatNames;
+	std::vector<int> seatStacks;
 };
 
 struct GameInfo {

@@ -17,6 +17,7 @@
 
 #include "chatcolors.h"
 #include <boost/shared_ptr.hpp>
+#include <roster.h>
 
 class ConfigFile;
 class Session;
@@ -822,6 +823,14 @@ private:
 	// The blind the event started at: the level is counted from it (the engine
 	// doubles the blind every level, so the current blind says the level).
 	int m_tournamentStartSmallBlind = 0;
+	// The people in the tournament, not the seats (PLAN.md section 3, "Ростер").
+	// The field is dealt into it once, at the start, and every table is seated
+	// from it: rebuild the table and the same people come back with the same
+	// strength, archetype, name and stack.
+	PlayerState::Roster m_roster;
+	// The line that is written to the log when the roster is dealt, so that a
+	// table can be matched with what was seated.
+	QString rosterLine() const;
 };
 
 #endif // GAMEHANDLER_H
