@@ -5705,12 +5705,20 @@ and disconnect from the server?</source>
         <translation>Девятка</translation>
     </message>
     <message>
+        <source>Schule</source>
+        <translation>Школа</translation>
+    </message>
+    <message>
         <source>6 Plätze, zwei werden bezahlt: das Geld ist nah, die Blinds warten nicht</source>
         <translation>6 мест, платят двоим: деньги близко, блайнды не ждут</translation>
     </message>
     <message>
         <source>9 Plätze, drei werden bezahlt: voller Tisch und eine echte Bubble</source>
         <translation>9 мест, платят троим: полный стол и настоящий пузырь</translation>
+    </message>
+    <message>
+        <source>18 Plätze an zwei Tischen, fünf werden bezahlt: der erste Schritt hinauf</source>
+        <translation>18 мест за двумя столами, платят пятерым: первая ступень вверх</translation>
     </message>
 </context>
 <context>

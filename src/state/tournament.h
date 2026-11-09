@@ -24,7 +24,7 @@
 namespace PlayerState
 {
 
-const int MaxTournamentPayouts = 3;
+const int MaxTournamentPayouts = 5;
 
 struct TournamentPayout
 {

@@ -66,7 +66,11 @@ public:
 
 	void addOwnAvatar(const std::string &avatarFile);
 
-	void startLocalGame(const GameData &gameData, const StartData &startData);
+	// startFirstHand: a table of a tournament is often built between two hands
+	// (a bust, a balancing move), and then the caller starts the hand itself -
+	// at the blind the tournament is at, not at the one the table was built with.
+	void startLocalGame(const GameData &gameData, const StartData &startData,
+						bool startFirstHand = true);
 	void startClientGame(boost::shared_ptr<Game> game);
 
 	boost::shared_ptr<Game> getCurrentGame();

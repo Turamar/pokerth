@@ -18,6 +18,43 @@ class Game;
 class Log;
 class SilentGui;
 
+/* The table the player sits at.
+ *
+ * A tournament of several tables has exactly one table somebody watches: the
+ * one with the player. The controller does not build that table and does not
+ * play its hands - the client owns the Game, the player acts and the bots
+ * answer, and the clock of the table is the player's own - but the controller
+ * tells it when a hand starts and at which blind, and reads the table back when
+ * the hand is over. Everything else (the other tables, the level, the
+ * balancing, the places) stays the controller's, which is what keeps the one
+ * watched table and the silent ones in lockstep.
+ */
+class LocalTableHost
+{
+public:
+	virtual ~LocalTableHost() {}
+
+	// The table as the engine left it once the pot of the hand is distributed.
+	struct Snapshot
+	{
+		// Chips in front of every seat, in the order seat() was given the
+		// people.
+		std::vector<int> stacks;
+		// Roster id of the button for the next hand and of the player who paid
+		// the big blind in the hand that just ended (-1 if unknown).
+		int button = -1;
+		int lastBigBlind = -1;
+	};
+
+	// Seats these people, in this order, with the button on this roster id.
+	// No hand starts here: the controller says when (startHand).
+	virtual bool seat(const std::vector<int> &ids, int button, std::string &error) = 0;
+	// Starts one hand at this small blind.
+	virtual bool startHand(int blind, std::string &error) = 0;
+	// The table after that hand. Only asked while the hand is over.
+	virtual Snapshot snapshot() const = 0;
+};
+
 /* A tournament played out on several tables (PLAN.md section 3, "Технические
  * решения").
  *
@@ -35,6 +72,11 @@ class SilentGui;
  * the same participants with the same strength, archetype, name and stack. The
  * engine only plays the hands: the controller owns the level, the button and
  * the balancing.
+ *
+ * Two ways in: run() plays every table itself (the headless simulator), and
+ * begin()/startLocalHand()/step() hand one table to a LocalTableHost (the
+ * client), which is the same tournament with the player's table played by the
+ * UI instead of the controller.
  */
 class TournamentRun
 {
@@ -63,8 +105,19 @@ public:
 	~TournamentRun();
 
 	// Seats the roster and plays until one player is left, the hand limit is
-	// reached or the engine reports an error.
+	// reached or the engine reports an error. Every table is silent.
 	bool run(const PlayerState::Roster &roster, int maxHands, std::string &error);
+
+	// The client's way in: the table with hostId is played by the host, every
+	// other table by the controller. begin() seats the field and seats the
+	// host's table; startLocalHand() starts the first hand there; step() is
+	// called every time that hand is over and does the rest of the step
+	// (the silent tables, the busts, the moves) - it leaves the host's table
+	// ready but does not start a hand, so the caller can pause first.
+	bool begin(const PlayerState::Roster &roster, LocalTableHost *host, int hostId,
+			   std::string &error);
+	bool startLocalHand(std::string &error);
+	bool step(std::string &error);
 
 	// The roster after the run: the stacks are the ones the tables ended with.
 	const PlayerState::Roster &roster() const
@@ -80,6 +133,20 @@ public:
 	int level() const;
 	int blind() const;
 	int playersLeft() const;
+
+	// Is the host's player still in chips?
+	bool hostStillIn() const;
+	// 1-based place of a roster id, 0 while he is still playing.
+	int placeOf(int id) const;
+	int tableCount() const
+	{
+		return static_cast<int>(m_tables.size());
+	}
+	// The people at the host's table, in seat order (the host's player first).
+	std::vector<int> localIds() const;
+	// The people at any table, in seat order; empty for a table number the
+	// tournament does not have.
+	std::vector<int> idsAt(int table) const;
 
 private:
 	struct Table
@@ -98,12 +165,20 @@ private:
 		boost::shared_ptr<Game> game;
 		// The seating changed since the table was built.
 		bool dirty = true;
+		// This is the host's table: the controller does not build it and does
+		// not play its hands.
+		bool local = false;
 	};
 
+	void reset(const PlayerState::Roster &roster);
 	bool seatTables(std::string &error);
 	bool buildTable(Table &table, std::string &error);
 	unsigned buttonOf(const Table &table) const;
-	bool playStep(std::string &error);
+	Table *localTable();
+	const Table *localTable() const;
+	void updateLocalFlags();
+	bool seatLocalTable(std::string &error);
+	bool playSilentTables(std::string &error);
 	void collectBusts();
 	void rebalance();
 	int moveOne(Table &from, Table &to);
@@ -112,6 +187,8 @@ private:
 	// Difference in size between the fullest and the emptiest table.
 	int imbalance() const;
 	void assignPlaces();
+	// The numbers of the result that are read from the tables now.
+	void fillResult();
 
 	ConfigFile *m_config;
 	const PlayerState::TournamentEvent m_event;
@@ -123,6 +200,9 @@ private:
 	int m_handsPlayed = 0;
 	int m_moves = 0;
 	int m_chipsInPlay = 0;
+	// The client's table (see LocalTableHost), NULL in the headless run.
+	LocalTableHost *m_host = nullptr;
+	int m_hostId = -1;
 	Result m_result;
 };
 

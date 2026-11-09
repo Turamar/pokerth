@@ -57,6 +57,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <random>
 #include <string>
 #include <vector>
@@ -73,6 +74,16 @@
 
 #include <botprofile.h>
 #include <configfile.h>
+#include <enginefactory.h>
+#include <game.h>
+#include <game_defs.h>
+#include <gamedata.h>
+#include <handinterface.h>
+#include <localenginefactory.h>
+#include <localplayer.h>
+#include <playerdata.h>
+#include <playerinterface.h>
+#include <silentgui.h>
 #include <statestore.h>
 #include <wallet.h>
 #include <roster.h>
@@ -123,9 +134,10 @@ void printUsage()
 		"  --margin F        postflop calling margin in equity points, e.g. -0.05\n"
 		"                    (calibration; overrides the value of the profile)\n"
 		"  --quiet           only the summary line, no table\n"
-		"  --tournament K    play the catalogue event K (sng6, sng9, ...) instead\n"
-		"                    of a cash table: the whole field on as many tables as\n"
-		"                    it needs, --runs tournaments, report ITM and ROI\n"
+		"  --tournament K    play the catalogue event K (school, sng6, sng9)\n"
+		"                    instead of a cash table: the whole field on as many\n"
+		"                    tables as it needs, --runs tournaments, report ITM\n"
+		"                    and ROI\n"
 		"  --state-selftest DIR\n"
 		"                    check the state store in DIR instead of simulating\n"
 		"\n"
@@ -468,6 +480,208 @@ bool writeJson(const string &fileName, const SimTotals &totals, const SimOptions
 	return true;
 }
 
+/* The player's own table of a multi-table tournament, headless (PLAN.md section
+ * 3, "Технические решения").
+ *
+ * This is the client's half of the deal (tournamentrun.h, LocalTableHost),
+ * reduced to what the contract needs: seat() builds an ordinary local table
+ * from the people the controller names - the player in seat 0, the rest as bots
+ * - and startHand() plays one hand there to the end. The client spreads that
+ * over clicks and timers; the test pumps it. snapshot() answers with the stacks,
+ * the button and the big blind, and it refuses to answer before the pot of the
+ * hand is out: the controller must never read a table in the middle of a hand.
+ *
+ * Not used by the simulator's own --tournament; the self test drives it, so that
+ * the path the client takes is checked in the build and not only by playing.
+ */
+class SimLocalTable : public LocalTableHost
+{
+public:
+	SimLocalTable(ConfigFile *config, const PlayerState::TournamentEvent &event,
+				  TournamentRun *run)
+		: m_config(config), m_event(event), m_run(run)
+	{
+	}
+
+	bool seat(const std::vector<int> &ids, int button, std::string &error) override
+	{
+		error.clear();
+		m_game.reset();
+		m_gui.reset();
+		m_handOver = false;
+		m_ids = ids;
+		if(ids.size() < 2 || ids.front() != 0) {
+			// The player is seat 0 of his own table, always: a local game takes
+			// the type of every seat from its number.
+			m_sane = false;
+			error = "the player's table does not start with him";
+			return false;
+		}
+		if(ids.size() > static_cast<size_t>(MAX_NUMBER_OF_PLAYERS)) {
+			m_sane = false;
+			error = "more players than the engine has seats";
+			return false;
+		}
+
+		const PlayerState::Roster &people = m_run->roster();
+		GameData gameData;
+		gameData.gameType = GAME_TYPE_NORMAL;
+		gameData.allowSpectators = false;
+		gameData.maxNumberOfPlayers = static_cast<int>(ids.size());
+		gameData.startMoney = m_event.startStack;
+		gameData.firstSmallBlind = m_run->blind();
+		gameData.raiseIntervalMode = RAISE_ON_HANDNUMBER;
+		// The controller raises the blind, not the table.
+		gameData.raiseSmallBlindEveryHandsValue = 1000000000;
+		gameData.raiseMode = DOUBLE_BLINDS;
+		gameData.afterManualBlindsMode = AFTERMB_DOUBLE_BLINDS;
+		gameData.afterMBAlwaysRaiseValue = 0;
+		gameData.guiSpeed = 4;
+		gameData.delayBetweenHandsSec = 0;
+		gameData.playerActionTimeoutSec = 0;
+
+		PlayerDataList players;
+		for(size_t seat = 0; seat < ids.size(); ++seat) {
+			const PlayerState::RosterEntry *who = people.entry(ids[seat]);
+			boost::shared_ptr<PlayerData> playerData(new PlayerData(
+					static_cast<unsigned>(seat), static_cast<int>(seat),
+					seat == 0 ? PLAYER_TYPE_HUMAN : PLAYER_TYPE_COMPUTER,
+					PLAYER_RIGHTS_NORMAL, seat == 0));
+			if(who) playerData->SetName(who->name.toStdString());
+			playerData->SetStartCash(people.stack(ids[seat]));
+			players.push_back(playerData);
+		}
+
+		unsigned buttonSeat = 0;
+		for(size_t seat = 0; seat < ids.size(); ++seat) {
+			if(ids[seat] == button) buttonSeat = static_cast<unsigned>(seat);
+		}
+		StartData startData;
+		startData.numberOfPlayers = static_cast<int>(ids.size());
+		startData.startDealerPlayerId = buttonSeat;
+
+		m_gui.reset(new SilentGui(m_config));
+		boost::shared_ptr<EngineFactory> factory(new LocalEngineFactory(m_config));
+		try {
+			m_game.reset(new Game(m_gui.get(), factory, players, gameData, startData, 1, NULL));
+		} catch(const exception &e) {
+			m_sane = false;
+			error = e.what();
+			return false;
+		}
+		m_gui->setGame(m_game.get());
+		// The people keep their character across a rebuild.
+		for(size_t seat = 1; seat < ids.size(); ++seat) {
+			const PlayerState::RosterEntry *who = people.entry(ids[seat]);
+			if(!who || who->profile.isEmpty()) continue;
+			LocalPlayer *player = dynamic_cast<LocalPlayer*>(
+									  m_game->getPlayerByNumber(static_cast<int>(seat)).get());
+			BotProfile profile;
+			if(player && BotProfile::parse(who->profile.toStdString(), profile)) {
+				player->setBotProfile(profile);
+			}
+		}
+		m_game->setCurrentSmallBlind(m_run->blind());
+		++m_seated;
+		return true;
+	}
+
+	bool startHand(int blind, std::string &error) override
+	{
+		error.clear();
+		if(!m_game) {
+			error = "the table is not seated";
+			return false;
+		}
+		m_handOver = false;
+		m_game->setCurrentSmallBlind(blind);
+		if(m_game->getCurrentSmallBlind() != blind) {
+			// The table of the player must post the blind of the level like
+			// every other table.
+			m_sane = false;
+		}
+		try {
+			m_game->initHand();
+			m_game->startHand();
+			bool finished = false;
+			m_gui->onHandFinished = [&finished]() {
+				finished = true;
+			};
+			while(m_gui->pump()) {}
+			m_handOver = finished;
+		} catch(const exception &e) {
+			m_sane = false;
+			error = e.what();
+			return false;
+		}
+		if(!m_handOver) {
+			error = "the hand did not reach the pot distribution";
+			return false;
+		}
+		++m_hands;
+		return true;
+	}
+
+	Snapshot snapshot() const override
+	{
+		Snapshot snap;
+		if(!m_handOver || !m_game) {
+			// The controller asked in the middle of a hand: nothing it reads
+			// could be trusted.
+			m_sane = false;
+			return snap;
+		}
+		PlayerList seats = m_game->getSeatsList();
+		if(!seats) return snap;
+		int seat = 0;
+		for(auto it = seats->begin(); it != seats->end()
+				&& seat < static_cast<int>(m_ids.size()); ++it, ++seat) {
+			snap.stacks.push_back((*it)->getMyCash());
+		}
+		const unsigned nextButton = m_game->getDealerPosition();
+		if(static_cast<size_t>(nextButton) < m_ids.size()) {
+			snap.button = m_ids[static_cast<size_t>(nextButton)];
+		}
+		boost::shared_ptr<HandInterface> hand = m_game->getCurrentHand();
+		if(hand) {
+			const unsigned bigBlind = hand->getBigBlindPositionId();
+			if(static_cast<size_t>(bigBlind) < m_ids.size()) {
+				snap.lastBigBlind = m_ids[static_cast<size_t>(bigBlind)];
+			}
+		}
+		return snap;
+	}
+
+	// The contract held: the player was in seat 0 whenever the table was built,
+	// the blind was the controller's, and no reading happened mid-hand.
+	bool sane() const
+	{
+		return m_sane;
+	}
+	int seated() const
+	{
+		return m_seated;
+	}
+	int hands() const
+	{
+		return m_hands;
+	}
+
+private:
+	ConfigFile *m_config;
+	PlayerState::TournamentEvent m_event;
+	TournamentRun *m_run;
+	std::vector<int> m_ids;
+	boost::shared_ptr<SilentGui> m_gui;
+	boost::shared_ptr<Game> m_game;
+	bool m_handOver = false;
+	// snapshot() is const, but a reading in the middle of a hand is itself the
+	// failure the flag records.
+	mutable bool m_sane = true;
+	int m_seated = 0;
+	int m_hands = 0;
+};
+
 /* Self test of the state store and the bank: money and counters have to survive
  * a restart, a session that was interrupted by a crash has to come back, the
  * cash table limits and the rebuy cooldown have to hold, and a damaged or too
@@ -733,6 +947,83 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 				printf("  tournament %d seats: %d hands, level %d, %d moves, hero place %d\n",
 					   event.seats, result.handsPlayed, result.level, result.moves,
 					   result.places.at(0));
+			}
+		}
+
+		// ── The same tournament, played the way the client plays it ──────────
+		// One table belongs to the "client" (LocalTableHost): it seats the people
+		// itself, is told when to deal a hand and reports back once the pot is
+		// out - the contract GameHandler has with the controller. Everything
+		// else, the other tables included, stays the controller's.
+		if(config) {
+			const int index = PlayerState::tournamentIndex(QStringLiteral("school"));
+			check(index >= 0, QStringLiteral("the catalogue has an event on two tables"));
+			if(index >= 0) {
+				PlayerState::TournamentEvent event = PlayerState::tournamentEvent(index);
+				std::vector<BotProfile> field;
+				check(BotProfile::dealTier(event.field, event.seats - 1, field),
+					  QStringLiteral("the client's tournament deals its field"));
+				PlayerState::Roster roster;
+				roster.add(QStringLiteral("Hero"), QString(), event.startStack);
+				for(int i = 1; i < event.seats; ++i) {
+					roster.add(QStringLiteral("Bot%1").arg(i),
+							   QString::fromStdString(field[static_cast<size_t>(i - 1)].label()),
+							   event.startStack);
+				}
+				for(int seat = 0; seat < event.seats; ++seat) roster.seat(seat, 0, seat);
+
+				TournamentRun tournament(config, event, NULL);
+				SimLocalTable host(config, event, &tournament);
+				std::string error;
+				const bool seated = tournament.begin(roster, &host, 0, error);
+				check(seated, QStringLiteral("my table is seated (%1)")
+					  .arg(QString::fromStdString(error)));
+				check(seated && tournament.tableCount() == 2,
+					  QStringLiteral("%1 seats are two tables (%2)").arg(event.seats)
+					  .arg(tournament.tableCount()));
+
+				bool dealt = seated && tournament.startLocalHand(error);
+				check(dealt, QStringLiteral("the first hand at my table starts (%1)")
+					  .arg(QString::fromStdString(error)));
+				int steps = 0;
+				while(dealt && tournament.playersLeft() > 1 && tournament.hostStillIn()
+					  && steps < 2000) {
+					if(!tournament.step(error)) {
+						check(false, QStringLiteral("the step after hand %1 (%2)").arg(steps)
+							  .arg(QString::fromStdString(error)));
+						break;
+					}
+					++steps;
+					if(tournament.playersLeft() <= 1 || !tournament.hostStillIn()) break;
+					if(!tournament.startLocalHand(error)) {
+						check(false, QStringLiteral("the hand after step %1 (%2)").arg(steps)
+							  .arg(QString::fromStdString(error)));
+						break;
+					}
+				}
+				const TournamentRun::Result &result = tournament.result();
+				check(steps > 0 && (result.finished || !tournament.hostStillIn()),
+					  QStringLiteral("the client's tournament runs to a decision"));
+				check(host.sane(),
+					  QStringLiteral("my table kept me in seat 0, posted the blind of the "
+									 "level and was read only with the hand over"));
+				check(host.hands() >= steps && host.hands() <= steps + 1,
+					  QStringLiteral("every step dealt one hand at my table (%1 hands, "
+									 "%2 steps)").arg(host.hands()).arg(steps));
+				check(result.chipsConserved,
+					  QStringLiteral("the client's tournament lost no chips"));
+				check(result.blindsAligned,
+					  QStringLiteral("every silent table played the same blind"));
+				check(result.worstImbalance <= 1,
+					  QStringLiteral("the client's tables never differed by more than one (%1)")
+					  .arg(result.worstImbalance));
+				const int place = tournament.placeOf(0);
+				check(place >= 1 && place <= event.seats,
+					  QStringLiteral("the player has a place (%1 of %2)")
+					  .arg(place).arg(event.seats));
+				printf("  client-style tournament: %d steps, %d reseats, %d moves, "
+					   "hero place %d of %d\n", steps, host.seated() - 1, result.moves,
+					   place, event.seats);
 			}
 		}
 		{

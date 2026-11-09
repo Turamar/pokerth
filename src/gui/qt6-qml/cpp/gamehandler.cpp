@@ -1301,6 +1301,11 @@ void GameHandler::onRefreshGameLabels(int gameState)
 		auto hand = m_game->getCurrentHand();
 		if (hand) {
 			int newHandNum = hand->getMyID();
+			// A tournament counts its own hands: the tables are rebuilt now and
+			// then, and every rebuilt table would start counting at one again.
+			// The step is the hand of the tournament - every table plays one.
+			if (m_tournament)
+				newHandNum = m_tournament->result().handsPlayed + 1;
 			if (newHandNum != m_handNumber) {
 				m_handNumber = newHandNum;
 				handChanged = true;
@@ -1755,6 +1760,14 @@ bool GameHandler::checkLocalGameOver()
 
 	if (playersWithCash > 1 && !humanBroke) return false;
 
+	if (m_tournamentMode) {
+		// A tournament does not return a stack: it pays a place. The players
+		// who still have chips are the ones ahead of me - if I am one of them,
+		// I am the winner (playersWithCash == 1 by the guard above).
+		finishTournament(humanBroke ? playersWithCash + 1 : 1);
+		return true;
+	}
+
 	m_localGameOver = true;
 	// No further action in this game - the clock must not outlive it.
 	stopLocalActionTimer();
@@ -1763,20 +1776,7 @@ bool GameHandler::checkLocalGameOver()
 	// would otherwise play on among themselves and never reach an end.
 	const bool outOfChips = humanBroke && playersWithCash > 1;
 
-	if (m_tournamentMode) {
-		// A tournament does not return a stack: it pays a place. The players
-		// who still have chips are the ones ahead of me - if I am one of them,
-		// I am the winner (playersWithCash == 1 by the guard above).
-		const int place = humanBroke ? playersWithCash + 1 : 1;
-		const qint64 prize = m_wallet ? m_wallet->payTournamentPrize(m_tournamentKey, place) : 0;
-		m_tournamentPlace = place;
-		m_tournamentPrize = prize;
-		emit tournamentStateChanged();
-		appendGameLog(QStringLiteral("Tournament over: place ")
-						  + QString::number(place) + QStringLiteral(" of ")
-						  + QString::number(m_tournamentSeats),
-					  LogGameWin);
-	} else {
+	{
 		// Nobody is left to play against - or the player is broke: the table is
 		// over, the stack goes back into the balance right away (the popup
 		// below only reports it).
@@ -1846,6 +1846,14 @@ void GameHandler::onLocalHandFinished()
 			m_wallet->noteHandFinished(myStack(), won);
 	}
 
+	// A tournament runs on several tables (tournamentrun.h): the hand here was
+	// one step of it, and the other tables play theirs now. The controller
+	// decides what happens next - and whether the tournament goes on at all.
+	if (m_tournament) {
+		advanceTournament();
+		return;
+	}
+
 	// The end of the tournament? As in the widgets client (gameTableImpl::postRiverRun-
 	// Animation6) NO further hand may follow the last one if only
 	// one player has chips left – otherwise the winner plays on alone endlessly
@@ -1869,6 +1877,10 @@ void GameHandler::continueToNextHand()
 		return;
 	// Leaving the game during the pause clears the flag (endLocalGame/setGame).
 	setWaitingForNextHand(false);
+	if (m_tournament) {
+		continueTournamentHand();
+		return;
+	}
 	startNextLocalHand();
 }
 
@@ -2325,6 +2337,8 @@ bool GameHandler::startCashGame(int players, int buyIn, int limitIndex)
 	m_tournamentSeats = 0;
 	m_tournamentPrize = 0;
 	m_tournamentStartSmallBlind = 0;
+	m_tournament.reset();
+	m_localSeatIds.clear();
 	emit tournamentStateChanged();
 
 	GameData gameData;
@@ -2391,19 +2405,19 @@ bool GameHandler::startCashGame(int players, int buyIn, int limitIndex)
 	return true;
 }
 
-// What the roster seated at a table, one entry per seat:
+// What a table seats, one entry per seat:
 // "[0] Human Player 1500 · [1] Player 1/pro/tag 1500". Written to the log so
 // that a table can be matched with the people it was built from - the same idea
 // as the cash table's "deals the field" line.
-QString GameHandler::rosterLine() const
+QString GameHandler::seatLine(const std::vector<int> &ids) const
 {
+	const PlayerState::Roster &people = m_tournament ? m_tournament->roster() : m_roster;
 	QStringList parts;
-	const QVector<int> seats = m_roster.seatsAt(0);
-	for (int seat = 0; seat < seats.size(); ++seat) {
-		const PlayerState::RosterEntry *who = m_roster.entry(seats.at(seat));
+	for (size_t seat = 0; seat < ids.size(); ++seat) {
+		const PlayerState::RosterEntry *who = people.entry(ids[seat]);
 		if (!who)
 			continue;
-		QString part = QStringLiteral("[%1] %2").arg(seat).arg(who->name);
+		QString part = QStringLiteral("[%1] %2").arg(static_cast<int>(seat)).arg(who->name);
 		if (!who->profile.isEmpty())
 			part += QLatin1Char('/') + who->profile;
 		part += QStringLiteral(" %1").arg(who->stack);
@@ -2439,28 +2453,12 @@ bool GameHandler::startTournament(const QString &key)
 	m_localGameOver = false;
 	m_tournamentMode = true;
 	m_tournamentKey = key;
+	m_tournamentEvent = event;
 	m_tournamentPlace = 0;
 	m_tournamentSeats = event.seats;
 	m_tournamentPrize = 0;
 	m_tournamentStartSmallBlind = event.smallBlind;
 	emit tournamentStateChanged();
-
-	GameData gameData;
-	gameData.maxNumberOfPlayers     = event.seats;
-	gameData.startMoney             = event.startStack;   // chips, not cents
-	gameData.firstSmallBlind        = event.smallBlind;
-	// The levels: the engine doubles the blinds every levelHands hands.
-	gameData.raiseIntervalMode              = RAISE_ON_HANDNUMBER;
-	gameData.raiseSmallBlindEveryHandsValue = event.levelHands;
-	gameData.raiseMode                      = DOUBLE_BLINDS;
-	gameData.guiSpeed = 4;
-	if (m_config) {
-		const int speed = m_config->readConfigInt("GameSpeed");
-		if (speed >= 1 && speed <= 11)
-			gameData.guiSpeed = speed;
-	}
-	gameData.delayBetweenHandsSec   = 7;
-	gameData.playerActionTimeoutSec = 30;
 
 	// The field of the event (botprofile.h) is dealt into the roster, not into
 	// the table: the roster is the list of people, and the table is seated from
@@ -2483,65 +2481,302 @@ bool GameHandler::startTournament(const QString &key)
 	for (int seat = 0; seat < event.seats; ++seat)
 		m_roster.seat(seat, 0, seat);
 
-	// The engine takes the name and the stack of every seat from the caller
-	// (gamedata.h), so the table is built from the roster, seat by seat.
-	const QStringList seatNames = m_roster.seatNames(0);
-	const QStringList seatProfiles = m_roster.seatProfiles(0);
-	const QVector<int> seatStacks = m_roster.seatStacks(0);
-	for (int seat = 0; seat < event.seats; ++seat) {
-		gameData.seatNames.push_back(seat < seatNames.size()
-									 ? seatNames.at(seat).toStdString()
-									 : std::string());
-		gameData.seatStacks.push_back(seat < seatStacks.size() ? seatStacks.at(seat)
-															   : event.startStack);
-		if (seat > 0 && dealt && seat < seatProfiles.size())
-			gameData.botProfiles.push_back(seatProfiles.at(seat).toStdString());
-	}
-
 	if (dealt) {
 		qInfo().noquote() << "tournament" << event.key << "deals the" << event.field
-						  << "field:" << seatProfiles.mid(1).join(QStringLiteral(", "));
+						  << "field:" << m_roster.seatProfiles(0).mid(1).join(QStringLiteral(", "));
 	} else {
 		qWarning() << "startTournament: the event names an unknown field" << event.field
 				   << "- the default mixture is used";
 	}
-	qInfo().noquote() << "tournament" << event.key << "seats" << event.seats
-					  << "at table 0:" << rosterLine();
 
-	StartData startData;
-	startData.numberOfPlayers     = event.seats;
-	startData.startDealerPlayerId = 0;
-
-	try {
-		m_session->startLocalGame(gameData, startData);
-
-		auto game = m_session->getCurrentGame();
-		if (game)
-			setGame(game);
-	} catch (const std::exception &e) {
-		qWarning() << "startTournament: the engine refused the table:" << e.what();
+	// The tournament itself (tournamentrun.h): it seats the field on as many
+	// tables as it needs, hands this client the one table it draws and keeps the
+	// rest - the other tables, the level, the balancing, the places.
+	auto refuse = [this, key](const QString &why) {
+		qWarning().noquote() << "startTournament:" << why;
+		m_tournament.reset();
 		m_game.reset();
+		m_localSeatIds.clear();
+		// A half-built table stays in the session; leaving marks the game as
+		// finished, so that the next start is not refused as "already running".
+		m_localGameExitRequested = true;
 		m_tournamentMode = false;
 		m_tournamentKey.clear();
+		m_tournamentPlace = 0;
 		m_tournamentSeats = 0;
+		m_tournamentPrize = 0;
 		m_tournamentStartSmallBlind = 0;
 		emit tournamentStateChanged();
 		if (m_wallet)
 			m_wallet->refundTournament(key);
 		return false;
+	};
+
+	m_tournament.reset(new TournamentRun(m_config, event, m_session->getMyLog()));
+	std::string error;
+	if (!m_tournament->begin(m_roster, this, 0, error))
+		return refuse(QStringLiteral("the tournament could not be seated: ")
+					  + QString::fromStdString(error));
+	m_roster = m_tournament->roster();
+
+	QStringList tables;
+	for (int t = 0; t < m_tournament->tableCount(); ++t) {
+		tables << QStringLiteral("table %1%2: %3").arg(t)
+					  .arg(t == 0 ? QStringLiteral(" (mine)") : QString())
+					  .arg(seatLine(m_tournament->idsAt(t)));
+	}
+	qInfo().noquote() << "tournament" << event.key << "seats" << event.seats << "at"
+					  << m_tournament->tableCount() << "table(s):"
+					  << tables.join(QStringLiteral(" / "));
+
+	if (!m_tournament->startLocalHand(error))
+		return refuse(QStringLiteral("the first hand could not be started: ")
+					  + QString::fromStdString(error));
+	m_roster = m_tournament->roster();
+
+	if (!isLocalGameRunning())
+		return refuse(QStringLiteral("the table did not start"));
+	return true;
+}
+
+// ── The table of the tournament the player sits at ───────────────────────────
+// The controller (tournamentrun.h, LocalTableHost) hands over the people of one
+// table and starts its hands at the blind of the current level; this is where
+// those people become an engine table. The player is always seat 0 - the local
+// engine takes the type of every seat from its number - so a rebuild keeps him
+// where he is and only the others move around him.
+bool GameHandler::seat(const std::vector<int> &ids, int button, std::string &error)
+{
+	error.clear();
+	if (!m_session) {
+		error = "no session";
+		return false;
+	}
+	if (ids.empty()) {
+		error = "an empty table";
+		return false;
+	}
+	const int seats = static_cast<int>(ids.size());
+	if (seats > MAX_NUMBER_OF_PLAYERS) {
+		error = "more players than the engine has seats";
+		return false;
 	}
 
-	if (!isLocalGameRunning()) {
-		m_tournamentMode = false;
-		m_tournamentKey.clear();
-		m_tournamentSeats = 0;
-		m_tournamentStartSmallBlind = 0;
-		emit tournamentStateChanged();
-		if (m_wallet)
-			m_wallet->refundTournament(key);
+	const PlayerState::Roster &people = m_tournament ? m_tournament->roster() : m_roster;
+	const bool rebuild = !m_localSeatIds.empty();
+
+	GameData gameData;
+	gameData.maxNumberOfPlayers = seats;
+	gameData.startMoney         = m_tournamentEvent.startStack;   // chips, not cents
+	gameData.firstSmallBlind    = m_tournament ? m_tournament->blind()
+											   : m_tournamentEvent.smallBlind;
+	gameData.raiseIntervalMode              = RAISE_ON_HANDNUMBER;
+	// The controller raises the blind and sets it before every hand: a table
+	// that counted its own hands would drift away from the rest of the field,
+	// and a rebuilt table would start the count over.
+	gameData.raiseSmallBlindEveryHandsValue = 1000000000;
+	gameData.raiseMode                      = DOUBLE_BLINDS;
+	gameData.guiSpeed = 4;
+	if (m_config) {
+		const int speed = m_config->readConfigInt("GameSpeed");
+		if (speed >= 1 && speed <= 11)
+			gameData.guiSpeed = speed;
+	}
+	gameData.delayBetweenHandsSec   = 7;
+	gameData.playerActionTimeoutSec = 30;
+
+	for (int seat = 0; seat < seats; ++seat) {
+		const PlayerState::RosterEntry *who = people.entry(ids[seat]);
+		gameData.seatNames.push_back(who ? who->name.toStdString() : std::string());
+		gameData.seatStacks.push_back(who ? who->stack : m_tournamentEvent.startStack);
+		if (seat > 0 && who && !who->profile.isEmpty())
+			gameData.botProfiles.push_back(who->profile.toStdString());
+	}
+
+	// The button is a unique id, and the unique id of a player in a local game
+	// is his seat number.
+	unsigned buttonSeat = 0;
+	for (int seat = 0; seat < seats; ++seat) {
+		if (ids[seat] == button) {
+			buttonSeat = static_cast<unsigned>(seat);
+			break;
+		}
+	}
+	StartData startData;
+	startData.numberOfPlayers     = seats;
+	startData.startDealerPlayerId = buttonSeat;
+
+	try {
+		// The hand is the controller's to start (startHand): a rebuilt table must
+		// not deal one at the blind the event started with.
+		m_session->startLocalGame(gameData, startData, false);
+	} catch (const std::exception &e) {
+		error = e.what();
+		return false;
+	}
+
+	m_localSeatIds = ids;
+	m_game = m_session->getCurrentGame();
+	if (!m_game) {
+		error = "the engine built no table";
+		m_localSeatIds.clear();
+		return false;
+	}
+	// The same window and the same history - only the seats are new.
+	m_leftPlayers.clear();
+	qDeleteAll(m_bustedLocalTimers);
+	m_bustedLocalTimers.clear();
+	refreshPlayerData();
+	if (rebuild) {
+		qInfo().noquote() << "tournament" << m_tournamentKey << "reseats my table:"
+						  << seatLine(m_localSeatIds);
+	}
+	return true;
+}
+
+bool GameHandler::startHand(int blind, std::string &error)
+{
+	error.clear();
+	boost::shared_ptr<Game> game = m_session ? m_session->getCurrentGame()
+											 : boost::shared_ptr<Game>();
+	if (!game) {
+		error = "there is no table to play at";
+		return false;
+	}
+	// The blind of the level, not of the table: the controller says how high the
+	// level is and every table of the field posts the same.
+	game->setCurrentSmallBlind(blind);
+	try {
+		game->initHand();
+		game->startHand();
+	} catch (const std::exception &e) {
+		error = e.what();
 		return false;
 	}
 	return true;
+}
+
+LocalTableHost::Snapshot GameHandler::snapshot() const
+{
+	LocalTableHost::Snapshot snap;
+	if (!m_game) return snap;
+	PlayerList seats = m_game->getSeatsList();
+	if (!seats) return snap;
+	// The engine fills the table up to ten seats; only the people the roster
+	// seated here count.
+	int seat = 0;
+	for (auto it = seats->begin();
+		 it != seats->end() && seat < static_cast<int>(m_localSeatIds.size());
+		 ++it, ++seat) {
+		snap.stacks.push_back((*it)->getMyCash());
+	}
+	// The engine has already moved the button on at the start of the hand: the
+	// value it holds is the button of the next one. Unique ids are seat numbers.
+	const unsigned nextButton = m_game->getDealerPosition();
+	if (static_cast<size_t>(nextButton) < m_localSeatIds.size())
+		snap.button = m_localSeatIds[static_cast<size_t>(nextButton)];
+	boost::shared_ptr<HandInterface> hand = m_game->getCurrentHand();
+	if (hand) {
+		const unsigned bigBlind = hand->getBigBlindPositionId();
+		if (static_cast<size_t>(bigBlind) < m_localSeatIds.size())
+			snap.lastBigBlind = m_localSeatIds[static_cast<size_t>(bigBlind)];
+	}
+	return snap;
+}
+
+// The hand at my table is over: the rest of the step belongs to the controller.
+// It plays one hand at every other table, books the busts, moves the people
+// around if the tables drifted apart - and it may rebuild my table before the
+// next hand, because somebody at it busted or the balancing moved somebody in or
+// out. Only then does the next hand start here.
+void GameHandler::advanceTournament()
+{
+	if (!m_tournament || m_localGameOver)
+		return;
+
+	std::string error;
+	if (!m_tournament->step(error)) {
+		qWarning().noquote() << "tournament" << m_tournamentKey
+							 << "stopped:" << QString::fromStdString(error);
+		const int place = m_tournament->placeOf(0) > 0 ? m_tournament->placeOf(0)
+													  : m_tournamentSeats;
+		finishTournament(place);
+		return;
+	}
+	m_roster = m_tournament->roster();
+	m_localSeatIds = m_tournament->localIds();
+
+	// Out of chips, or the last one standing: the place is decided.
+	if (!m_tournament->hostStillIn() || m_tournament->playersLeft() <= 1) {
+		int place = m_tournament->placeOf(0);
+		if (place <= 0)
+			place = m_tournament->playersLeft() <= 1 ? 1 : m_tournamentSeats;
+		finishTournament(place);
+		return;
+	}
+
+	if (m_config && m_config->readConfigInt("PauseBetweenHands")) {
+		setWaitingForNextHand(true);
+		return;
+	}
+	continueTournamentHand();
+}
+
+void GameHandler::continueTournamentHand()
+{
+	if (!m_tournament) {
+		startNextLocalHand();
+		return;
+	}
+	onNextRoundCleanGui();
+	std::string error;
+	if (!m_tournament->startLocalHand(error)) {
+		qWarning().noquote() << "tournament" << m_tournamentKey
+							 << "could not deal the next hand:"
+							 << QString::fromStdString(error);
+		finishTournament(m_tournament->placeOf(0) > 0 ? m_tournament->placeOf(0)
+													  : m_tournamentSeats);
+		return;
+	}
+	m_roster = m_tournament->roster();
+	m_localSeatIds = m_tournament->localIds();
+	refreshPlayerData();
+}
+
+// The end of a tournament: a place out of the seats and the prize of that place.
+// The chips never come back - the stack is not money. The same as the result
+// popup of a single-table event always did.
+void GameHandler::finishTournament(int place)
+{
+	if (m_localGameOver)
+		return;
+	m_localGameOver = true;
+	if (place < 1)
+		place = m_tournamentSeats;
+	stopLocalActionTimer();
+
+	const qint64 prize = m_wallet ? m_wallet->payTournamentPrize(m_tournamentKey, place) : 0;
+	m_tournamentPlace = place;
+	m_tournamentPrize = prize;
+	emit tournamentStateChanged();
+	appendGameLog(QStringLiteral("Tournament over: place ") + QString::number(place)
+					  + QStringLiteral(" of ") + QString::number(m_tournamentSeats),
+				  LogGameWin);
+
+	closeMyTurnWindow();
+	if (m_myTurn) {
+		m_myTurn = false;
+		emit myTurnChanged();
+	}
+	if (m_timeoutSeatId != -1) {
+		m_timeoutSeatId = -1;
+		emit timeoutChanged();
+	}
+	qDeleteAll(m_bustedLocalTimers);
+	m_bustedLocalTimers.clear();
+
+	emit tournamentFinished(m_tournamentPlace, m_tournamentSeats,
+							static_cast<int>(m_tournamentPrize));
 }
 
 // The blinds of the running table, in chips. The engine keeps the current small
@@ -2638,6 +2873,10 @@ void GameHandler::endLocalGame()
 		m_tournamentStartSmallBlind = 0;
 		// The people go with the tournament: there is nothing left to seat.
 		m_roster.clear();
+		// And so do the other tables: leaving is a forfeit (PLAN.md section 3 -
+		// no save, no resume), so nothing of the tournament survives the table.
+		m_tournament.reset();
+		m_localSeatIds.clear();
 		emit tournamentStateChanged();
 	}
 

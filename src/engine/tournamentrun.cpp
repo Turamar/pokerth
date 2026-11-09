@@ -28,6 +28,11 @@ namespace
 // engine queued something that never ends. The simulator uses the same kind of
 // limit for the same reason.
 const long long MaxStepsPerHand = 20000;
+
+bool contains(const vector<int> &ids, int id)
+{
+	return find(ids.begin(), ids.end(), id) != ids.end();
+}
 }
 
 TournamentRun::TournamentRun(ConfigFile *config, const PlayerState::TournamentEvent &event, Log *log)
@@ -72,9 +77,48 @@ int TournamentRun::playersLeft() const
 	return left;
 }
 
-bool TournamentRun::run(const PlayerState::Roster &roster, int maxHands, string &error)
+bool TournamentRun::hostStillIn() const
 {
-	error.clear();
+	const PlayerState::RosterEntry *who = m_roster.entry(m_hostId);
+	return who && who->seated() && who->stack > 0;
+}
+
+int TournamentRun::placeOf(int id) const
+{
+	if(id < 0 || id >= static_cast<int>(m_result.places.size())) return 0;
+	return m_result.places[static_cast<size_t>(id)];
+}
+
+std::vector<int> TournamentRun::localIds() const
+{
+	const Table *table = localTable();
+	return table ? table->ids : std::vector<int>();
+}
+
+std::vector<int> TournamentRun::idsAt(int table) const
+{
+	if(table < 0 || table >= static_cast<int>(m_tables.size())) return std::vector<int>();
+	return m_tables[static_cast<size_t>(table)].ids;
+}
+
+TournamentRun::Table *TournamentRun::localTable()
+{
+	for(size_t i = 0; i < m_tables.size(); ++i) {
+		if(m_tables[i].local) return &m_tables[i];
+	}
+	return nullptr;
+}
+
+const TournamentRun::Table *TournamentRun::localTable() const
+{
+	for(size_t i = 0; i < m_tables.size(); ++i) {
+		if(m_tables[i].local) return &m_tables[i];
+	}
+	return nullptr;
+}
+
+void TournamentRun::reset(const PlayerState::Roster &roster)
+{
 	m_roster = roster;
 	m_tables.clear();
 	m_finishOrder.clear();
@@ -88,24 +132,36 @@ bool TournamentRun::run(const PlayerState::Roster &roster, int maxHands, string 
 	for(int id = 0; id < m_roster.count(); ++id) {
 		m_chipsInPlay += m_roster.stack(id);
 	}
+}
 
-	if(!seatTables(error)) return false;
+bool TournamentRun::run(const PlayerState::Roster &roster, int maxHands, string &error)
+{
+	if(!begin(roster, nullptr, -1, error)) return false;
 
 	while(m_handsPlayed < maxHands && playersLeft() > 1) {
-		if(!playStep(error)) return false;
+		if(!step(error)) return false;
 	}
 
-	m_result.handsPlayed = m_handsPlayed;
-	m_result.level = level() + 1;
-	m_result.moves = m_moves;
-	m_result.finished = playersLeft() == 1;
-	assignPlaces();
+	fillResult();
+	return true;
+}
 
-	int chips = 0;
-	for(int id = 0; id < m_roster.count(); ++id) {
-		chips += m_roster.stack(id);
-	}
-	m_result.chipsConserved = chips == m_chipsInPlay;
+bool TournamentRun::begin(const PlayerState::Roster &roster, LocalTableHost *host, int hostId,
+						  string &error)
+{
+	error.clear();
+	reset(roster);
+	m_host = host;
+	m_hostId = host ? hostId : -1;
+
+	if(!seatTables(error)) return false;
+	updateLocalFlags();
+	// The host's table is seated right away: its Game is the client's, and the
+	// client needs it before the first hand - there is nothing the controller
+	// could play on it.
+	if(!seatLocalTable(error)) return false;
+
+	fillResult();
 	return true;
 }
 
@@ -143,6 +199,15 @@ bool TournamentRun::seatTables(string &error)
 	return true;
 }
 
+void TournamentRun::updateLocalFlags()
+{
+	// The host's table is not a fixed table number: the balancing may move him,
+	// and then his table is the one he was moved to.
+	for(size_t i = 0; i < m_tables.size(); ++i) {
+		m_tables[i].local = m_hostId >= 0 && contains(m_tables[i].ids, m_hostId);
+	}
+}
+
 unsigned TournamentRun::buttonOf(const Table &table) const
 {
 	for(size_t i = 0; i < table.ids.size(); ++i) {
@@ -157,6 +222,7 @@ bool TournamentRun::buildTable(Table &table, string &error)
 	table.game.reset();
 	table.gui.reset();
 	table.dirty = false;
+	if(table.local) return true;
 	if(table.ids.size() < 2) return true;
 	if(table.ids.size() > static_cast<size_t>(MAX_NUMBER_OF_PLAYERS)) {
 		ostringstream oss;
@@ -230,12 +296,88 @@ bool TournamentRun::buildTable(Table &table, string &error)
 	return true;
 }
 
-bool TournamentRun::playStep(string &error)
+bool TournamentRun::seatLocalTable(string &error)
+{
+	Table *table = localTable();
+	// The player is out, or alone and about to be moved: nothing to seat.
+	if(!table || !table->dirty) return true;
+	if(table->ids.size() < 2) return true;
+
+	// The player's seat is the first one. His table is an ordinary local game,
+	// and a local game takes the type of every seat from its number: seat 0 is
+	// the human, the rest are bots.
+	vector<int> ordered;
+	ordered.reserve(table->ids.size());
+	if(m_hostId >= 0) ordered.push_back(m_hostId);
+	for(size_t i = 0; i < table->ids.size(); ++i) {
+		if(table->ids[i] != m_hostId) ordered.push_back(table->ids[i]);
+	}
+	table->ids = ordered;
+
+	if(!m_host->seat(table->ids, static_cast<int>(buttonOf(*table)), error)) return false;
+	table->dirty = false;
+	return true;
+}
+
+bool TournamentRun::startLocalHand(string &error)
+{
+	error.clear();
+	if(!m_host) {
+		error = "this tournament has no table of its own";
+		return false;
+	}
+	if(!hostStillIn()) {
+		error = "the player is out of the tournament";
+		return false;
+	}
+	Table *table = localTable();
+	if(!table || table->ids.size() < 2) {
+		error = "the player's table has nobody to play against";
+		return false;
+	}
+	if(table->dirty && !seatLocalTable(error)) return false;
+	return m_host->startHand(blind(), error);
+}
+
+bool TournamentRun::step(string &error)
+{
+	error.clear();
+
+	// 1. What the finished hand did to the host's table: the stacks, the button
+	// and the big blind come back before anything is rebuilt from the roster.
+	Table *local = localTable();
+	if(local && m_host) {
+		const LocalTableHost::Snapshot snap = m_host->snapshot();
+		for(size_t seat = 0; seat < local->ids.size() && seat < snap.stacks.size(); ++seat) {
+			m_roster.setStack(local->ids[seat], snap.stacks[seat]);
+		}
+		if(snap.button >= 0) local->button = static_cast<unsigned>(snap.button);
+		local->lastBigBlind = snap.lastBigBlind;
+	}
+
+	// 2. Every other table plays the same hand: same blind, same step.
+	if(!playSilentTables(error)) return false;
+
+	++m_handsPlayed;
+	collectBusts();
+	rebalance();
+	assignPlaces();
+
+	// 3. The seating of the host's table may have changed (a bust, a move):
+	// it is rebuilt now, before the next hand.
+	if(!seatLocalTable(error)) return false;
+
+	fillResult();
+	return true;
+}
+
+bool TournamentRun::playSilentTables(string &error)
 {
 	const int stepBlind = blind();
 
 	for(size_t i = 0; i < m_tables.size(); ++i) {
 		Table &table = m_tables[i];
+		if(table.local) continue;
 		if(table.ids.size() < 2) continue;
 		if(table.dirty && !buildTable(table, error)) return false;
 
@@ -298,9 +440,6 @@ bool TournamentRun::playStep(string &error)
 		}
 	}
 
-	++m_handsPlayed;
-	collectBusts();
-	rebalance();
 	return true;
 }
 
@@ -392,6 +531,9 @@ void TournamentRun::rebalance()
 		moveOne(m_tables[full], m_tables[thin]);
 	}
 
+	// The host may have been moved to another table; his table goes with him.
+	updateLocalFlags();
+
 	// What the tables look like once the moves are done: one apart at most, and
 	// that is the number the report quotes.
 	const int now = imbalance();
@@ -416,15 +558,25 @@ int TournamentRun::moveOne(Table &from, Table &to)
 	// Who goes: the player who just paid the big blind. He is the one who has
 	// the longest wait for the button anyway, so moving costs him least - and it
 	// cannot make him pay the big blind twice in a row.
+	//
+	// Never the host's player while somebody else is at his table: moving him
+	// means rebuilding his table in front of him. He moves only when his table
+	// is broken, i.e. when he is the only one left there.
 	int mover = -1;
 	if(from.ids.size() == 1) {
 		mover = from.ids.front();
-	} else if(from.lastBigBlind >= 0
-			  && find(from.ids.begin(), from.ids.end(), from.lastBigBlind) != from.ids.end()) {
+	} else if(from.lastBigBlind >= 0 && from.lastBigBlind != m_hostId
+			  && contains(from.ids, from.lastBigBlind)) {
 		mover = from.lastBigBlind;
 	} else {
-		mover = from.ids.back();
+		for(size_t i = from.ids.size(); i > 0; --i) {
+			if(from.ids[i - 1] != m_hostId) {
+				mover = from.ids[i - 1];
+				break;
+			}
+		}
 	}
+	if(mover < 0) mover = from.ids.back();
 	from.ids.erase(remove(from.ids.begin(), from.ids.end(), mover), from.ids.end());
 
 	// Where: the newcomer becomes the button, so he posts no blind in his first
@@ -467,4 +619,19 @@ void TournamentRun::assignPlaces()
 			m_result.winner = id;
 		}
 	}
+}
+
+void TournamentRun::fillResult()
+{
+	m_result.handsPlayed = m_handsPlayed;
+	m_result.level = level() + 1;
+	m_result.moves = m_moves;
+	m_result.finished = playersLeft() <= 1;
+	assignPlaces();
+
+	int chips = 0;
+	for(int id = 0; id < m_roster.count(); ++id) {
+		chips += m_roster.stack(id);
+	}
+	m_result.chipsConserved = chips == m_chipsInPlay;
 }

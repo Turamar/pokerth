@@ -115,7 +115,8 @@ void Session::addOwnAvatar(const std::string &avatarFile)
 	myAvatarManager->AddSingleAvatar(avatarFile);
 }
 
-void Session::startLocalGame(const GameData &gameData, const StartData &startData)
+void Session::startLocalGame(const GameData &gameData, const StartData &startData,
+							 bool startFirstHand)
 {
 
 	myGameType = GAME_TYPE_LOCAL;
@@ -173,8 +174,10 @@ void Session::startLocalGame(const GameData &gameData, const StartData &startDat
 	currentGame.reset(new Game(myGui, factory, playerDataList, gameData, startData, currentGameNum, myLog.get()));
 
 	//// SPIEL-SCHLEIFE
-	currentGame->initHand();
-	currentGame->startHand();
+	if(startFirstHand) {
+		currentGame->initHand();
+		currentGame->startHand();
+	}
 	// SPIEL-SCHLEIFE
 }
 

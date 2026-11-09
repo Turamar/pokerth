@@ -13,11 +13,13 @@
 #include <QElapsedTimer>
 #include <QSet>
 #include <QPointer>
+#include <memory>
 #include <vector>
 
 #include "chatcolors.h"
 #include <boost/shared_ptr.hpp>
 #include <roster.h>
+#include <tournamentrun.h>
 
 class ConfigFile;
 class Session;
@@ -119,7 +121,7 @@ private:
 	TableChatColors::Palette m_palette;  // the colours of the current table theme
 };
 
-class GameHandler : public QObject
+class GameHandler : public QObject, public LocalTableHost
 {
 	Q_OBJECT
 
@@ -253,6 +255,13 @@ public:
 	// result is a place and a prize, not a stack. False if the game could not
 	// be started - the buy-in is returned in that case.
 	Q_INVOKABLE bool startTournament(const QString &key);
+	// The table of the tournament with the player in it (tournamentrun.h,
+	// LocalTableHost): the controller seats it, starts its hands and reads it
+	// back, while every other table of the field is played by the controller
+	// itself. The client only draws this one.
+	bool seat(const std::vector<int> &ids, int button, std::string &error) override;
+	bool startHand(int blind, std::string &error) override;
+	LocalTableHost::Snapshot snapshot() const override;
 	Q_INVOKABLE void endLocalGame();
 	Q_INVOKABLE bool isLocalGameRunning() const;
 	// An amount as the table talks about it: cents ("$40") at a cash table,
@@ -673,6 +682,17 @@ private:
 	void setWaitingForNextHand(bool waiting);
 	// Local game: clear the table and deal the next hand.
 	void startNextLocalHand();
+	// A tournament of several tables (tournamentrun.h): the hand at my table is
+	// over, so the other tables play theirs and the controller decides whether
+	// the tournament goes on. continueTournamentHand() is the "next hand" of a
+	// tournament - it asks the controller, which also rebuilds my table if the
+	// seating changed.
+	void advanceTournament();
+	void continueTournamentHand();
+	// The tournament is over for the player: the place is paid, the popup opens.
+	void finishTournament(int place);
+	// One line of the log: the people of a table with strength and stack.
+	QString seatLine(const std::vector<int> &ids) const;
 	// Local game: the action clock on my seat. A network game gets its countdown
 	// from the server (startTimeoutAnimation/stopTimeoutAnimation); in a local
 	// game nobody else would ever stop the player, so the client holds the clock
@@ -828,9 +848,15 @@ private:
 	// from it: rebuild the table and the same people come back with the same
 	// strength, archetype, name and stack.
 	PlayerState::Roster m_roster;
-	// The line that is written to the log when the roster is dealt, so that a
-	// table can be matched with what was seated.
-	QString rosterLine() const;
+	// The event of the running tournament - its seats, stack, blind and field.
+	PlayerState::TournamentEvent m_tournamentEvent{};
+	// The tournament itself (tournamentrun.h): it seats the field on as many
+	// tables as it needs, plays every table but mine and keeps the level, the
+	// button, the balancing and the places. Empty out of a tournament.
+	std::unique_ptr<TournamentRun> m_tournament;
+	// The person in every seat of my table (seat 0 is me). A rebuild reorders
+	// the people; the engine numbers its seats, the roster numbers the people.
+	std::vector<int> m_localSeatIds;
 };
 
 #endif // GAMEHANDLER_H
