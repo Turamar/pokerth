@@ -442,6 +442,27 @@ Rectangle {
                             }
                         }
 
+                        // Die Aktionsuhr (PLAN.md, "Темп и таймер"): sie läuft im
+                        // lokalen Spiel genauso wie im Netzwerk, damit der Spieler
+                        // sich an das Limit gewöhnt, bevor es Turniere gibt.
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            text: qsTr("Zeitlimit pro Aktion\n(Sekunden, 0 = aus):")
+                            color: Config.StaticData.palette.secondary.col200
+                        }
+
+                        CustomSpinBox {
+                            id: actionTimer
+                            from: 0
+                            to: 60
+                            stepSize: 5
+                            value: SettingsManager ? SettingsManager.readConfigInt("ActionTimer") : 30
+                            onValueModified: {
+                                if (SettingsManager) SettingsManager.writeConfigInt("ActionTimer", value)
+                            }
+                        }
+
                         ConfigCheckBox {
                             Layout.columnSpan: 2
                             text: qsTr("Pause zwischen den Händen")

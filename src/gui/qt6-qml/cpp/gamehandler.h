@@ -621,6 +621,15 @@ private:
 	void setWaitingForNextHand(bool waiting);
 	// Local game: clear the table and deal the next hand.
 	void startNextLocalHand();
+	// Local game: the action clock on my seat. A network game gets its countdown
+	// from the server (startTimeoutAnimation/stopTimeoutAnimation); in a local
+	// game nobody else would ever stop the player, so the client holds the clock
+	// itself. It drives the same two properties as the server one
+	// (timeoutSeatId/timeoutSec), so the table shows the same bar and the same
+	// warning beep. The length comes from the "ActionTimer" setting, 0 = off.
+	void startLocalActionTimer();
+	void stopLocalActionTimer();
+	void onLocalActionTimeout();
 
 	boost::shared_ptr<Session> m_session;
 	boost::shared_ptr<Game> m_game;
@@ -628,6 +637,9 @@ private:
 	SoundEvents *m_soundEventHandler = nullptr;   // not owned
 	WalletHandler *m_wallet = nullptr;            // not owned
 	QTimer *m_timeoutBeepTimer = nullptr;
+	// The local action clock (see startLocalActionTimer). One shot: it either
+	// sees my action first (then it is stopped) or it is the action.
+	QTimer *m_localActionTimer = nullptr;
 	// The rate limit for the AFK reset (ResetTimeoutMessage). As in the widgets
 	// client: send it at most every few minutes, on real user activity.
 	QElapsedTimer m_afkResetTimer;

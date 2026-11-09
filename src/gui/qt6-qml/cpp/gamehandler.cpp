@@ -133,6 +133,12 @@ GameHandler::GameHandler(QObject *parent)
 		playYourTurnTimeoutSound();
 	});
 
+	// The local action clock: the counterpart of the server timer in a network
+	// game (see startLocalActionTimer).
+	m_localActionTimer = new QTimer(this);
+	m_localActionTimer->setSingleShot(true);
+	connect(m_localActionTimer, &QTimer::timeout, this, &GameHandler::onLocalActionTimeout);
+
 	// The chat translator operates directly on m_chatLog; every line it changes
 	// triggers (in a bundle) chatLogChanged(), so that the QML binding renders anew.
 	m_chatTranslator = new ChatTranslator(&m_chatLog, this);
@@ -1125,6 +1131,9 @@ void GameHandler::doActionDone()
 	if (!m_session) return;
 	if (localGameCallbacksBlocked()) return;
 
+	// My action is out - the local clock has nothing left to do.
+	stopLocalActionTimer();
+
 	// The action for this turn window is out → the window is closed. For the
 	// engine based turn detection that replaces what clearing the two flags below
 	// did implicitly so far: no second turn in the same window.
@@ -1361,6 +1370,10 @@ void GameHandler::onMeInAction()
 	// here – and only here – trigger the noted/automatic action,
 	// ALWAYS (even when m_myTurn was already true above, e.g. via the action timer).
 	emit meInActionTriggered();
+	// A noted/preselected action may have run synchronously above; only a turn
+	// that is still open gets the local clock. (A network game has the server clock.)
+	if (m_myTurn && humanCanAct())
+		startLocalActionTimer();
 }
 
 void GameHandler::onDisableMyButtons()
@@ -1378,6 +1391,8 @@ void GameHandler::onDisableMyButtons()
 	qDebug() << "[ACTDBG] onDisableMyButtons myTurn=" << m_myTurn
 			 << "p0Action=" << dbgAct
 			 << "(NONE=0,FOLD=1,CHK=2,CALL=3,BET=4,RAISE=5,ALLIN=6)";
+	// The buttons are gone for this window - so is the local clock.
+	stopLocalActionTimer();
 	if (m_myTurn) {
 		m_myTurn = false;
 		emit myTurnChanged();
@@ -1453,6 +1468,74 @@ void GameHandler::onStopTimeoutAnimation(int playerNum)
 	if (playerNum == 0)
 		closeMyTurnWindow();
 	updateAwaitingMyAction();
+}
+
+// ─── The local action clock ─────────────────────────────────────────────────
+//
+// In a network game the server counts the action time and announces it with
+// startTimeoutAnimation/stopTimeoutAnimation. A local game has no server, so
+// without this clock the "action timer" would exist only online - and the clock
+// is part of the tournament format (PLAN.md, "Темп и таймер"). It drives the
+// same two properties the server one drives (timeoutSeatId/timeoutSec), so the
+// seat bar and the warning beep are the same in both kinds of game, and it
+// performs the same default action a server would: check if it is free, fold
+// otherwise.
+
+void GameHandler::startLocalActionTimer()
+{
+	stopLocalActionTimer();
+	if (!m_session || m_session->isNetworkClientRunning()) return;
+	if (!m_config) return;
+	const int seconds = m_config->readConfigInt("ActionTimer");
+	if (seconds < 5) return;              // 0 = the player switched the clock off
+	if (!m_myTurn || !humanCanAct()) return;
+
+	m_timeoutSeatId = 0;
+	m_timeoutSec = seconds;
+	emit timeoutChanged();
+	m_localActionTimer->start(seconds * 1000);
+	// The warning 10 seconds before the end, as noted in PLAN.md.
+	if (seconds > 10)
+		m_timeoutBeepTimer->start((seconds - 10) * 1000);
+}
+
+void GameHandler::stopLocalActionTimer()
+{
+	// Only a clock that is actually running owns the beep timer; in a network
+	// game that timer belongs to the server clock, and stopping it here would
+	// silence the warning of a game this code has nothing to do with.
+	const bool wasRunning = m_localActionTimer && m_localActionTimer->isActive();
+	if (wasRunning) {
+		m_localActionTimer->stop();
+		if (m_timeoutBeepTimer && m_timeoutBeepTimer->isActive())
+			m_timeoutBeepTimer->stop();
+	}
+	// Take the bar off my seat as well - the game may be ending here rather
+	// than my action closing the window.
+	if (m_timeoutSeatId == 0) {
+		m_timeoutSeatId = -1;
+		emit timeoutChanged();
+	}
+}
+
+void GameHandler::onLocalActionTimeout()
+{
+	if (localGameCallbacksBlocked()) return;
+	// The turn may have ended between the last step and this timer (the player
+	// acted, the hand ended, the table was left): then there is nothing to do.
+	if (!m_myTurn || !humanCanAct()) {
+		stopLocalActionTimer();
+		return;
+	}
+
+	const bool freeCheck = (m_callAmount <= 0);
+	appendGameLog(freeCheck ? QStringLiteral("Time out: check")
+							: QStringLiteral("Time out: fold"));
+	if (freeCheck)
+		call(-1);
+	else
+		fold();
+	stopLocalActionTimer();
 }
 
 void GameHandler::onNetworkGameEnded()
@@ -1661,6 +1744,8 @@ bool GameHandler::checkLocalGameOver()
 	if (playersWithCash > 1 && !humanBroke) return false;
 
 	m_localGameOver = true;
+	// No further action in this game - the clock must not outlive it.
+	stopLocalActionTimer();
 
 	// Nobody is left to play against - or the player is broke: the table is
 	// over, the stack goes back into the balance right away (the popup below
@@ -2281,6 +2366,9 @@ void GameHandler::endLocalGame()
 {
 	if (!m_session) return;
 	if (m_session->isNetworkClientRunning()) return;
+
+	// Leaving the table also stops the clock on my seat.
+	stopLocalActionTimer();
 
 	// Back to the lobby: whatever is left in front of the player returns into
 	// the balance (PLAN.md section 2 - the stack at a cash table IS money).
