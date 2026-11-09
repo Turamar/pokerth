@@ -508,8 +508,9 @@ int TournamentRun::largestTable() const
  * him for no reason he could see, which is exactly what the player noticed.
  *
  * Who waits where: the one who paid the big blind at the broken table arrives
- * last. The seats after the button are the blinds, so he is the one who takes
- * the blinds furthest from here - he does not pay the big blind twice in a row.
+ * last, so of all the arrivals the blinds reach him last - he does not take the
+ * big blind in the first hand at the new table if somebody else could. A proper
+ * "wait for the big blind" (sit out one orbit) is still a gap of its own.
  */
 bool TournamentRun::consolidateOne()
 {
