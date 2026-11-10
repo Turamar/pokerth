@@ -193,12 +193,6 @@ Rectangle {
                     }
 
                     ConfigCheckBox {
-                        objectName: "showBlindButtonsCheckbox"
-                        text: qsTr("Symbole für Small Blind und Big Blind anzeigen")
-                        configKey: "ShowBlindButtons"
-                    }
-
-                    ConfigCheckBox {
                         objectName: "showPotPercentButtonsCheckbox"
                         text: qsTr("Pot-Prozent-Schaltflächen anzeigen")
                         configKey: "ShowPotPercentButtons"

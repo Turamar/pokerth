@@ -65,14 +65,10 @@ Item {
 
     readonly property int button: seatData && seatData.button !== undefined ? seatData.button : 0
     readonly property int bet: seatData && seatData.bet !== undefined ? seatData.bet : 0
-    // Setting "show symbols for small/big blind" (config key
-    // ShowBlindButtons). As in the Qt widgets client the dealer button (1) is
-    // always shown, only the small blind (2) and the big blind (3) can be switched off.
-    readonly property bool showBlindButtons:
-        (typeof SettingsManager !== "undefined" && SettingsManager && SettingsManager.configRevision >= 0)
-            ? SettingsManager.readConfigInt("ShowBlindButtons") !== 0 : true
-    readonly property bool buttonVisible:
-        button === 1 || ((button === 2 || button === 3) && showBlindButtons)
+    // Only the dealer button is drawn (decision 2026-11-10): the small-blind and
+    // big-blind pucks duplicated the bet chips and, on the felt, only got in the
+    // way. button: 1 = dealer, 2 = small blind, 3 = big blind.
+    readonly property bool buttonVisible: button === 1
 
     // The player has folded → the cards become translucent (as in the Qt widgets client)
     readonly property bool folded: seatData && seatData.folded !== undefined ? seatData.folded : false

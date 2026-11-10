@@ -46,6 +46,13 @@ SeatBox {
     property point betAt: Qt.point(0, 0)
     readonly property bool betOnFeltShown: betOnFelt && bet > 0 && !betInset
 
+    // The dealer button is drawn as a badge ON the plate instead of next to it
+    // (landscape). Next to the plate it would stand in the gap between two plates,
+    // where the bet chips of the neighbouring seats lie – and there it is only a
+    // matter of the table size whether it touches one. On the plate nothing can
+    // collide: the chips keep a gap from the plate by construction.
+    property bool puckOnPlate: false
+
     // ── Size of the box ──────────────────────────────────────────────────────
     // Everything is derived from the body height, so that the seat style "inset"
     // (which adds the bet base below the body) does not move a single pixel:
@@ -295,13 +302,29 @@ SeatBox {
         }
     }
 
-    // The bet (chip pile + amount) + the dealer/small/big blind button – grouped.
+    // The dealer button as a small badge ON the plate (landscape, see
+    // GamePage.puckOnPlate). Chips always keep a gap from the plate, and the name
+    // and stack text live to the left of the avatar, so a badge over the avatar's
+    // lower right part cannot collide with anything.
+    BlindButtonImage {
+        id: platePuck
+        visible: root.buttonVisible && root.puckOnPlate
+        button: root.button
+        width: Math.round(root._plateH * 0.5)
+        height: width
+        z: 14
+        x: body.width - root._avatarD + Math.round((root._avatarD - width) / 2) + 4
+        y: root._plateY + Math.round((root._plateH - height) / 2) + 4
+    }
+
+    // The bet (chip pile + amount) + the dealer/blind button – grouped.
     // Top/bottom centre (betSide top/bottom): the full box width; the bet centred,
     // the button right-aligned with a 6px outer margin.
     // Sides (betSide left/right): the button below the bet, both vertically centred.
     Item {
         id: betGroup
-        visible: (root.bet > 0 && !root.betInset && !root.betOnFeltShown) || root.buttonVisible
+        visible: (root.bet > 0 && !root.betInset && !root.betOnFeltShown)
+                 || (root.buttonVisible && !root.puckOnPlate)
         z: 25
 
         readonly property bool split: root.betSplit
@@ -312,8 +335,9 @@ SeatBox {
         readonly property bool chipHere: root.bet > 0 && !root.betInset && !root.betOnFeltShown
         readonly property real betW: chipHere ? betRow.width : 0
         readonly property real betH: chipHere ? betRow.height : 0
-        readonly property real btnW: root.buttonVisible ? buttonImg.width : 0
-        readonly property real btnH: root.buttonVisible ? buttonImg.height : 0
+        readonly property bool btnInGroup: root.buttonVisible && !root.puckOnPlate
+        readonly property real btnW: btnInGroup ? buttonImg.width : 0
+        readonly property real btnH: btnInGroup ? buttonImg.height : 0
 
         width: (horizontal || split) ? body.width : Math.max(betW, btnW)
         height: horizontal ? Math.max(betH, btnH) : body.height
@@ -343,7 +367,7 @@ SeatBox {
         // right-aligned 6px from the box edge; sides: the lower slot.
         BlindButtonImage {
             id: buttonImg
-            visible: root.buttonVisible
+            visible: betGroup.btnInGroup
             button: root.button
             x: betGroup.split
                ? -width - 8
@@ -372,13 +396,6 @@ SeatBox {
         z: 24
         x: root.betAt.x - width / 2
         y: root.betAt.y - height / 2
-        // TEMPORARY diagnostic – see GamePage (BETDEBUG).
-        Component.onCompleted: console.warn("BETCHIP seat=" + root.seatIndex
-            + " shown=" + root.betOnFeltShown
-            + " betAt=" + Math.round(root.betAt.x) + "," + Math.round(root.betAt.y)
-            + " chip=" + Math.round(x) + "," + Math.round(y)
-            + " chipW=" + Math.round(width) + " chipH=" + Math.round(height)
-            + " boxW=" + Math.round(root.width) + " boxH=" + Math.round(root.height))
     }
 
     // ── Right click context menu (desktop only) ──────────────────────────────

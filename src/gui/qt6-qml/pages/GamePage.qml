@@ -899,9 +899,10 @@ Rectangle {
             }
 
             // ── The bet ON the felt ─────────────────────────────────────────────
-            // Where the chip with the bet lies: on the line from the centre of the
-            // box towards the centre of the table, tight against the box edge
-            // (compact – the bet belongs to the player, not to the pot). The
+            // Where the chip with the bet lies: on the INNER side of the box – the
+            // side of the table, not the side of the player (the rule from the
+            // player's report of 2026-11-10: player → chip → table), tight against
+            // the box edge (the bet belongs to the player, not to the pot). The
             // dealer/blind puck stays next to the box: it marks the seat, not the bet.
             //
             // Returns table coordinates (already scaled); the seat delegate turns
@@ -911,57 +912,40 @@ Rectangle {
             // halfW/halfH – half of the VISUAL box size
             function betFeltPoint(cx, cy, halfW, halfH) {
                 var s = oppScale
-                var dx = width / 2 - cx
-                var dy = communityCenterY - cy
-                var len = Math.sqrt(dx * dx + dy * dy)
-                if (len < 1) return Qt.point(cx, cy)
-                var ux = dx / len, uy = dy / len
-                // Distance along the ray at which the chip's RECTANGLE is exactly
-                // `gap` away from the box's rectangle. Clearing ONE axis is enough
-                // for two axis-aligned rectangles to be apart, so the smaller of the
-                // two thresholds is the first moment the chip clears the plate.
-                // (The earlier formula - the distance to the box edge plus the chip's
-                // support along the ray - measured the gap obliquely and therefore
-                // left the chips visibly too far from their boxes.)
+                // One pair of half sizes for the offset AND for every clearance test.
+                // With a second, larger pair (24/20) in the overlap test the chip
+                // was "inside" its own plate by 3–4 px by construction, the test
+                // fired for every side seat and threw the chip to the OUTER side –
+                // exactly the defect the player reported (bet → player → table).
                 var chipHalfX = 20 * s
                 var chipHalfY = 18.5 * s
                 var gap = 6 * s
-                var clearX = Math.abs(ux) < 1e-4 ? 1e9 : (halfW + chipHalfX + gap) / Math.abs(ux)
-                var clearY = Math.abs(uy) < 1e-4 ? 1e9 : (halfH + chipHalfY + gap) / Math.abs(uy)
-                var d = Math.min(clearX, clearY)
-                var px = cx + ux * d
-                var py = cy + uy * d
-                // Never into the community block: the upper seats keep their chip
-                // ABOVE the pot, the lower ones BELOW the cards. Without this a bet
-                // of the bottom corner seats slid into the pot on small tables.
-                // Only where the chip can reach the block HORIZONTALLY at all: a side
-                // seat's chip travels sideways and must not be pushed up into its
-                // upper neighbour.
-                var blockTop = communityCenterY - 60 * communityScale
-                var blockBottom = communityCenterY + 32 * communityScale
-                var chipHalfV = 20 * s
-                var chipHalfU = 24 * s
+                var right = width / 2 - cx          // > 0: table centre right of the box
+                var down = communityCenterY - cy    // > 0: table centre below the box
+                // One axis only: side seats put the chip sideways, top/bottom seats
+                // up/down – always towards the table centre. A ray to the centre made
+                // the two top seats' chips converge in the middle and collide.
+                var horizontal = Math.abs(right) >= Math.abs(down)
+                var px = horizontal
+                    ? cx + (right >= 0 ? 1 : -1) * (halfW + chipHalfX + gap)
+                    : cx
+                var py = horizontal
+                    ? cy
+                    : cy + (down >= 0 ? 1 : -1) * (halfH + chipHalfY + gap)
+                // Never into the community block (pot + cards). Above the centre the
+                // chip stays ABOVE the pot; below it BELOW the cards. The card row is
+                // wide (±132·communityScale) while the pot badge is narrow (60 wide),
+                // so the badge only clamps the chips that really stand over it – the
+                // chips beside it may come down to the cards' upper edge.
                 var blockHalfW = 132 * communityScale + 6
-                if (Math.abs(px - width / 2) < blockHalfW + chipHalfU) {
-                    if (cy < communityCenterY)
-                        py = Math.min(py, blockTop - 2 - chipHalfV)
-                    else
-                        py = Math.max(py, blockBottom + 2 + chipHalfV)
-                }
-                // No room left between the box and the pot (a seat above the centre
-                // that even spacing put right over the pot): the clamp above pushed
-                // the chip back onto its own plate. Then the chip goes BESIDE the box,
-                // on the side AWAY from the table centre – as the dealer puck stands.
-                // Towards the centre two top seats would push their chips into each
-                // other; outwards they stay apart, and the chip stays out of the name.
-                var boxLeft = cx - halfW - gap, boxRight = cx + halfW + gap
-                var boxTop = cy - halfH - gap, boxBottom = cy + halfH + gap
-                var overlapX = Math.min(px + chipHalfU, boxRight) - Math.max(px - chipHalfU, boxLeft)
-                var overlapY = Math.min(py + chipHalfV, boxBottom) - Math.max(py - chipHalfV, boxTop)
-                if (overlapX > 1.5 && overlapY > 1.5) {
-                    var side = cx < width / 2 ? -1 : 1
-                    px = cx + side * (halfW + chipHalfU + gap)
-                    py = cy
+                var potHalfW = 30 * communityScale
+                var fromCentre = Math.abs(px - width / 2)
+                if (cy < communityCenterY) {
+                    var cardsTop = communityCenterY - 32 * communityScale - 2 - chipHalfY
+                    var potTop = communityCenterY - 60 * communityScale - 2 - chipHalfY
+                    py = Math.min(py, fromCentre < potHalfW + chipHalfX ? potTop : cardsTop)
+                } else if (fromCentre < blockHalfW + chipHalfX) {
+                    py = Math.max(py, communityCenterY + 32 * communityScale + 2 + chipHalfY)
                 }
                 // Never beyond the edge of the table.
                 var mx = 8 + 24 * s
@@ -1303,14 +1287,37 @@ Rectangle {
 
                     // TEMPORARY diagnostic (console.warn, so that it really lands in
                     // pokerth-debug.log – console.log is not written there).
-                    Component.onCompleted: console.warn("BETDEBUG wide=" + tableZone.wide
-                        + " zone=" + Math.round(tableZone.width) + "x" + Math.round(tableZone.height)
-                        + " seat=" + index + " slot=" + slotName
-                        + " felt=" + Math.round(feltBet.x) + "," + Math.round(feltBet.y)
-                        + " centre=" + Math.round(boxCenterX) + "," + Math.round(boxCenterY)
-                        + " scale=" + tableZone.oppScale.toFixed(3))
+                    // Deliberately a repeating timer and not a change handler: during
+                    // the layout pass the neighbours of `slot` are still stale, so a
+                    // handler printed a plate position that did not belong to the
+                    // centre it printed with it. A timer fires after the frame is
+                    // settled, and repeats, so the last line before the table closes
+                    // is the real picture.
+                    Timer {
+                        interval: 1000
+                        running: true
+                        repeat: true
+                        onTriggered: {
+                            if (tableZone.width < 1 || betBox.bet <= 0) return
+                            console.warn("BETSTATE seat=" + index
+                                + " slot=" + slotName
+                                + " bet=" + betBox.bet
+                                + " plate=" + Math.round(x + width / 2) + ","
+                                + Math.round(y + height / 2)
+                                + " felt=" + Math.round(feltBet.x) + ","
+                                + Math.round(feltBet.y)
+                                + " tableCentre=" + Math.round(tableZone.width / 2) + ","
+                                + Math.round(tableZone.communityCenterY)
+                                + " zone=" + Math.round(tableZone.width) + "x"
+                                + Math.round(tableZone.height)
+                                + " scale=" + tableZone.oppScale.toFixed(3)
+                                + " inset=" + betBox.betInset
+                                + " feltShown=" + betBox.betOnFeltShown)
+                        }
+                    }
 
                     GamePlayerBox {
+                        id: betBox
                         anchors.fill: parent
                         seatIndex: seatSlot.index
                         // Rasterize the cards in the real screen size (oppScale × zoom).
@@ -1328,31 +1335,25 @@ Rectangle {
                         // Only the topmost box (player 5, the TC slot) shows the
                         // winner badge below it in portrait – everywhere else above.
                         winnerBelow: !tableZone.wide && seatSlot.slotName === "TC"
-                        // Where the dealer/blind puck sits (and, in the seat style
-                        // "inset", where the bet base is shown). The bet itself lies
-                        // on the FELT now (betAt above), so this only has to keep the
-                        // puck away from the bet:
-                        //   landscape: as well towards the table centre – the player
-                        //              reported the chips of the side seats standing
-                        //              OUTSIDE their plates (away from the pot), which
-                        //              reads as if the bet belonged to the neighbour,
-                        //   portrait:  towards the table centre, as before.
-                        // The top centre seat keeps the split (bet right, button left).
+                        // The dealer button (only the dealer's puck is drawn, no
+                        // small/big blind): on the PLATE as a small badge. Next to
+                        // the plate it stands in the gap between two plates, where the
+                        // bet chips lie – and whether it touches one depends on the
+                        // table size. On the plate nothing can collide (chips keep a
+                        // gap from the plate by construction). Portrait keeps the puck
+                        // beside the box, where the row layout has room for it.
+                        puckOnPlate: tableZone.wide
+                        // Where the bet sits when it is NOT on the felt – only the
+                        // portrait layout shows the chip in the group next to the box,
+                        // so this now positions the puck (and the "inset" bet base
+                        // side) there only: towards the table centre.
                         betSide: seatSlot.slot[0] < 0.45 ? "right"
                                : seatSlot.slot[0] > 0.55 ? "left"
                                : "bottom"
-                        // The topmost centre box (player 5): the badge below it would collide with
-                        // the pot badge → the button on the LEFT, the bet on the RIGHT
-                        // of the box. It applies in the whole landscape (desktop wide
-                        // as well as ultrawide), not only in landscapeCompact.
-                        //
-                        // The lowest ring seat of the spectator (slot opp0/BC) needs
-                        // the same split, and that in EVERY orientation: below
-                        // it there is no room, and next to each other INSIDE the box width
-                        // the bet (centred) and the blind button (on the right) overlap.
+                        // Only the lowest ring seat of the spectator (slot opp0/BC) needs
+                        // a split: below it there is no room, and the puck next to the
+                        // centred bet would overlap it.
                         betSplit: seatSlot.bottomCenter
-                                  || (tableZone.wide
-                                      && seatSlot.slot[0] >= 0.45 && seatSlot.slot[0] <= 0.55)
                     }
                 }
             }

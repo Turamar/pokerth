@@ -10,7 +10,6 @@ Settings {
     property bool fadeOutLosingCardsAnimationCheckbox: true
     property bool animatedCardsCheckbox: true
     property bool reverseFKeysOrderCheckbox: false
-    property bool showBlindButtonsCheckbox: true
     property bool showOwnCardsOnMouseClickCheckbox: false
     property bool disableSplashScreenOnStartupCheckbox: false
     property bool doNotTranslatePokerTermsCheckbox: true
