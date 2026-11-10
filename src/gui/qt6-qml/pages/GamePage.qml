@@ -1312,12 +1312,12 @@ Rectangle {
                         // the table (landscape). In portrait the boxes stand in rows
                         // around a free middle band – there the bet keeps sitting
                         // next to the box, otherwise it would end up on the cards.
-                        betAt: tableZone.wide
-                               ? Qt.point((seatSlot.feltBet.x - seatSlot.boxCenterX)
-                                          / tableZone.oppScale + width / 2,
-                                          (seatSlot.feltBet.y - seatSlot.boxCenterY)
-                                          / tableZone.oppScale + height / 2)
-                               : Qt.point(-1, -1)
+                        betOnFelt: tableZone.wide
+                        betAt: Qt.point(
+                            (seatSlot.feltBet.x - seatSlot.boxCenterX) / tableZone.oppScale
+                                + width / 2,
+                            (seatSlot.feltBet.y - seatSlot.boxCenterY) / tableZone.oppScale
+                                + height / 2)
                         // Only the topmost box (player 5, the TC slot) shows the
                         // winner badge below it in portrait – everywhere else above.
                         winnerBelow: !tableZone.wide && seatSlot.slotName === "TC"

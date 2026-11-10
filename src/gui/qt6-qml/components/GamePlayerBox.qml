@@ -22,11 +22,14 @@ SeatBox {
     // Where the bet chip lies when it is NOT shown next to the box but on the
     // felt (seat style "classic"): the centre of the chip in this item's own
     // coordinates, put on the line from the box towards the centre of the
-    // table by GamePage (betFeltPoint). x < 0 means "not set" → the chip keeps
-    // sitting next to the box as before. The dealer/blind puck stays NEXT TO
-    // the box in both cases (it belongs to the seat, not to the bet).
-    property point betAt: Qt.point(-1, -1)
-    readonly property bool betOnFelt: betAt.x >= 0 && bet > 0 && !betInset
+    // table by GamePage (betFeltPoint).
+    // `betOnFelt` says whether it is used at all. The coordinates must NOT
+    // double as the flag: the chip lies OUTSIDE the plate, so to the left of a
+    // right-hand seat its x is negative (that was the bug on 2026-11-10 – the
+    // right seats kept their old chip on the outer contour).
+    property bool betOnFelt: false
+    property point betAt: Qt.point(0, 0)
+    readonly property bool betOnFeltShown: betOnFelt && bet > 0 && !betInset
 
     // Effective table scaling, seat data and base dimensions: see SeatBox.
     // Dynamic width: 2×hMargin(4) + AvatarCardRow.implicitWidth(avatarH+4+2·cardW+4)
@@ -331,7 +334,7 @@ SeatBox {
     // Sides (betSide left/right): the button below the bet, both vertically centred.
     Item {
         id: betGroup
-        visible: (root.bet > 0 && !root.betInset && !root.betOnFelt) || root.buttonVisible
+        visible: (root.bet > 0 && !root.betInset && !root.betOnFeltShown) || root.buttonVisible
         z: 25
 
         readonly property bool split: root.betSplit
@@ -339,7 +342,7 @@ SeatBox {
         // In the style "inset" the bet sits in the box base – the group then
         // only carries the dealer/blind puck. The same holds when the bet lies
         // on the felt (betOnFelt): then the group is the puck alone.
-        readonly property bool chipHere: root.bet > 0 && !root.betInset && !root.betOnFelt
+        readonly property bool chipHere: root.bet > 0 && !root.betInset && !root.betOnFeltShown
         readonly property real betW: chipHere ? betRow.width : 0
         readonly property real betH: chipHere ? betRow.height : 0
         readonly property real btnW: root.buttonVisible ? buttonImg.width : 0
@@ -395,7 +398,7 @@ SeatBox {
     // stays next to the box (betGroup above) - it belongs to the seat.
     BetChip {
         id: feltBet
-        visible: root.betOnFelt
+        visible: root.betOnFeltShown
         amount: root.bet
         textColor: "#f0f0f0"
         z: 24
