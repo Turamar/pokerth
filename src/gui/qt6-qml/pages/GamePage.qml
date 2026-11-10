@@ -1301,11 +1301,9 @@ Rectangle {
                         tableZone.oppBaseWidth * tableZone.oppScale / 2,
                         tableZone.oppBaseHeight * tableZone.oppScale / 2)
 
-                    // TEMPORARY diagnostic (goes to pokerth-debug.log as "qml: …"):
-                    // what the client really computes for this seat, so that the
-                    // question "why do the side seats show their chip outside" can be
-                    // answered from a log instead of from a screenshot.
-                    Component.onCompleted: console.log("BETDEBUG wide=" + tableZone.wide
+                    // TEMPORARY diagnostic (console.warn, so that it really lands in
+                    // pokerth-debug.log – console.log is not written there).
+                    Component.onCompleted: console.warn("BETDEBUG wide=" + tableZone.wide
                         + " zone=" + Math.round(tableZone.width) + "x" + Math.round(tableZone.height)
                         + " seat=" + index + " slot=" + slotName
                         + " felt=" + Math.round(feltBet.x) + "," + Math.round(feltBet.y)

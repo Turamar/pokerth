@@ -372,6 +372,13 @@ SeatBox {
         z: 24
         x: root.betAt.x - width / 2
         y: root.betAt.y - height / 2
+        // TEMPORARY diagnostic – see GamePage (BETDEBUG).
+        Component.onCompleted: console.warn("BETCHIP seat=" + root.seatIndex
+            + " shown=" + root.betOnFeltShown
+            + " betAt=" + Math.round(root.betAt.x) + "," + Math.round(root.betAt.y)
+            + " chip=" + Math.round(x) + "," + Math.round(y)
+            + " chipW=" + Math.round(width) + " chipH=" + Math.round(height)
+            + " boxW=" + Math.round(root.width) + " boxH=" + Math.round(root.height))
     }
 
     // ── Right click context menu (desktop only) ──────────────────────────────
