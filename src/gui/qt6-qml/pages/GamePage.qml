@@ -899,18 +899,26 @@ Rectangle {
             }
 
             // ── The bet ON the felt ─────────────────────────────────────────────
-            // Where the chip with the bet lies: on the INNER side of the box – the
-            // side of the table, not the side of the player (the rule from the
-            // player's report of 2026-11-10: player → chip → table), tight against
-            // the box edge (the bet belongs to the player, not to the pot). The
-            // dealer/blind puck stays next to the box: it marks the seat, not the bet.
+            // Where the chip with the bet lies: in FRONT of the seat – between the
+            // player and the table, never beside it. The direction is decided by the
+            // BAND the seat stands in, not by the longer axis: the top row puts the
+            // chip BELOW its plate (towards the pot), the bottom row ABOVE it, the
+            // side seats sideways. With "the longer axis" the chip of seat 3 slid
+            // sideways into the gap between 3 and 4 and read as the neighbour's bet
+            // (player report 2026-11-10).
+            //
+            // The chip also has to get past the community block (pot + cards) and must
+            // not land on another seat's plate. On short-handed tables the plates are
+            // big and the straight spot is taken – then the chip goes along the ray to
+            // the table centre, as far out as needed, which is the only free felt left.
             //
             // Returns table coordinates (already scaled); the seat delegate turns
             // them into its own item coordinates.
             //
-            // cx/cy      – centre of the box in table coordinates
+            // cx/cy       – centre of the box in table coordinates
             // halfW/halfH – half of the VISUAL box size
-            function betFeltPoint(cx, cy, halfW, halfH) {
+            // seatIndex   – own seat, so that the test against the other plates skips it
+            function betFeltPoint(cx, cy, halfW, halfH, seatIndex) {
                 var s = oppScale
                 // One pair of half sizes for the offset AND for every clearance test.
                 // With a second, larger pair (24/20) in the overlap test the chip
@@ -922,30 +930,74 @@ Rectangle {
                 var gap = 6 * s
                 var right = width / 2 - cx          // > 0: table centre right of the box
                 var down = communityCenterY - cy    // > 0: table centre below the box
-                // One axis only: side seats put the chip sideways, top/bottom seats
-                // up/down – always towards the table centre. A ray to the centre made
-                // the two top seats' chips converge in the middle and collide.
-                var horizontal = Math.abs(right) >= Math.abs(down)
+                // The community block: the card row is wide (±132·communityScale), the
+                // pot badge above it is narrow (60 wide). A chip beside the badge may
+                // come down to the cards' upper edge, one above the badge not.
+                var blockHalfW = 132 * communityScale + 6
+                var potHalfW = 30 * communityScale
+
+                function clampBlock(x, y) {
+                    var fromCentre = Math.abs(x - width / 2)
+                    if (fromCentre >= blockHalfW + chipHalfX) return y
+                    var cardsTop = communityCenterY - 32 * communityScale - 2 - chipHalfY
+                    var cardsBottom = communityCenterY + 32 * communityScale + 2 + chipHalfY
+                    var potTop = communityCenterY - 60 * communityScale - 2 - chipHalfY
+                    if (cy < communityCenterY)
+                        return Math.min(y, fromCentre < potHalfW + chipHalfX ? potTop : cardsTop)
+                    return Math.max(y, cardsBottom)
+                }
+                // On the plate? Deliberately without the gap: the gap is already part
+                // of the offset, and the block clamp may eat a part of it – that is no
+                // reason to move the chip away.
+                function onPlate(x, y) {
+                    var oX = Math.min(x + chipHalfX, cx + halfW) - Math.max(x - chipHalfX, cx - halfW)
+                    var oY = Math.min(y + chipHalfY, cy + halfH) - Math.max(y - chipHalfY, cy - halfH)
+                    return oX > 0.5 && oY > 0.5
+                }
+                function onOtherPlate(x, y) {
+                    var players = (typeof GameTable !== "undefined" && GameTable)
+                                  ? GameTable.players : null
+                    if (!players) return false
+                    for (var i = spectating ? 0 : 1; i < players.length; ++i) {
+                        if (i === seatIndex) continue
+                        var info = slotForSeat(i)
+                        if (!info) continue
+                        var ox = width * info.x + info.nudgeX
+                        var oy = height * info.y + info.nudge
+                        if (Math.abs(x - ox) < halfW + chipHalfX
+                            && Math.abs(y - oy) < halfH + chipHalfY) return true
+                    }
+                    return false
+                }
+
+                var topBand = cy < height * 0.30
+                var bottomBand = cy > height * 0.70
+                var horizontal = !topBand && !bottomBand
                 var px = horizontal
                     ? cx + (right >= 0 ? 1 : -1) * (halfW + chipHalfX + gap)
                     : cx
-                var py = horizontal
-                    ? cy
-                    : cy + (down >= 0 ? 1 : -1) * (halfH + chipHalfY + gap)
-                // Never into the community block (pot + cards). Above the centre the
-                // chip stays ABOVE the pot; below it BELOW the cards. The card row is
-                // wide (±132·communityScale) while the pot badge is narrow (60 wide),
-                // so the badge only clamps the chips that really stand over it – the
-                // chips beside it may come down to the cards' upper edge.
-                var blockHalfW = 132 * communityScale + 6
-                var potHalfW = 30 * communityScale
-                var fromCentre = Math.abs(px - width / 2)
-                if (cy < communityCenterY) {
-                    var cardsTop = communityCenterY - 32 * communityScale - 2 - chipHalfY
-                    var potTop = communityCenterY - 60 * communityScale - 2 - chipHalfY
-                    py = Math.min(py, fromCentre < potHalfW + chipHalfX ? potTop : cardsTop)
-                } else if (fromCentre < blockHalfW + chipHalfX) {
-                    py = Math.max(py, communityCenterY + 32 * communityScale + 2 + chipHalfY)
+                var py = clampBlock(px, horizontal
+                                    ? cy
+                                    : cy + (down >= 0 ? 1 : -1) * (halfH + chipHalfY + gap))
+                // Straight in front is taken – walk along the ray to the table centre
+                // and, when the block clamp keeps pushing the chip back, go deeper along
+                // the same ray (that is where the free felt is on short-handed tables).
+                if (onPlate(px, py) || onOtherPlate(px, py)) {
+                    var len = Math.sqrt(right * right + down * down)
+                    if (len >= 1) {
+                        var ux = right / len, uy = down / len
+                        var clearX = Math.abs(ux) < 1e-4 ? 1e9 : (halfW + chipHalfX + gap) / Math.abs(ux)
+                        var clearY = Math.abs(uy) < 1e-4 ? 1e9 : (halfH + chipHalfY + gap) / Math.abs(uy)
+                        var d0 = Math.min(clearX, clearY)
+                        var steps = [1, 1.4, 2, 2.8]
+                        for (var k = 0; k < steps.length; ++k) {
+                            var rx = cx + ux * d0 * steps[k]
+                            var ry = clampBlock(rx, cy + uy * d0 * steps[k])
+                            px = rx
+                            py = ry
+                            if (!onPlate(rx, ry) && !onOtherPlate(rx, ry)) break
+                        }
+                    }
                 }
                 // Never beyond the edge of the table.
                 var mx = 8 + 24 * s
@@ -1283,7 +1335,8 @@ Rectangle {
                     readonly property point feltBet: tableZone.betFeltPoint(
                         boxCenterX, boxCenterY,
                         tableZone.oppBaseWidth * tableZone.oppScale / 2,
-                        tableZone.oppBaseHeight * tableZone.oppScale / 2)
+                        tableZone.oppBaseHeight * tableZone.oppScale / 2,
+                        seatSlot.index)
 
                     // TEMPORARY diagnostic (console.warn, so that it really lands in
                     // pokerth-debug.log – console.log is not written there).
