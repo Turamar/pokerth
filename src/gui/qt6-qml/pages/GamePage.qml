@@ -916,16 +916,19 @@ Rectangle {
                 var len = Math.sqrt(dx * dx + dy * dy)
                 if (len < 1) return Qt.point(cx, cy)
                 var ux = dx / len, uy = dy / len
-                // Where the ray leaves the box: the nearer of the two edges.
-                var tx = Math.abs(ux) < 1e-4 ? 1e9 : halfW / Math.abs(ux)
-                var ty = Math.abs(uy) < 1e-4 ? 1e9 : halfH / Math.abs(uy)
-                var edge = Math.min(tx, ty)
-                // Support of the bet pile itself along the direction, so that the
-                // whole pile fits next to the box and not only its point. The pile
-                // is up to ~48 × 40 base px (four chip columns, the amount below).
-                var chipHalf = (Math.abs(ux) * 24 + Math.abs(uy) * 20) * s
+                // Distance along the ray at which the chip's RECTANGLE is exactly
+                // `gap` away from the box's rectangle. Clearing ONE axis is enough
+                // for two axis-aligned rectangles to be apart, so the smaller of the
+                // two thresholds is the first moment the chip clears the plate.
+                // (The earlier formula - the distance to the box edge plus the chip's
+                // support along the ray - measured the gap obliquely and therefore
+                // left the chips visibly too far from their boxes.)
+                var chipHalfX = 20 * s
+                var chipHalfY = 18.5 * s
                 var gap = 6 * s
-                var d = edge + gap + chipHalf
+                var clearX = Math.abs(ux) < 1e-4 ? 1e9 : (halfW + chipHalfX + gap) / Math.abs(ux)
+                var clearY = Math.abs(uy) < 1e-4 ? 1e9 : (halfH + chipHalfY + gap) / Math.abs(uy)
+                var d = Math.min(clearX, clearY)
                 var px = cx + ux * d
                 var py = cy + uy * d
                 // Never into the community block: the upper seats keep their chip
@@ -947,15 +950,17 @@ Rectangle {
                 }
                 // No room left between the box and the pot (a seat above the centre
                 // that even spacing put right over the pot): the clamp above pushed
-                // the chip back onto its own plate. Then the chip goes BESIDE the box
-                // – on the side away from the centre, like the dealer puck. Better a
-                // bet next to the player than a bet lying on his name.
+                // the chip back onto its own plate. Then the chip goes BESIDE the box,
+                // on the side AWAY from the table centre – as the dealer puck stands.
+                // Towards the centre two top seats would push their chips into each
+                // other; outwards they stay apart, and the chip stays out of the name.
                 var boxLeft = cx - halfW - gap, boxRight = cx + halfW + gap
                 var boxTop = cy - halfH - gap, boxBottom = cy + halfH + gap
-                if (px + chipHalfU > boxLeft && px - chipHalfU < boxRight
-                    && py + chipHalfV > boxTop && py - chipHalfV < boxBottom) {
+                var overlapX = Math.min(px + chipHalfU, boxRight) - Math.max(px - chipHalfU, boxLeft)
+                var overlapY = Math.min(py + chipHalfV, boxBottom) - Math.max(py - chipHalfV, boxTop)
+                if (overlapX > 1.5 && overlapY > 1.5) {
                     var side = cx < width / 2 ? -1 : 1
-                    px = cx + side * (halfW + gap + chipHalfU)
+                    px = cx + side * (halfW + chipHalfU + gap)
                     py = cy
                 }
                 // Never beyond the edge of the table.
