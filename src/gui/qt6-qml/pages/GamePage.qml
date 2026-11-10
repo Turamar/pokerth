@@ -1335,18 +1335,10 @@ Rectangle {
                         // Only the topmost box (player 5, the TC slot) shows the
                         // winner badge below it in portrait – everywhere else above.
                         winnerBelow: !tableZone.wide && seatSlot.slotName === "TC"
-                        // The dealer button (only the dealer's puck is drawn, no
-                        // small/big blind): on the PLATE as a small badge. Next to
-                        // the plate it stands in the gap between two plates, where the
-                        // bet chips lie – and whether it touches one depends on the
-                        // table size. On the plate nothing can collide (chips keep a
-                        // gap from the plate by construction). Portrait keeps the puck
-                        // beside the box, where the row layout has room for it.
-                        puckOnPlate: tableZone.wide
                         // Where the bet sits when it is NOT on the felt – only the
                         // portrait layout shows the chip in the group next to the box,
-                        // so this now positions the puck (and the "inset" bet base
-                        // side) there only: towards the table centre.
+                        // so this positions the chip there only: towards the table
+                        // centre. The dealer badge sits on the plate in both layouts.
                         betSide: seatSlot.slot[0] < 0.45 ? "right"
                                : seatSlot.slot[0] > 0.55 ? "left"
                                : "bottom"

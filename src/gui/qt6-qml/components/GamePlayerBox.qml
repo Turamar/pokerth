@@ -46,13 +46,6 @@ SeatBox {
     property point betAt: Qt.point(0, 0)
     readonly property bool betOnFeltShown: betOnFelt && bet > 0 && !betInset
 
-    // The dealer button is drawn as a badge ON the plate instead of next to it
-    // (landscape). Next to the plate it would stand in the gap between two plates,
-    // where the bet chips of the neighbouring seats lie – and there it is only a
-    // matter of the table size whether it touches one. On the plate nothing can
-    // collide: the chips keep a gap from the plate by construction.
-    property bool puckOnPlate: false
-
     // ── Size of the box ──────────────────────────────────────────────────────
     // Everything is derived from the body height, so that the seat style "inset"
     // (which adds the bet base below the body) does not move a single pixel:
@@ -182,7 +175,10 @@ SeatBox {
         //    part is visible. As soon as the player folds, they are gone.
         HoleCards {
             id: cards
-            x: Math.round((body.width - width) / 2)
+            // 12 px left of the plate's centre: the room above the avatar belongs to
+            // the dealer badge (see platePuck below), otherwise it would sit on the
+            // right card's corner. The cards stay centred on the plate's visible part.
+            x: Math.round((body.width - width) / 2) - 12
             y: 0
             z: 1
             cardH: root._cardH
@@ -302,45 +298,44 @@ SeatBox {
         }
     }
 
-    // The dealer button as a small badge ON the plate (landscape, see
-    // GamePage.puckOnPlate). Chips always keep a gap from the plate, and the name
-    // and stack text live to the left of the avatar, so a badge over the avatar's
-    // lower right part cannot collide with anything.
+    // ── The dealer button: a small badge like a crown on the avatar ──────────
+    // It sits on the avatar's upper edge, centred on the avatar. The hole cards
+    // are drawn 12 px left of the plate's centre (see the cards above), so the
+    // crown has clear felt above the avatar and cannot cover a card. Beats every
+    // other arrangement by construction: next to the plate the puck shares the gap
+    // with the neighbouring seat's bet chip, and lower on the avatar it was barely
+    // visible (player report 2026-11-10).
     BlindButtonImage {
         id: platePuck
-        visible: root.buttonVisible && root.puckOnPlate
+        visible: root.buttonVisible
         button: root.button
         width: Math.round(root._plateH * 0.5)
         height: width
         z: 14
-        x: body.width - root._avatarD + Math.round((root._avatarD - width) / 2) + 4
-        y: root._plateY + Math.round((root._plateH - height) / 2) + 4
+        x: Math.round(body.width - root._avatarD / 2 - width / 2)
+        y: Math.round(root._plateY + (root._plateH - root._avatarD) / 2
+                      - height + Math.round(height * 0.35))
     }
 
-    // The bet (chip pile + amount) + the dealer/blind button – grouped.
-    // Top/bottom centre (betSide top/bottom): the full box width; the bet centred,
-    // the button right-aligned with a 6px outer margin.
-    // Sides (betSide left/right): the button below the bet, both vertically centred.
+    // The bet (chip pile + amount), grouped.
+    // Top/bottom centre (betSide top/bottom): the full box width.
+    // Sides (betSide left/right): vertically centred next to the box.
     Item {
         id: betGroup
-        visible: (root.bet > 0 && !root.betInset && !root.betOnFeltShown)
-                 || (root.buttonVisible && !root.puckOnPlate)
+        visible: betGroup.chipHere
         z: 25
 
         readonly property bool split: root.betSplit
         readonly property bool horizontal: !split && (root.betSide === "bottom" || root.betSide === "top")
-        // In the style "inset" the bet sits in the box base – the group then only
-        // carries the dealer/blind puck. The same holds when the bet lies on the
-        // felt (betOnFelt): then the group is the puck alone.
+        // In the style "inset" the bet sits in the box base and, when the bet lies
+        // on the felt (betOnFelt), the chip is drawn there as well – the group then
+        // carries nothing.
         readonly property bool chipHere: root.bet > 0 && !root.betInset && !root.betOnFeltShown
         readonly property real betW: chipHere ? betRow.width : 0
         readonly property real betH: chipHere ? betRow.height : 0
-        readonly property bool btnInGroup: root.buttonVisible && !root.puckOnPlate
-        readonly property real btnW: btnInGroup ? buttonImg.width : 0
-        readonly property real btnH: btnInGroup ? buttonImg.height : 0
 
-        width: (horizontal || split) ? body.width : Math.max(betW, btnW)
-        height: horizontal ? Math.max(betH, btnH) : body.height
+        width: (horizontal || split) ? body.width : betW
+        height: horizontal ? betH : body.height
 
         x: split ? 0
          : root.betSide === "right" ? body.width + 8
@@ -362,29 +357,12 @@ SeatBox {
             x: betGroup.split ? betGroup.width + 8 : (betGroup.width - width) / 2
             y: (betGroup.height - height) / 2
         }
-
-        // Dealer/blind button – split: to the left NEXT TO the box; horizontal:
-        // right-aligned 6px from the box edge; sides: the lower slot.
-        BlindButtonImage {
-            id: buttonImg
-            visible: betGroup.btnInGroup
-            button: root.button
-            x: betGroup.split
-               ? -width - 8
-               : betGroup.horizontal
-               ? (betGroup.width - width - 6)
-               : (root.betSide === "right" ? 0 : (betGroup.width - width))
-            y: (betGroup.horizontal || betGroup.split || root.betInset)
-               ? (betGroup.height - height) / 2
-               : (betGroup.height * 5 / 6 - height / 2)
-        }
     }
 
     // ── The bet ON THE FELT ──────────────────────────────────────────────────
     // The bet is part of the table, not of the player's plate: it lies on the
     // felt between the box and the pot as a pile of chips. Position comes from
-    // GamePage (betFeltPoint). The puck stays next to the box (betGroup above) -
-    // it belongs to the seat.
+    // GamePage (betFeltPoint).
     BetChip {
         id: feltBet
         visible: root.betOnFeltShown

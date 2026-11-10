@@ -95,7 +95,9 @@ SeatBox {
 
         HoleCards {
             id: cards
-            x: Math.round((body.width - width) / 2)
+            // 12 px left of the plate's centre – the room above the avatar belongs to
+            // the dealer badge (see platePuck), as on the opponent plates.
+            x: Math.round((body.width - width) / 2) - 12
             y: 0
             z: 1
             cardH: root._cardH
@@ -249,14 +251,18 @@ SeatBox {
         }
     }
 
-    // Dealer/small/big blind button: at the top right NEXT TO the box (outside).
+    // Dealer button: the same "crown" badge on the avatar's upper edge as on the
+    // opponent plates. It used to stand to the right of the box on the felt, where
+    // it was easy to miss (player report 2026-11-10).
     BlindButtonImage {
-        id: buttonImg
+        id: platePuck
         visible: root.buttonVisible
         button: root.button
-        anchors.left: parent.right
-        anchors.leftMargin: 6
-        anchors.top: parent.top
-        z: 25
+        width: Math.round(root._plateH * 0.5)
+        height: width
+        z: 14
+        x: Math.round(body.width - root._avatarD / 2 - width / 2)
+        y: Math.round(root._plateY + (root._plateH - root._avatarD) / 2
+                      - height + Math.round(height * 0.35))
     }
 }
