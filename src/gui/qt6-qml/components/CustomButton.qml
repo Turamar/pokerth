@@ -11,6 +11,14 @@ AbstractButton {
     implicitWidth:  Config.Theme.buttonWidth < 0 ? 160 : Config.Theme.buttonWidth
     implicitHeight: Config.Theme.touchTarget
 
+    // A disabled button has to LOOK disabled. Until 2026-11-11 the colours below
+    // ignored "enabled" completely, so a disabled button was indistinguishable
+    // from an active one: the player pressed "Spiel starten" while the cash page
+    // was still sliding in (the button is disabled until StackView.onActivated
+    // picks a limit) and nothing happened - no action, no feedback
+    // (player report 2026-11-11).
+    opacity: enabled ? 1.0 : Config.Theme.disabledOpacity
+
     // Keyboard operation as in web forms and Win32 dialogs: space already
     // triggers AbstractButton itself, Return/Enter is added here. The event is
     // thereby consumed, so that a focused button takes precedence over the
@@ -58,7 +66,7 @@ AbstractButton {
     }
 
     HoverHandler {
-        cursorShape: Qt.PointingHandCursor
+        cursorShape: customButton.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
     }
 }
 

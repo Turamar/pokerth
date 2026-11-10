@@ -36,8 +36,17 @@ Rectangle {
     property int selectedLimit: -1
 
     readonly property var limits: Wallet ? Wallet.limits : []
-    readonly property var currentLimit: (selectedLimit >= 0 && selectedLimit < limits.length)
-                                        ? limits[selectedLimit] : null
+    // The step the page WORKS with: the player's choice, or - until the choice is
+    // made - the highest open step. It must be valid on the very first frame:
+    // StackView.onActivated only arrives after the 400 ms push animation (style
+    // Universal), and until then "canSit" was false, i.e. the start button was
+    // disabled while the page was already visible and interactive. A player who
+    // clicks right away got nothing at all - the button looked normal, because a
+    // disabled CustomButton looked exactly like an active one (player report
+    // 2026-11-11: "the start button almost never works on the first click").
+    readonly property int activeLimit: selectedLimit >= 0 ? selectedLimit : bestLimit()
+    readonly property var currentLimit: (activeLimit >= 0 && activeLimit < limits.length)
+                                        ? limits[activeLimit] : null
     readonly property bool canSit: currentLimit !== null && currentLimit.unlocked
     readonly property int bottomGate: limits.length > 0 ? limits[0].gate : 0
     readonly property int bigBlind: currentLimit ? currentLimit.bigBlind : 0
@@ -223,7 +232,7 @@ Rectangle {
                                 ButtonGroup.group: limitGroup
                                 onClicked: localGamePagePage.selectLimit(limitIndex)
                                 Component.onCompleted: checked =
-                                        (localGamePagePage.selectedLimit === limitIndex)
+                                        (localGamePagePage.activeLimit === limitIndex)
                                 text: modelData.label
                                       + "  ·  " + qsTr("Buy-in %1–%2")
                                         .arg(Wallet.money(modelData.minBuyIn))

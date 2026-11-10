@@ -273,6 +273,10 @@ QtObject {
     // ── Opacity helpers ──────────────────────────────────────────────────────
     readonly property real overlayOpacity: 0.80
     readonly property real dimmedOpacity:  0.40
+    // A disabled control that keeps full opacity reads as clickable, and the only
+    // symptom is a click that does nothing (player report 2026-11-11). Every
+    // control that can be disabled takes this opacity instead.
+    readonly property real disabledOpacity: 0.55
 
     // Return the colour with the alpha set (for translucent sheet surfaces).
     function withAlpha(c, a) {
