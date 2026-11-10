@@ -900,17 +900,27 @@ Rectangle {
 
             // ── The bet ON the felt ─────────────────────────────────────────────
             // Where the chip with the bet lies: in FRONT of the seat – between the
-            // player and the table, never beside it. The direction is decided by the
-            // BAND the seat stands in, not by the longer axis: the top row puts the
-            // chip BELOW its plate (towards the pot), the bottom row ABOVE it, the
-            // side seats sideways. With "the longer axis" the chip of seat 3 slid
-            // sideways into the gap between 3 and 4 and read as the neighbour's bet
-            // (player report 2026-11-10).
+            // player and the table, never beside it. The direction comes from the
+            // ray to the community block: a seat of the upper row puts the chip
+            // below and inwards, a side seat sideways and inwards, a lower seat
+            // above and inwards. The band rule ("top row strictly below its plate")
+            // put the chip of a side seat into the corridor between two plates: at
+            // seat 3 it read as the bet of seat 2 (player report 2026-11-10, with a
+            // marked-up screenshot: chips of 3 and 7 belong lower and further
+            // towards the middle of the table).
+            //
+            // The offset is DIAGONAL – one gap outside both the side and the lower
+            // (or upper) edge of the plate – because on this ellipse the ray of a
+            // top-row seat is shallow: a chip pushed only along the ray would hug
+            // the plate's side, a chip pushed only downwards would sit in the
+            // corridor between the plates. An axis the seat is barely offset along
+            // (top centre, own seat) takes no part in the offset, otherwise the
+            // chip would slide sideways for no reason.
             //
             // The chip also has to get past the community block (pot + cards) and must
-            // not land on another seat's plate. On short-handed tables the plates are
-            // big and the straight spot is taken – then the chip goes along the ray to
-            // the table centre, as far out as needed, which is the only free felt left.
+            // not land on another seat's plate. If the place in front is taken, the
+            // chip tries: straight in front (down/up), then sideways, then further
+            // along the same diagonal – that is where the free felt is left.
             //
             // Returns table coordinates (already scaled); the seat delegate turns
             // them into its own item coordinates.
@@ -970,38 +980,49 @@ Rectangle {
                     return false
                 }
 
-                var topBand = cy < height * 0.30
-                var bottomBand = cy > height * 0.70
-                var horizontal = !topBand && !bottomBand
-                var px = horizontal
-                    ? cx + (right >= 0 ? 1 : -1) * (halfW + chipHalfX + gap)
-                    : cx
-                var py = clampBlock(px, horizontal
-                                    ? cy
-                                    : cy + (down >= 0 ? 1 : -1) * (halfH + chipHalfY + gap))
-                // Straight in front is taken – walk along the ray to the table centre
-                // and, when the block clamp keeps pushing the chip back, go deeper along
-                // the same ray (that is where the free felt is on short-handed tables).
-                if (onPlate(px, py) || onOtherPlate(px, py)) {
-                    var len = Math.sqrt(right * right + down * down)
-                    if (len >= 1) {
-                        var ux = right / len, uy = down / len
-                        var clearX = Math.abs(ux) < 1e-4 ? 1e9 : (halfW + chipHalfX + gap) / Math.abs(ux)
-                        var clearY = Math.abs(uy) < 1e-4 ? 1e9 : (halfH + chipHalfY + gap) / Math.abs(uy)
-                        var d0 = Math.min(clearX, clearY)
-                        var steps = [1, 1.4, 2, 2.8]
-                        for (var k = 0; k < steps.length; ++k) {
-                            var rx = cx + ux * d0 * steps[k]
-                            var ry = clampBlock(rx, cy + uy * d0 * steps[k])
-                            px = rx
-                            py = ry
-                            if (!onPlate(rx, ry) && !onOtherPlate(rx, ry)) break
-                        }
-                    }
+                function clear(x, y) { return !onPlate(x, y) && !onOtherPlate(x, y) }
+
+                // Offset up to the plate's edge plus the gap, per axis.
+                var stepX = halfW + chipHalfX + gap
+                var stepY = halfH + chipHalfY + gap
+                // How far the seat is offset from the centre along this axis: the top
+                // centre and the own seat have no horizontal one, and their chip must
+                // not slide sideways.
+                var shareX = Math.min(1, Math.abs(right) / (2 * stepX))
+                var shareY = Math.min(1, Math.abs(down) / (2 * stepY))
+                // One axis has to reach the full gap, otherwise the chip lies on its own
+                // plate: with both axes "under-filled" (short table, big plates) it
+                // stayed inside the plate along both. The push is scaled by the larger
+                // share.
+                var full = 1 / Math.max(shareX, shareY, 1e-6)
+                var dirX = (right >= 0 ? 1 : -1) * shareX * full
+                var dirY = (down >= 0 ? 1 : -1) * shareY * full
+                // Where to go when the place in front is taken:
+                //  1) diagonally off the plate's corner (the usual rule);
+                //  2) straight in front (down/up) – the diagonal is blocked by the pot
+                //     badge (short table: a few pixels between the plate and the badge,
+                //     while two neighbouring chips sideways meet in the middle);
+                //  3) sideways at the plate's height;
+                //  4) further along the same diagonal – the chip landed on a
+                //     neighbour's plate.
+                var tries = [[cx + dirX * stepX, cy + dirY * stepY],
+                             [cx, cy + (down >= 0 ? 1 : -1) * stepY]]
+                if (shareX > 0.15)
+                    tries.push([cx + (right >= 0 ? 1 : -1) * stepX, cy])
+                if (shareX > 0.05 && shareY > 0.05) {
+                    var ks = [1.3, 1.7, 2.2, 2.9]
+                    for (var k = 0; k < ks.length; ++k)
+                        tries.push([cx + dirX * stepX * ks[k], cy + dirY * stepY * ks[k]])
+                }
+                var px = cx, py = cy
+                for (var t = 0; t < tries.length; ++t) {
+                    px = tries[t][0]
+                    py = clampBlock(px, tries[t][1])
+                    if (clear(px, py)) break
                 }
                 // Never beyond the edge of the table.
-                var mx = 8 + 24 * s
-                var my = 8 + 20 * s
+                var mx = 8 + 22 * s
+                var my = 8 + 19 * s
                 px = Math.max(mx, Math.min(width - mx, px))
                 py = Math.max(my, Math.min(height - my, py))
                 return Qt.point(px, py)
