@@ -215,6 +215,20 @@ QtObject {
         default: return colorCallEdge
         }
     }
+    // The readable TEXT colour of an action – for the action word that replaces
+    // the stack in the player plate for two seconds (the badge colours above are
+    // backgrounds, unreadable as text on the dark plate).
+    function actionEdgeColor(action) {
+        switch (action) {
+        case 1:  return colorFoldEdge
+        case 2:
+        case 3:  return colorCallEdge
+        case 4:
+        case 5:  return colorRaiseEdge
+        case 6:  return colorAllInEdge
+        default: return colorAccent
+        }
+    }
 
     // Chat send action (spectral green, readable on both themes)
     readonly property color colorChatSend:      isDark ? "#4ade80" : "#16a34a"

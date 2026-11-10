@@ -15,6 +15,8 @@ Item {
     property int badgeHeight: 16
     property int badgeFontSize: 9
     property int hPadding: 12
+    // Corner radius of the frame; the pill-shaped plate passes its own.
+    property int radius: 6
 
     anchors.fill: parent
     visible: active
@@ -23,7 +25,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: "transparent"
-        radius: 6
+        radius: overlay.radius
         border.color: "#FFD700"
         border.width: 3
         z: 19

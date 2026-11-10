@@ -187,9 +187,9 @@
     </message>
 </context>
 <context>
-    <name>AvatarCardRow</name>
+    <name>PlayerAvatar</name>
     <message>
-        <location filename="../components/AvatarCardRow.qml" line="+132"/>
+        <location filename="../components/PlayerAvatar.qml" line="+132"/>
         <source>Server response times</source>
         <translation>Час відповіді сервера</translation>
     </message>

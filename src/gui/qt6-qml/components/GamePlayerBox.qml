@@ -3,6 +3,21 @@ import QtQuick.Controls
 
 import "../config" as Config
 
+// The plate of an opponent seat.
+//
+// Shape since 2026-11-10 (the player's mock-up): the two hole cards stand BEHIND
+// the plate and stick out above its upper edge, the plate is a "pill" with the
+// name on the first line and the stack on the second, and the round avatar sits
+// on the right end of the plate, a little larger than the plate is high.
+//
+// The second line is the stack – except for two seconds after the player acted:
+// then it shows the action (fold/check/call/bet/raise/all-in) and returns to the
+// stack afterwards. A folded player's cards disappear (the muck); the plate
+// itself stays dimmed.
+//
+// The box is 112 × 70 base pixels (before the table scale); the numbers are
+// derived from `bodyH` below so that the seat style "inset" (bet base in the box)
+// keeps working unchanged.
 SeatBox {
     id: root
 
@@ -31,12 +46,26 @@ SeatBox {
     property point betAt: Qt.point(0, 0)
     readonly property bool betOnFeltShown: betOnFelt && bet > 0 && !betInset
 
-    // Effective table scaling, seat data and base dimensions: see SeatBox.
-    // Dynamic width: 2×hMargin(4) + AvatarCardRow.implicitWidth(avatarH+4+2·cardW+4)
-    readonly property int _topRowH: bodyH - (wideLayout ? 44 : 28)
-    readonly property int _cardW:   Math.round(_topRowH * 120 / 168)
-    implicitWidth: 2 * 4 + _topRowH + 4 + 2 * _cardW + 4
-    implicitHeight: 84 + betStripH
+    // ── Size of the box ──────────────────────────────────────────────────────
+    // Everything is derived from the body height, so that the seat style "inset"
+    // (which adds the bet base below the body) does not move a single pixel:
+    //   envelope 112×70  =  cards 40 (upper 26 visible) + plate 44 (14 px overlap)
+    //   plate    44 high =  two text lines
+    //   avatar   48      =  plate height + 4 (it stands out above and below)
+    readonly property int _hMargin: 4
+    readonly property int _textX: 8
+    readonly property int _cardH: Math.round(bodyH * 40 / 70)
+    readonly property int _cardW: Math.round(_cardH * 120 / 168)
+    readonly property int _plateH: Math.round(bodyH * 44 / 70)
+    readonly property int _avatarD: _plateH + 4
+    readonly property int _plateY: bodyH - _plateH
+    readonly property int _textW: Math.max(24, Math.round(width) - _avatarD - _textX - 4)
+
+    readonly property int _nameSize: 13
+    readonly property int _stackSize: 12
+
+    implicitWidth: 112
+    implicitHeight: 70
 
     // Knocked out (no money left) - a default of its own as opposed to the self box.
     readonly property bool isActive: seatData ? seatData.active : false
@@ -46,6 +75,26 @@ SeatBox {
         playerIgnored
         && ((typeof SettingsManager !== "undefined" && SettingsManager && SettingsManager.configRevision >= 0)
                 ? SettingsManager.readConfigInt("DontHideAvatarsOfIgnored") === 0 : true)
+
+    // ── The action instead of the stack, for two seconds ─────────────────────
+    // The action itself stays in the seat data until the end of the hand; what we
+    // want is only the short flash of the word, afterwards the stack is back.
+    property bool _flashAction: false
+    readonly property bool _showAction: _flashAction && actionText !== "" && !isWinner
+    onActionChanged: {
+        if (root.action > 0 && !root.isWinner) {
+            root._flashAction = true
+            actionFlash.restart()
+        } else if (root.action === 0) {
+            root._flashAction = false
+            actionFlash.stop()
+        }
+    }
+    Timer {
+        id: actionFlash
+        interval: 2000
+        onTriggered: root._flashAction = false
+    }
 
     // ── Context actions ──────────────────────────────────────────────────────
     // A right click (desktop) or a long press (touch) on an opponent box opens
@@ -105,174 +154,132 @@ SeatBox {
             ? SettingsManager.playerNote(root.targetPlayerName) : ""
     }
 
-    // Wide screen layout: the box is large enough for 2 line info (name + flag/cash).
-    // It uses height >= 76 as a proxy for tableZone.wide (oppBaseHeight = wide ? 84 : 71).
-    // Deliberately NOT Config.Responsive.landscape – the table zone can be wider than
-    // high even when the whole window (incl. the toolbar) is portrait-like.
-    // Subtract the base height: otherwise a portrait box (71 + the base) would
-    // wrongly slip above the threshold of 76 and would get the 2 line
-    // landscape footer.
-    readonly property bool wideLayout: bodyH >= 76
-
     // Only show it when the seat is occupied
     visible: root.seatData !== null && root.seatData.name !== ""
 
     // Information density: whoever is out (no money left → !isActive) is clearly
-    // darkened, whoever has only folded is pulled back subtly. That way the
-    // active player and the hand still running stand out more clearly.
+    // darkened, whoever has only folded is pulled back subtly.
     opacity: !root.isActive ? Config.Theme.dimmedOpacity
            : (root.folded ? 0.72 : 1.0)
     Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutQuad } }
 
-    // ── Hauptbox ────────────────────────────────────────────────────────────────
-    Rectangle {
-        id: playerBox
+    // ── The body: cards behind, plate in front, avatar on top ────────────────
+    Item {
+        id: body
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        // The body + the (unfolded) base. The rest of the reserved height
-        // stays empty while the player has not bet anything.
         height: root.bodyH + betStrip.height
-        color: "transparent"
-        property int hMargin: 4
 
-        // The active player is slightly "raised" → more depth/focus (a gentle transition).
-        scale: root.isAtTurn ? 1.04 : 1.0
-        transformOrigin: Item.Center
-        Behavior on scale { NumberAnimation { duration: 180; easing.type: Easing.OutQuad } }
-
-        // A card background with a subtle gradient + a soft drop shadow → the
-        // box looks like a raised card instead of a flat surface.
-        PlayerBoxBackground {}
-
-        // Highlight: the active player gets a gold frame + a soft glow.
-        PlayerTurnGlow { active: root.isAtTurn }
-
-        // Avatar + cards: AvatarCardRow guarantees cardH == topRowH (no
-        // rounding difference). Spacings: 4 px on the left, 4 px avatar↔cards,
-        // 4 px between the cards, 4 px on the right (= the implicitWidth formula above).
-        AvatarCardRow {
-            id: cardRow
-            x: playerBox.hMargin
-            y: 4
-            height: root.wideLayout ? (root.bodyH - 44) : (root.bodyH - 28)
-
-            cardRenderScale: root.cardRenderScale
+        // 1. The hole cards – they stand behind the plate and only their upper
+        //    part is visible. As soon as the player folds, they are gone.
+        HoleCards {
+            id: cards
+            x: root._hMargin
+            y: 0
+            z: 1
+            cardH: root._cardH
             card0: root.card0
             card1: root.card1
             fade0: root.fade0
             fade1: root.fade1
-            avatarSource: root.avatarSource
-            folded: root.folded
+            cardRenderScale: root.cardRenderScale
+            visible: root.isActive && !root.folded
+        }
+
+        // 2. The plate: name + stack (or action), the avatar hangs on its right end.
+        Rectangle {
+            id: plate
+            x: 0
+            y: root._plateY
+            width: body.width
+            height: root._plateH
+            radius: height / 2
+            color: "transparent"
+            z: 10
+
+            // A raised card with a soft shadow, now with the radius of the pill.
+            PlayerBoxBackground { radius: plate.height / 2 }
+
+            // Highlight: the active player gets a gold frame + a soft glow.
+            PlayerTurnGlow { active: root.isAtTurn; radius: plate.height / 2 }
+
+            AppText {
+                x: root._textX
+                y: 6
+                width: root._textW
+                height: 16
+                verticalAlignment: Text.AlignVCenter
+                horizontalAlignment: Text.AlignLeft
+                color: "#eff1f5"
+                font.pixelSize: root._nameSize
+                font.weight: Font.DemiBold
+                font.letterSpacing: 0.2
+                elide: Text.ElideRight
+                text: root.seatData && root.seatData.name !== "" ? root.seatData.name : "---"
+            }
+
+            // The second line: the stack – or, for two seconds, what the player did.
+            AppText {
+                x: root._textX
+                y: 22
+                width: root._textW
+                height: 15
+                verticalAlignment: Text.AlignVCenter
+                horizontalAlignment: Text.AlignLeft
+                elide: Text.ElideRight
+                text: root._showAction
+                      ? root.actionText
+                      : (root.seatData && root.seatData.name !== ""
+                            ? (GameTable ? GameTable.amount(root.seatData.stack) : "") : "")
+                color: root._showAction
+                       ? Config.Theme.actionEdgeColor(root.action)
+                       : Config.Theme.colorAccent
+                font.pixelSize: root._stackSize
+                font.bold: true
+                Behavior on color { ColorAnimation { duration: 150 } }
+            }
+
+            // Action timeout: a slim progress bar inside the plate, at its lower
+            // edge – it belongs to the seat, not to the cards.
+            PlayerTimeoutBar {
+                id: timeoutBar
+                readonly property bool atTurn: (typeof GameTable !== "undefined" && GameTable)
+                                               && GameTable.timeoutSeatId === root.seatIndex
+                active: atTurn
+                visible: atTurn && !root.isWinner && !root._showAction
+                width: root._textW
+                height: 4
+                x: root._textX
+                y: plate.height - 9
+                z: 14
+            }
+        }
+
+        // 3. The round avatar on the right end of the plate.
+        PlayerAvatar {
+            id: avatar
+            x: body.width - root._avatarD
+            y: root._plateY + Math.round((root._plateH - root._avatarD) / 2)
+            width: root._avatarD
+            height: root._avatarD
+            z: 12
+            source: root.avatarSource
             playerActive: root.isActive
         }
 
-        // Portrait: name + (note badge) + stack on one line. Anchors instead of fixed
-        // halves, so that the badge only takes the room it really needs
-        // and the name elides exactly that much earlier.
+        // Winner highlight: a golden frame around the plate + a "WINNER" badge.
+        // The frame encloses the plate, not the cards behind it.
         Item {
-            visible: !root.wideLayout
-            width: parent.width - 2 * playerBox.hMargin
-            height: 15
-            x: playerBox.hMargin
-            y: root.bodyH - height - 4
-
-            AppText {
-                anchors.left: parent.left
-                anchors.right: compactBadge.visible ? compactBadge.left : compactStack.left
-                anchors.rightMargin: 4
-                anchors.verticalCenter: parent.verticalCenter
-                horizontalAlignment: Text.AlignLeft
-                color: "#eff1f5"
-                font.pixelSize: 12
-                font.weight: Font.DemiBold
-                font.letterSpacing: 0.3
-                elide: Text.ElideRight
-                text: root.seatData && root.seatData.name !== "" ? root.seatData.name : "---"
-            }
-
-            PlayerNoteBadge {
-                id: compactBadge
-                anchors.right: compactStack.left
-                anchors.rightMargin: 4
-                anchors.verticalCenter: parent.verticalCenter
-                rating: root.playerRating
-                note: root.playerNote
-                glyphSize: 10
-            }
-
-            AppText {
-                id: compactStack
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                horizontalAlignment: Text.AlignRight
-                color: Config.Theme.colorAccent
-                font.pixelSize: 12
-                font.bold: true
-                text: root.seatData && root.seatData.name !== ""
-                      ? (GameTable ? GameTable.amount(root.seatData.stack) : "") : ""
-            }
-        }
-
-        // Widescreen: Name + Flagge + Stack 2-zeilig
-        Item {
-            id: infoBar
-            visible: root.wideLayout
-            width: parent.width - 2 * playerBox.hMargin
-            height: 36
-            x: playerBox.hMargin
-            y: root.bodyH - height - 4
-
-            AppText {
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.right: wideBadge.visible ? wideBadge.left : parent.right
-                anchors.rightMargin: wideBadge.visible ? 4 : 2
-                horizontalAlignment: Text.AlignLeft
-                color: "#eff1f5"
-                font.pixelSize: 15
-                font.weight: Font.DemiBold
-                font.letterSpacing: 0.3
-                elide: Text.ElideRight
-                text: root.seatData && root.seatData.name !== "" ? root.seatData.name : "---"
-            }
-
-            // The note/rating goes into the NAME LINE, not into the lower line: there
-            // the flag (22+6) and the stack (up to ~55 px with six
-            // digits) already stand – together with the badge that would be more than the 106 px
-            // inner width of the box (oppBaseWidth 114 − 2×hMargin). Up here
-            // it only competes with the name, which elides anyway.
-            PlayerNoteBadge {
-                id: wideBadge
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.topMargin: 2
-                rating: root.playerRating
-                note: root.playerNote
-                glyphSize: 13
-            }
-
-            Image {
-                visible: root.countryCode !== ""
-                anchors.left: parent.left
-                anchors.bottom: parent.bottom
-                width: 22
-                height: 15
-                source: root.countryCode !== ""
-                    ? "qrc:/resources/cflags/" + root.countryCode + ".svg" : ""
-                fillMode: Image.PreserveAspectFit
-                smooth: true
-            }
-
-            AppText {
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                horizontalAlignment: Text.AlignRight
-                color: Config.Theme.colorAccent
-                font.pixelSize: 15
-                font.bold: true
-                text: root.seatData && root.seatData.name !== ""
-                      ? (GameTable ? GameTable.amount(root.seatData.stack) : "") : ""
+            x: 0
+            y: root._plateY
+            width: body.width
+            height: root._plateH
+            z: 16
+            PlayerWinnerOverlay {
+                active: root.isWinner
+                below: root.winnerBelow
+                radius: plate.height / 2
             }
         }
 
@@ -286,51 +293,11 @@ SeatBox {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
         }
-
-        // Winner highlight: a golden frame (it does NOT cover the cards) +
-        // a "WINNER" badge. The badge is above the box by default; only the topmost box
-        // (winnerBelow) shows it below, otherwise it would bump into the screen edge.
-        // A child of playerBox (not of root): the frame should enclose the BODY,
-        // not the empty base height reserved below it.
-        PlayerWinnerOverlay {
-            active: root.isWinner
-            below: root.winnerBelow
-        }
     }
 
-    // Action display (fold/check/call/bet/raise/all-in) – centred above the
-    // hole cards in the normal player boxes.
-    PlayerActionBadge {
-        id: actionBadge
-        visible: root.actionText !== "" && !root.isWinner
-        action: root.action
-        label: root.actionText
-        z: 18
-
-        readonly property real cardsCenterX: playerBox.hMargin + cardRow.cardsCenterX
-        readonly property real cardsCenterY: cardRow.y + cardRow.height / 2
-        x: cardsCenterX - width / 2
-        y: cardsCenterY - height / 2
-    }
-
-    // Action timeout: a slim progress bar at the place of the action
-    // badge while this seat is to act (it counts down over the timeout duration).
-    PlayerTimeoutBar {
-        id: timeoutBar
-        readonly property bool atTurn: (typeof GameTable !== "undefined" && GameTable)
-                                       && GameTable.timeoutSeatId === root.seatIndex
-        active: atTurn
-        visible: atTurn && !root.isWinner && root.actionText === ""
-        width: 44
-        height: 9
-        z: 18
-        x: actionBadge.cardsCenterX - width / 2
-        y: actionBadge.cardsCenterY - height / 2
-    }
-
-    // The bet (chip + amount) + the dealer/small/big blind button – grouped.
+    // The bet (chip pile + amount) + the dealer/small/big blind button – grouped.
     // Top/bottom centre (betSide top/bottom): the full box width; the bet centred,
-    // the button right-aligned with a 6px outer margin – identical to the self box.
+    // the button right-aligned with a 6px outer margin.
     // Sides (betSide left/right): the button below the bet, both vertically centred.
     Item {
         id: betGroup
@@ -339,31 +306,33 @@ SeatBox {
 
         readonly property bool split: root.betSplit
         readonly property bool horizontal: !split && (root.betSide === "bottom" || root.betSide === "top")
-        // In the style "inset" the bet sits in the box base – the group then
-        // only carries the dealer/blind puck. The same holds when the bet lies
-        // on the felt (betOnFelt): then the group is the puck alone.
+        // In the style "inset" the bet sits in the box base – the group then only
+        // carries the dealer/blind puck. The same holds when the bet lies on the
+        // felt (betOnFelt): then the group is the puck alone.
         readonly property bool chipHere: root.bet > 0 && !root.betInset && !root.betOnFeltShown
         readonly property real betW: chipHere ? betRow.width : 0
         readonly property real betH: chipHere ? betRow.height : 0
         readonly property real btnW: root.buttonVisible ? buttonImg.width : 0
         readonly property real btnH: root.buttonVisible ? buttonImg.height : 0
 
-        width: (horizontal || split) ? playerBox.width : Math.max(betW, btnW)
-        height: horizontal ? Math.max(betH, btnH) : playerBox.height
+        width: (horizontal || split) ? body.width : Math.max(betW, btnW)
+        height: horizontal ? Math.max(betH, btnH) : body.height
 
         x: split ? 0
-         : root.betSide === "right" ? playerBox.width + 8
+         : root.betSide === "right" ? body.width + 8
          : root.betSide === "left"  ? -width - 8
          : 0
         y: split ? 0
-         : root.betSide === "bottom" ? playerBox.height + 7
+         : root.betSide === "bottom" ? body.height + 7
          : root.betSide === "top"    ? -height - 7
-         : (playerBox.height - height) / 2
+         : (body.height - height) / 2
 
         BetChip {
             id: betRow
             visible: betGroup.chipHere
             amount: root.bet
+            iconSize: 16
+            fontSize: 12
             textColor: "#f0f0f0"
             // split: the bet to the right NEXT TO the box; otherwise centred inside.
             x: betGroup.split ? betGroup.width + 8 : (betGroup.width - width) / 2
@@ -381,9 +350,6 @@ SeatBox {
                : betGroup.horizontal
                ? (betGroup.width - width - 6)
                : (root.betSide === "right" ? 0 : (betGroup.width - width))
-            // At the sides (betSide left/right) the puck sat in the LOWER slot, because
-            // the bet stood above it. If the bet sits in the base, the
-            // slot is free → the puck goes vertically centred next to the box.
             y: (betGroup.horizontal || betGroup.split || root.betInset)
                ? (betGroup.height - height) / 2
                : (betGroup.height * 5 / 6 - height / 2)
@@ -392,14 +358,16 @@ SeatBox {
 
     // ── The bet ON THE FELT ──────────────────────────────────────────────────
     // The bet is part of the table, not of the player's plate: it lies on the
-    // felt between the box and the pot, slightly offset towards the centre.
-    // Position comes from GamePage (betFeltPoint), which knows where the centre
-    // of the table is and how far the box reaches in that direction. The puck
-    // stays next to the box (betGroup above) - it belongs to the seat.
+    // felt between the box and the pot as a pile of chips. Position comes from
+    // GamePage (betFeltPoint). The puck stays next to the box (betGroup above) -
+    // it belongs to the seat.
     BetChip {
         id: feltBet
         visible: root.betOnFeltShown
         amount: root.bet
+        iconSize: 13
+        fontSize: 10
+        labelBelow: true
         textColor: "#f0f0f0"
         z: 24
         x: root.betAt.x - width / 2
@@ -414,7 +382,7 @@ SeatBox {
         // Only above the box body – the base height reserved below it is
         // empty table, no context menu may open there.
         id: contextArea
-        anchors.fill: playerBox
+        anchors.fill: body
         z: 30
         enabled: root.hasContextActions
         acceptedButtons: Qt.RightButton
@@ -451,10 +419,6 @@ SeatBox {
         id: contextMenu
 
         // Adjust the width to the widest visible entry (at least 180).
-        // Necessary because the ListView contentItem of the menu reports no
-        // implicitWidth – without this the width would be determined by the background alone and
-        // longer (also translated) labels such as "Report inappropriate avatar"
-        // would be cut off.
         implicitWidth: {
             var w = 180
             for (var i = 0; i < count; ++i) {

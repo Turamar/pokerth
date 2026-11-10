@@ -54,8 +54,8 @@ Item {
             anchors.centerIn: parent
             visible: strip.amount > 0
             amount: strip.amount
-            iconSize: 15
-            fontSize: 13
+            iconSize: 12
+            fontSize: 11
             textColor: "#eff1f5"
         }
     }

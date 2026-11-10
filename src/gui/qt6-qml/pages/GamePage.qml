@@ -557,54 +557,33 @@ Rectangle {
             // not only the absolute width but how much additional width
             // arises at the same height: that way the boxes react visibly
             // faster when dragging from portrait to wide.
-            // The base dimensions: in portrait the opponent box is LOWER (71 instead of
-            // 84), because otherwise the square avatar (= topRow.height) gets too
-            // wide and the cards stick out of the cardsLane
-            // horizontally. With 71 topRow becomes ≈ 45 → 2 cards + the avatar fit
-            // comfortably next to each other. In landscape (84) the 2 line
-            // footer is 44 px, topRow = 40 → the avatar/cards are visibly larger.
+            // The base dimensions. Since the plate of 2026-11-10 (cards BEHIND the
+            // plate, name + stack in a pill, round avatar on its right end) the box no
+            // longer needs a separate row for the cards: the envelope is 112 × 70 in
+            // EVERY orientation – the cards (40 high) stick out of the plate (44 high)
+            // and are covered by it up to 14 px. Before it was 84 (landscape) or 71
+            // (portrait) high, and the width followed the row height.
             //
             // The seat style "inset" (Config.SeatStyle): the bet stands in the base
             // INSIDE the box – the box gets higher by betStripH for that. This
             // additional height deliberately sits in oppBaseHeight/selfBaseHeight, so that
             // the complete space bisection below (boxScale, the ellipse radii,
             // the community scale, the chat/info dock) automatically computes with the larger box
-            // and no new overlaps arise. The dimensions DERIVED
-            // from it (the box width, the card/avatar height) subtract it
-            // again – the box grows in height only.
+            // and no new overlaps arise.
             readonly property int betStripH: Config.SeatStyle.betStripExtra
-            readonly property int oppBaseHeight: (wide ? 84 : 71) + betStripH
-            // A dynamic width: 2×hMargin + AvatarCardRow.implicitWidth.
-            // AvatarCardRow: avatarH + gap(4) + 2·cardW + cardSpacing(4)
-            //   Landscape: topRow=40, cardW=29 → 2×4 + 40 + 4 + 2×29 + 4 = 114
-            //   Portrait : topRow=43, cardW=31 → 2×4 + 43 + 4 + 2×31 + 4 = 121
-            readonly property int oppBaseWidth: {
-                var rowH = oppBaseHeight - (wide ? 44 : 28) - betStripH
-                var cw   = Math.round(rowH * 120 / 168)
-                return 2 * 4 + rowH + 4 + 2 * cw + 4
-            }
-            // The self box is deliberately LARGER than the opponent boxes (your own box is prominent) —
-            // in EVERY mode: desktop wide 96, compact landscape 94, portrait 82
-            // (the opponent boxes: 84 or 71). The bisection derives selfVisualH/bottomY/
+            readonly property int oppBaseHeight: 70 + betStripH
+            // 2 × hMargin(4) + two cards (2 × 29 + 4) = 8 + 62 = 70 … the plate spans
+            // the full width, so the box is as wide as the plate: 112.
+            readonly property int oppBaseWidth: 112
+            // The self box is deliberately LARGER than the opponent boxes (your own box is prominent) –
+            // in EVERY mode 148 × 80. The bisection derives selfVisualH/bottomY/
             // selfClearX/selfVisualTopY from selfBaseHeight → it automatically reserves
             // more room (the opponents' bottom seats move up), hence no overlaps.
             // As a spectator an ordinary seat sits at the bottom: the same dimensions as the
             // opponent boxes, so that the ring looks even.
             readonly property int selfBaseHeight:
-                spectating ? oppBaseHeight
-                           : ((!wide ? 82 : (Config.Responsive.landscapeCompact ? 94 : 96))
-                              + betStripH)
-            // The self box width is dynamic: the same spacings as the opponent boxes.
-            //   Compact  : cardsH=46, cardW=33, avW=46 → 2×4 + 46 + 4 + 2×33 + 4 = 128
-            //   Landscape: cardsH=40, cardW=29, avW=40 → 2×4 + 40 + 4 + 2×29 + 4 = 114
-            //   Portrait : cardsH=41, cardW=29, avW=41 → 2×4 + 41 + 4 + 2×29 + 4 = 115
-            readonly property int selfBaseWidth: {
-                if (spectating) return oppBaseWidth
-                var cH  = selfBaseHeight - betStripH - 12 - (Config.Responsive.landscape ? 32 : 18)
-                var cW  = Math.round(cH * 120 / 168)
-                var avS = Math.min(cH, 60)
-                return 2 * 4 + avS + 4 + cW * 2 + 4
-            }
+                spectating ? oppBaseHeight : 80 + betStripH
+            readonly property int selfBaseWidth: spectating ? oppBaseWidth : 148
             readonly property real opponentGapBase: 10
             readonly property real opponentHorizontalGapBase: opponentGapBase * 2.8
             readonly property real selfGapBase: opponentGapBase * 2
@@ -941,9 +920,10 @@ Rectangle {
                 var tx = Math.abs(ux) < 1e-4 ? 1e9 : halfW / Math.abs(ux)
                 var ty = Math.abs(uy) < 1e-4 ? 1e9 : halfH / Math.abs(uy)
                 var edge = Math.min(tx, ty)
-                // Support of the chip itself (52 × 20 base px) along the direction,
-                // so that a whole chip fits next to the box and not only its point.
-                var chipHalf = (Math.abs(ux) * 26 + Math.abs(uy) * 10) * s
+                // Support of the bet pile itself along the direction, so that the
+                // whole pile fits next to the box and not only its point. The pile
+                // is up to ~48 × 40 base px (four chip columns, the amount below).
+                var chipHalf = (Math.abs(ux) * 24 + Math.abs(uy) * 20) * s
                 var gap = 6 * s
                 var d = edge + gap + chipHalf
                 var px = cx + ux * d
@@ -956,8 +936,8 @@ Rectangle {
                 // upper neighbour.
                 var blockTop = communityCenterY - 60 * communityScale
                 var blockBottom = communityCenterY + 32 * communityScale
-                var chipHalfV = 10 * s
-                var chipHalfU = 26 * s
+                var chipHalfV = 20 * s
+                var chipHalfU = 24 * s
                 var blockHalfW = 132 * communityScale + 6
                 if (Math.abs(px - width / 2) < blockHalfW + chipHalfU) {
                     if (cy < communityCenterY)
@@ -966,8 +946,8 @@ Rectangle {
                         py = Math.max(py, blockBottom + 2 + chipHalfV)
                 }
                 // Never beyond the edge of the table.
-                var mx = 8 + 26 * s
-                var my = 8 + 10 * s
+                var mx = 8 + 24 * s
+                var my = 8 + 20 * s
                 px = Math.max(mx, Math.min(width - mx, px))
                 py = Math.max(my, Math.min(height - my, py))
                 return Qt.point(px, py)
@@ -1368,7 +1348,6 @@ Rectangle {
                 height: tableZone.selfBaseHeight
                 transformOrigin: Item.Center
                 scale: tableZone.boxScale
-                maxAvatarSize: tableZone.wide ? 60 : 54
                 // Rasterize the cards in the real screen size (boxScale × zoom).
                 cardRenderScale: tableZone.boxScale * tableZone.zoomRenderMul
             }

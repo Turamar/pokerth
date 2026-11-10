@@ -60,7 +60,8 @@
         <file>components/StartFooter.qml</file>
         <file>components/StyleSettings.qml</file>
         <file>components/StyleCard.qml</file>
-        <file>components/AvatarCardRow.qml</file>
+        <file>components/HoleCards.qml</file>
+        <file>components/PlayerAvatar.qml</file>
         <file>components/SafeAreaInsets.qml</file>
         <file>components/BrandHeader.qml</file>
         <file>components/CardImage.qml</file>

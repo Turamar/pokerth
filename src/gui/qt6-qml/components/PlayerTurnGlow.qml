@@ -11,6 +11,8 @@ Item {
     id: glow
     property bool active: false
     property int borderWidth: 1
+    // Corner radius of the frame; the pill-shaped plate passes its own.
+    property int radius: 6
 
     anchors.fill: parent
     anchors.margins: -2
@@ -30,7 +32,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: "transparent"
-        radius: 6
+        radius: glow.radius
         border.color: "#FFD54A"
         border.width: glow.borderWidth
         layer.enabled: Config.Theme.effectsEnabled && glow.active
@@ -48,7 +50,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: "transparent"
-        radius: 6
+        radius: glow.radius
         border.color: "#CCFFD54A"
         border.width: glow.borderWidth
     }

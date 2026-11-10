@@ -99,7 +99,6 @@ set(QML_FILES
     components/AppCheckBox.qml
     components/AppLabel.qml
     components/AppText.qml
-    components/AvatarCardRow.qml
     components/SafeAreaInsets.qml
     components/BetChip.qml
     components/BlindButtonImage.qml
@@ -135,6 +134,7 @@ set(QML_FILES
     components/GlobalNoticePopup.qml
     components/GuideOverlay.qml
     components/GuiSettings.qml
+    components/HoleCards.qml
     components/InternetGameSettings.qml
     components/LobbyStatsBar.qml
     components/LocalGameSettings.qml
@@ -146,6 +146,7 @@ set(QML_FILES
     components/PlacementResult.qml
     components/PlayerActionBadge.qml
     components/PlayerActionIcon.qml
+    components/PlayerAvatar.qml
     components/PlayerBetStrip.qml
     components/PlayerBoxBackground.qml
     components/PlayerListItem.qml
