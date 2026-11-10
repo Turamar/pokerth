@@ -1338,39 +1338,7 @@ Rectangle {
                         tableZone.oppBaseHeight * tableZone.oppScale / 2,
                         seatSlot.index)
 
-                    // TEMPORARY diagnostic (console.warn, so that it really lands in
-                    // pokerth-debug.log – console.log is not written there).
-                    // Deliberately a repeating timer and not a change handler: during
-                    // the layout pass the neighbours of `slot` are still stale, so a
-                    // handler printed a plate position that did not belong to the
-                    // centre it printed with it. A timer fires after the frame is
-                    // settled, and repeats, so the last line before the table closes
-                    // is the real picture.
-                    Timer {
-                        interval: 1000
-                        running: true
-                        repeat: true
-                        onTriggered: {
-                            if (tableZone.width < 1 || betBox.bet <= 0) return
-                            console.warn("BETSTATE seat=" + index
-                                + " slot=" + slotName
-                                + " bet=" + betBox.bet
-                                + " plate=" + Math.round(x + width / 2) + ","
-                                + Math.round(y + height / 2)
-                                + " felt=" + Math.round(feltBet.x) + ","
-                                + Math.round(feltBet.y)
-                                + " tableCentre=" + Math.round(tableZone.width / 2) + ","
-                                + Math.round(tableZone.communityCenterY)
-                                + " zone=" + Math.round(tableZone.width) + "x"
-                                + Math.round(tableZone.height)
-                                + " scale=" + tableZone.oppScale.toFixed(3)
-                                + " inset=" + betBox.betInset
-                                + " feltShown=" + betBox.betOnFeltShown)
-                        }
-                    }
-
                     GamePlayerBox {
-                        id: betBox
                         anchors.fill: parent
                         seatIndex: seatSlot.index
                         // Rasterize the cards in the real screen size (oppScale × zoom).
