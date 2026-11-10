@@ -175,7 +175,7 @@ SeatBox {
         //    part is visible. As soon as the player folds, they are gone.
         HoleCards {
             id: cards
-            x: root._hMargin
+            x: Math.round((body.width - width) / 2)
             y: 0
             z: 1
             cardH: root._cardH
@@ -199,9 +199,7 @@ SeatBox {
             z: 10
 
             // A raised card with a soft shadow, now with the radius of the pill.
-            // Opaque on purpose: the hole cards lie BEHIND the plate and must not
-            // shimmer through it.
-            PlayerBoxBackground { radius: plate.height / 2; opacity: 1.0 }
+            PlayerBoxBackground { radius: plate.height / 2 }
 
             // Highlight: the active player gets a gold frame + a soft glow.
             PlayerTurnGlow { active: root.isAtTurn; radius: plate.height / 2 }

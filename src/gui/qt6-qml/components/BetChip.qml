@@ -64,17 +64,17 @@ Item {
     readonly property int _pileH: _columns.length > 0
         ? _chipD + (_maxCount - 1) * _stackStep : 0
 
-    // A colour per denomination – no text on the chip, so the colour is the only
-    // thing that has to tell them apart. Cash works on the same ladder in cents.
-    function chipColor(value) {
-        if (value >= 50000) return "#0f766e"   // teal
-        if (value >= 10000) return "#1d4ed8"   // blue
-        if (value >= 2500)  return "#c2410c"   // orange
-        if (value >= 500)   return "#7e22ce"   // purple
-        if (value >= 100)   return "#26303d"   // near black
-        if (value >= 25)    return "#15803d"   // green
-        if (value >= 10)    return "#b91c1c"   // red
-        return "#dfe3ea"                        // white: 1 and 5
+    // Two colours per denomination: the body and the lighter face. No digits on
+    // the chip – the colour is the denomination. Cash uses the same ladder in cents.
+    function chipColors(value) {
+        if (value >= 50000) return ["#0f766e", "#2dd4bf"]   // teal
+        if (value >= 10000) return ["#1d4ed8", "#60a5fa"]   // blue
+        if (value >= 2500)  return ["#c2410c", "#fb923c"]   // orange
+        if (value >= 500)   return ["#6d28d9", "#c084fc"]   // purple
+        if (value >= 100)   return ["#1f2937", "#6b7280"]   // near black
+        if (value >= 25)    return ["#15803d", "#4ade80"]   // green
+        if (value >= 10)    return ["#b91c1c", "#f87171"]   // red
+        return ["#9ca3af", "#e5e7eb"]                        // silver: 1 and 5
     }
 
     width: implicitWidth
@@ -124,26 +124,60 @@ Item {
                 Repeater {
                     model: col.entry.count
 
-                    // The lowest chip is drawn first, every next one is offset upwards.
-                    Rectangle {
+                    // One chip, drawn: coloured body, white marks on the rim, a
+                    // lighter face with a thin ring. The lowest chip is drawn
+                    // first, every next one is offset upwards – that is the stack.
+                    Canvas {
+                        id: chip
                         width: betChip._chipD
                         height: width
-                        radius: width / 2
-                        x: 0
                         y: (col.entry.count - 1 - index) * betChip._stackStep
-                        color: betChip.chipColor(col.entry.value)
-                        border.width: 1
-                        border.color: Qt.lighter(color, 1.7)
 
-                        // The face of the chip: a thin light ring, no digits.
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: Math.round(parent.width * 0.46)
-                            height: width
-                            radius: width / 2
-                            color: "transparent"
-                            border.width: 1
-                            border.color: Qt.rgba(1, 1, 1, 0.55)
+                        readonly property var face: betChip.chipColors(col.entry.value)
+
+                        Connections {
+                            target: col
+                            function onEntryChanged() { chip.requestPaint() }
+                        }
+
+                        onPaint: {
+                            var ctx = getContext("2d")
+                            ctx.clearRect(0, 0, width, height)
+                            var r = width / 2
+                            var body = chip.face[0]
+                            var inner = chip.face[1]
+
+                            // The body.
+                            ctx.beginPath()
+                            ctx.arc(r, r, r - 0.6, 0, 6.2832)
+                            ctx.fillStyle = body
+                            ctx.fill()
+
+                            // The rim marks: eight white segments, like a real chip.
+                            ctx.lineWidth = Math.max(1, r * 0.26)
+                            ctx.strokeStyle = "#f8fafc"
+                            for (var i = 0; i < 8; ++i) {
+                                var a0 = i * 0.7854 + 0.10
+                                ctx.beginPath()
+                                ctx.arc(r, r, r * 0.80, a0, a0 + 0.30)
+                                ctx.stroke()
+                            }
+
+                            // The face: a lighter disc with a thin light ring.
+                            ctx.beginPath()
+                            ctx.arc(r, r, r * 0.52, 0, 6.2832)
+                            ctx.fillStyle = inner
+                            ctx.fill()
+                            ctx.lineWidth = Math.max(0.7, r * 0.09)
+                            ctx.strokeStyle = "rgba(255,255,255,0.72)"
+                            ctx.stroke()
+
+                            // A dark outline keeps stacked chips apart.
+                            ctx.beginPath()
+                            ctx.arc(r, r, r - 0.6, 0, 6.2832)
+                            ctx.lineWidth = 1
+                            ctx.strokeStyle = "rgba(0,0,0,0.55)"
+                            ctx.stroke()
                         }
                     }
                 }

@@ -95,7 +95,7 @@ SeatBox {
 
         HoleCards {
             id: cards
-            x: root.hMargin
+            x: Math.round((body.width - width) / 2)
             y: 0
             z: 1
             cardH: root._cardH
@@ -125,8 +125,8 @@ SeatBox {
             color: "transparent"
             z: 10
 
-            // Opaque on purpose: the hole cards lie BEHIND the plate.
-            PlayerBoxBackground { radius: plate.height / 2; opacity: 1.0 }
+            // The plate is opaque (cards behind it), so the radius passes through.
+            PlayerBoxBackground { radius: plate.height / 2 }
 
             // Highlight: a gold frame + a soft glow when I am to act (the frame a bit
             // stronger than with the opponent boxes).

@@ -23,9 +23,11 @@ Rectangle {
     readonly property bool hasAccent: accentName !== ""
     readonly property color accent: hasAccent ? accentName : "transparent"
 
-    // Base gradient of the neutral look.
-    readonly property color baseTop: Qt.lighter("#394150", 1.18)
-    readonly property color baseBottom: "#1d222b"
+    // Base gradient of the neutral look: near black with a cool tint. Opaque on
+    // purpose – since 2026-11-10 the hole cards lie BEHIND the plate and must not
+    // shimmer through it.
+    readonly property color baseTop: "#22272f"
+    readonly property color baseBottom: "#0d1014"
 
     function tinted(base, strength) {
         return boxBackground.hasAccent
@@ -36,7 +38,7 @@ Rectangle {
 
     anchors.fill: parent
     radius: 6
-    opacity: 0.9
+    opacity: 1.0
     gradient: Gradient {
         GradientStop { position: 0.0; color: boxBackground.tinted(boxBackground.baseTop, 0.34) }
         GradientStop { position: 1.0; color: boxBackground.tinted(boxBackground.baseBottom, 0.22) }
@@ -44,7 +46,7 @@ Rectangle {
     border.color: boxBackground.hasAccent
                   ? Qt.rgba(boxBackground.accent.r, boxBackground.accent.g,
                             boxBackground.accent.b, 0.60)
-                  : Qt.rgba(1, 1, 1, 0.06)
+                  : Qt.rgba(1, 1, 1, 0.10)
     border.width: 1
 
     layer.enabled: Config.Theme.effectsEnabled
