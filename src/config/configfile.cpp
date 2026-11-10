@@ -87,7 +87,10 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	// !!!! Revision number of the config defaults !!!!!
 	// 109: ServerTlsCertFile / ServerTlsKeyFile were added.
 	// 110: FlipsideStyle / FlipsideStyleFile were added (widget card back styles).
-	configRev = 111;
+	// 112: QmlCardDeckStyle defaults to nobus_4c_classic, configs that still
+	//      carry the old default ("default") are switched over (see the
+	//      version hack section in updateConfig).
+	configRev = 112;
 
 	// standard defaults
 	logOnOffDefault = "1";
@@ -293,7 +296,11 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	// <AppDataDir>/gfx/qml/<table|cards>/<name>. Keys of its own, so that the
 	// widget client (Current*Style stores full XML paths) stays untouched.
 	configList.push_back(ConfigInfo("QmlGameTableStyle", CONFIG_TYPE_STRING, "default"));
-	configList.push_back(ConfigInfo("QmlCardDeckStyle", CONFIG_TYPE_STRING, "default"));
+	// The shipped card deck: the four colour "Nobus 4 colours classic" set
+	// (blue diamonds, red hearts, black spades, green clubs). It reads better
+	// than the plain two colour deck at the small card sizes of the QML table,
+	// and the corner index stays legible behind the player plate.
+	configList.push_back(ConfigInfo("QmlCardDeckStyle", CONFIG_TYPE_STRING, "nobus_4c_classic"));
 	configList.push_back(ConfigInfo("QmlCardBackStyle", CONFIG_TYPE_STRING, "default"));
 	// QML client: seat style of the player boxes (config/SeatStyle.qml) – where a
 	// player's bet is shown. "inset" = in the base INSIDE the box,
@@ -771,6 +778,16 @@ void ConfigFile::updateConfig(ConfigState myConfigState)
 			if (configRev == 98) {
 				// this means 1.0
 				setElementValue("CurrentCardDeckStyle", "");
+			}
+
+			// 112: the shipped QML card deck became "Nobus 4 colours classic".
+			// A config that still names the old built-in default has never
+			// chosen a deck, so it follows the new one; an explicit choice
+			// (lemming, star_trek, ...) is left alone.
+			if (configRev == 112) {
+				QDomElement deckElement = config.firstChildElement("QmlCardDeckStyle");
+				if (!deckElement.isNull() && deckElement.attribute("value") == "default")
+					setElementValue("QmlCardDeckStyle", "nobus_4c_classic");
 			}
 			///////// VERSION HACK SECTION ///////////////////////
 
