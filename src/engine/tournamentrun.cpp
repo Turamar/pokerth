@@ -324,6 +324,9 @@ bool TournamentRun::seatLocalTable(string &error)
 	table->ids = ordered;
 
 	if(!m_host->seat(table->ids, static_cast<int>(buttonOf(*table)), error)) return false;
+	// What the host was told, in the order it heard it: step() reads the stacks
+	// back by this list, because a bust or a newcomer may have changed ids since.
+	table->seated = table->ids;
 	table->dirty = false;
 	return true;
 }
@@ -359,8 +362,13 @@ bool TournamentRun::step(string &error)
 	Table *local = localTable();
 	if(local && m_host) {
 		const LocalTableHost::Snapshot snap = m_host->snapshot();
-		for(size_t seat = 0; seat < local->ids.size() && seat < snap.stacks.size(); ++seat) {
-			m_roster.setStack(local->ids[seat], snap.stacks[seat]);
+		// By the seating the host was given, not by the current ids: a bust at
+		// this table has already been struck off ids by the step before, and a
+		// merge may have seated newcomers there, so the two lists differ in
+		// length and order. Reading the stacks by ids would hand one person's
+		// chips to the next one.
+		for(size_t seat = 0; seat < local->seated.size() && seat < snap.stacks.size(); ++seat) {
+			m_roster.setStack(local->seated[seat], snap.stacks[seat]);
 		}
 		if(snap.button >= 0) local->button = static_cast<unsigned>(snap.button);
 		local->lastBigBlind = snap.lastBigBlind;

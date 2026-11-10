@@ -166,6 +166,11 @@ private:
 		// Roster ids in seat order. The engine packs seats, so there are no
 		// holes: a rebuild writes this list as seats 0..n-1.
 		std::vector<int> ids;
+		// The same list as it was handed to the host when the table was last
+		// seated. The host's snapshot comes back in that order, while ids may
+		// already have lost a bust or gained a newcomer since: reading the stacks
+		// by the current list would shift them onto the wrong people.
+		std::vector<int> seated;
 		// Roster id of the button for the next hand, not the seat: a rebuild
 		// keeps the button on the same person.
 		unsigned button = 0;

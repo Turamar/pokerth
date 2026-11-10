@@ -524,6 +524,23 @@ public:
 		}
 
 		const PlayerState::Roster &people = m_run->roster();
+		// The stacks the controller seats must be the stacks the last hand at
+		// this table ended with, person by person: the roster carries them over
+		// from the snapshot, and a controller that maps them by seat number
+		// instead of by person shows up here as somebody else's chips.
+		if(!m_lastIds.empty()) {
+			for(size_t seat = 0; seat < ids.size(); ++seat) {
+				for(size_t was = 0; was < m_lastIds.size() && was < m_lastStacks.size(); ++was) {
+					if(m_lastIds[was] != ids[seat]) continue;
+					if(people.stack(ids[seat]) != m_lastStacks[was]) {
+						m_sane = false;
+						error = "a stack was carried over to the wrong player";
+						return false;
+					}
+					break;
+				}
+			}
+		}
 		GameData gameData;
 		gameData.gameType = GAME_TYPE_NORMAL;
 		gameData.allowSpectators = false;
@@ -652,6 +669,8 @@ public:
 				snap.lastBigBlind = m_ids[static_cast<size_t>(bigBlind)];
 			}
 		}
+		m_lastIds = m_ids;
+		m_lastStacks = snap.stacks;
 		return snap;
 	}
 
@@ -683,6 +702,12 @@ private:
 	mutable bool m_sane = true;
 	int m_seated = 0;
 	int m_hands = 0;
+	// The seating of the last snapshot and the stacks it reported, in that
+	// order: the next seat() must bring exactly those stacks back for the same
+	// people, or the controller has carried them over by seat instead of by
+	// person.
+	mutable std::vector<int> m_lastIds;
+	mutable std::vector<int> m_lastStacks;
 };
 
 /* Self test of the state store and the bank: money and counters have to survive
