@@ -29,7 +29,9 @@ Item {
     property int maxPerColumn: 4
 
     readonly property int _chipD: Math.max(9, iconSize)
-    readonly property int _stackStep: Math.max(2, Math.round(_chipD * 0.18))
+    // The offset of a chip in a stack: a quarter of the diameter, otherwise a
+    // column of two does not read as a stack at all.
+    readonly property int _stackStep: Math.max(2, Math.round(_chipD * 0.25))
     readonly property int _colStep: Math.max(1, _chipD - Math.round(_chipD * 0.30))
     readonly property bool _tournament: (typeof GameTable !== "undefined" && GameTable)
         ? GameTable.tournamentMode : true
