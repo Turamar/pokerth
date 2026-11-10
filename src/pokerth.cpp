@@ -399,7 +399,24 @@ int main(int argc, char *argv[])
 	engine.rootContext()->setContextProperty("Wallet", &walletHandler);
 	engine.rootContext()->setContextProperty("LogStore", logHandler);
 	engine.rootContext()->setContextProperty("NetworkGame", networkGameHandler);
-	engine.load(QUrl(QStringLiteral("qrc:/pokerth.qml")));
+	// A development switch for the table look: with POKERTH_QML_DIR pointing at
+	// the source tree of the QML client (src/gui/qt6-qml) the interface is
+	// loaded from DISK instead of the compiled-in qrc. Then a layout change is
+	// "save the file, restart the client" instead of a ten minute CI build -
+	// the qrc stays the release path, the switch is never set in a release.
+	const QString qmlDir = qEnvironmentVariable("POKERTH_QML_DIR");
+	QUrl qmlRoot(QStringLiteral("qrc:/pokerth.qml"));
+	if (!qmlDir.isEmpty()) {
+		const QString fromDisk = QDir(qmlDir).filePath(QStringLiteral("pokerth.qml"));
+		if (QFileInfo::exists(fromDisk)) {
+			qmlRoot = QUrl::fromLocalFile(fromDisk);
+			qInfo() << "QML loaded from disk:" << fromDisk;
+		} else {
+			qWarning() << "POKERTH_QML_DIR is set but" << fromDisk
+			           << "does not exist - loading the built-in QML";
+		}
+	}
+	engine.load(qmlRoot);
 
 	if (engine.rootObjects().isEmpty()) {
 		// Session owns log – do NOT delete log here.

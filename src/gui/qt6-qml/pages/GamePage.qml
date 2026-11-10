@@ -649,12 +649,16 @@ Rectangle {
             //     table centre (gap based, see below), the floor is the bisection reserve.
             //   – portrait: it fills the reserved middle band, limited by the
             //     side columns (horizontally) and the top/bottom row (vertically).
+            // The SIZE is derived from communityDropY, NOT from the place where the
+            // block finally lands (communityCenterY): otherwise placement and size
+            // would define each other. communityDropY is where the card row would
+            // sit if only the boxes had a say (their centre of gravity).
             readonly property real communityScale: {
                 if (wide) {
                     // Landscape (desktop AND Android compact): the community cards
                     // FILL the free table centre instead of only growing along
                     // with boxScale. We measure the vertical gap around the drop point
-                    // communityCenterY and scale by it. The divisor 84 (> the pure
+                    // communityDropY and scale by it. The divisor 84 (> the pure
                     // half height 64) leaves some air.
                     //   – topB: the lower edge of the topmost box + its bet badge
                     //     pointing downwards (compact 39, otherwise 26 · oppScale).
@@ -664,8 +668,8 @@ Rectangle {
                     // a guaranteed minimum gap, no regression risk.
                     var isCmp     = Config.Responsive.landscapeCompact
                     var topB      = topOpponentBottomY + (isCmp ? 39 : 26) * oppScale
-                    var halfAbove = communityCenterY - topB - 6
-                    var halfBelow = selfVisualTopY - communityCenterY - 6
+                    var halfAbove = communityDropY - topB - 6
+                    var halfBelow = selfVisualTopY - communityDropY - 6
                     var avail     = Math.min(halfAbove, halfBelow)
                     // Filled compactly (82), but deliberately not as aggressively as
                     // before (66): on small phone landscape resolutions (the iPhone
@@ -680,7 +684,16 @@ Rectangle {
                     // 1.1) – that way the cards stay proportional to the boxes instead of
                     // towering over them. The desktop is unchanged (0.72).
                     var floor     = boxScale * (isCmp ? 0.85 : 0.72)
-                    return Math.max(0.55, Math.min(cap, Math.max(floor, gapFill)))
+                    var res       = Math.max(0.55, Math.min(cap, Math.max(floor, gapFill)))
+                    // The block (pot + cards) is 92·scale high and has to fit into the
+                    // band between the top row and the self box - with air. On a table
+                    // with FEW players the boxes are huge and the band is narrow: there
+                    // the block shrinks (3 players at 1024x621 otherwise touched the
+                    // self box). It only ever makes the cards smaller, so dense tables
+                    // (where gapFill is the binding limit anyway) stay unchanged.
+                    var band      = selfVisualTopY - topOpponentBottomY
+                    var fitBand   = band > 0 ? (band - 16) / 92 : 0.55
+                    return Math.max(0.55, Math.min(res, fitBand))
                 }
                 // Portrait: the community sits vertically BETWEEN the upper (~0.345)
                 // and the lower (~0.65) row – at its height (the table centre) there are
@@ -906,6 +919,60 @@ Rectangle {
                 return { x: pos[0], y: pos[1], nudge: nudge, nudgeX: nudgeX }
             }
 
+            // ── The bet ON the felt ─────────────────────────────────────────────
+            // Where the chip with the bet lies: on the line from the centre of the
+            // box towards the centre of the table, tight against the box edge
+            // (compact – the bet belongs to the player, not to the pot). The
+            // dealer/blind puck stays next to the box: it marks the seat, not the bet.
+            //
+            // Returns table coordinates (already scaled); the seat delegate turns
+            // them into its own item coordinates.
+            //
+            // cx/cy      – centre of the box in table coordinates
+            // halfW/halfH – half of the VISUAL box size
+            function betFeltPoint(cx, cy, halfW, halfH) {
+                var s = oppScale
+                var dx = width / 2 - cx
+                var dy = communityCenterY - cy
+                var len = Math.sqrt(dx * dx + dy * dy)
+                if (len < 1) return Qt.point(cx, cy)
+                var ux = dx / len, uy = dy / len
+                // Where the ray leaves the box: the nearer of the two edges.
+                var tx = Math.abs(ux) < 1e-4 ? 1e9 : halfW / Math.abs(ux)
+                var ty = Math.abs(uy) < 1e-4 ? 1e9 : halfH / Math.abs(uy)
+                var edge = Math.min(tx, ty)
+                // Support of the chip itself (52 × 20 base px) along the direction,
+                // so that a whole chip fits next to the box and not only its point.
+                var chipHalf = (Math.abs(ux) * 26 + Math.abs(uy) * 10) * s
+                var gap = 6 * s
+                var d = edge + gap + chipHalf
+                var px = cx + ux * d
+                var py = cy + uy * d
+                // Never into the community block: the upper seats keep their chip
+                // ABOVE the pot, the lower ones BELOW the cards. Without this a bet
+                // of the bottom corner seats slid into the pot on small tables.
+                // Only where the chip can reach the block HORIZONTALLY at all: a side
+                // seat's chip travels sideways and must not be pushed up into its
+                // upper neighbour.
+                var blockTop = communityCenterY - 60 * communityScale
+                var blockBottom = communityCenterY + 32 * communityScale
+                var chipHalfV = 10 * s
+                var chipHalfU = 26 * s
+                var blockHalfW = 132 * communityScale + 6
+                if (Math.abs(px - width / 2) < blockHalfW + chipHalfU) {
+                    if (cy < communityCenterY)
+                        py = Math.min(py, blockTop - 2 - chipHalfV)
+                    else
+                        py = Math.max(py, blockBottom + 2 + chipHalfV)
+                }
+                // Never beyond the edge of the table.
+                var mx = 8 + 26 * s
+                var my = 8 + 10 * s
+                px = Math.max(mx, Math.min(width - mx, px))
+                py = Math.max(my, Math.min(height - my, py))
+                return Qt.point(px, py)
+            }
+
             readonly property real topOpponentBottomY: {
                 var seq = slotSeq[ringCount] || []
                 // 0.13 caps how deep the "upper edge of the upper row" may
@@ -939,17 +1006,16 @@ Rectangle {
                 // without the scale compensation, see selfBox.anchors.bottomMargin).
                 return height - (wide ? 12 : 4) - selfBaseHeight * boxScale
             }
-            // The Y position of the community cards:
-            //   – Regular wide: the vertical CENTRE OF GRAVITY of all boxes (the opponents +
-            //     the self). The middle that was used before (topOpp+self)/2 is independent of the
-            //     number of players (~the table centre) and let the cards float ABOVE the
-            //     low sitting side boxes with few players (e.g. with
-            //     4 players: a lonely top player at the top, two side players
-            //     further down). The centre of gravity counts these lower boxes in →
-            //     the cards move into the crowd and look centred.
-            //   – landscapeCompact / portrait: still (topOpp+self)/2
+            // Where the card row would sit if only the boxes had a say: the
+            // vertical CENTRE OF GRAVITY of all boxes (the opponents + the self).
+            // That is the DROP POINT of the community block and it decides the card
+            // SIZE (see communityScale). Where the block finally lands is a
+            // different question – communityCenterY.
+            //   – Regular wide: the centre of gravity counts the low sitting side
+            //     boxes in → the cards move into the crowd and look centred.
+            //   – landscapeCompact / portrait: (topOpp+self)/2
             //     (a separate layout, tuned on its own).
-            readonly property real communityCenterY: {
+            readonly property real communityDropY: {
                 // The centre of gravity trick below exists to pull the cards into the crowd
                 // of the opponents AND the self box. Without a self box (a spectator)
                 // the ring lies symmetrically around the zone centre – then the
@@ -968,6 +1034,66 @@ Rectangle {
                     if (p) { sumY += p[1] * height; n++ }
                 }
                 return sumY / n
+            }
+
+            // The lower edge of the highest opponent box that really stands OVER the
+            // row of community cards (its horizontal extent reaches the cards). That
+            // is the line the block may not cross upwards. The 13 % cap of
+            // topOpponentBottomY is only a floor here: with few players the boxes sit
+            // at the sides, nothing stands over the cards, and the block belongs in
+            // the middle of the table rather than pressed against the self box.
+            readonly property real topOpponentRealBottomY: {
+                var seq = slotSeq[ringCount] || []
+                var drop = communityDropY
+                var halfRow = 132 * communityScale
+                var boxHalf = oppBaseWidth * oppScale / 2
+                var best = -1
+                for (var i = 0; i < seq.length; ++i) {
+                    var p = slotPos[seq[i]]
+                    if (!p) continue
+                    var cy = p[1] * height
+                    if (cy >= drop) continue                  // only the upper ones
+                    if (Math.abs(p[0] * width - width / 2) >= halfRow + boxHalf)
+                        continue                                  // not over the cards
+                    var bottom = cy + oppBaseHeight * oppScale / 2
+                    if (bottom > best) best = bottom
+                }
+                return Math.max(topOpponentBottomY, best > 0 ? best : topOpponentBottomY)
+            }
+
+            // The Y position of the community block (pot + cards):
+            //   – landscape desktop: the block is CENTRED in the band between the
+            //     lower edge of the top row and the upper edge of the self box.
+            //     Until 11/2026 only the CARD ROW was centred (at the centre of
+            //     gravity of the boxes) while the pot sticks out about 28 px above
+            //     it – so the whole block sat far too high: 17 px of air under the
+            //     top row against 76 px above the self box, and the upper seats
+            //     looked glued to the cards (player report, 2026-11-10).
+            //   – portrait / landscapeCompact / spectator: unchanged.
+            readonly property real communityCenterY: {
+                // The centre of gravity trick below exists to pull the cards into the crowd
+                // of the opponents AND the self box. Without a self box (a spectator)
+                // the ring lies symmetrically around the zone centre – then the
+                // cards simply belong in the middle of the free inner space.
+                // Portrait/mobile: the middle of the free middle band (the rows
+                // no longer sit symmetrically around the zone centre there).
+                if (!wide && Config.Responsive.isMobile)
+                    return (portraitBand[0] + portraitBand[1]) / 2
+                if (!wide || Config.Responsive.landscapeCompact || spectating)
+                    return (topOpponentBottomY + selfVisualTopY) / 2
+                var cs = communityScale
+                var bandTop = topOpponentRealBottomY
+                var bandBottom = selfVisualTopY
+                // The block reaches 60·cs above and 32·cs below the card row centre
+                // (card half 32 + pot gap 8 + pot 20), so its centre sits 14·cs above
+                // the row centre. Compensate that, then it is really centred.
+                var cy = (bandTop + bandBottom) / 2 + 14 * cs
+                // Keep the block inside the band as long as it fits in there at all.
+                var lo = bandTop + 60 * cs
+                var hi = bandBottom - 32 * cs
+                if (lo <= hi && (cy < lo || cy > hi))
+                    cy = Math.max(lo, Math.min(hi, cy))
+                return cy
             }
 
             // ── The zoom layer: the opponents + the community – scalable + pannable ─────────
@@ -1166,20 +1292,43 @@ Rectangle {
                     x: tableZone.width * slot[0] - width / 2 + seatNudgeX
                     y: tableZone.height * slot[1] - height / 2 + seatNudge
 
+                    // Centre of the box in table coordinates – the seat of the bet
+                    // is computed from it (betFeltPoint) towards the table centre.
+                    readonly property real boxCenterX: tableZone.width * slot[0] + seatNudgeX
+                    readonly property real boxCenterY: tableZone.height * slot[1] + seatNudge
+                    // Where the bet chip lies: on the felt, tight against the box,
+                    // towards the centre of the table (GamePlayerBox.betAt).
+                    readonly property point feltBet: tableZone.betFeltPoint(
+                        boxCenterX, boxCenterY,
+                        tableZone.oppBaseWidth * tableZone.oppScale / 2,
+                        tableZone.oppBaseHeight * tableZone.oppScale / 2)
+
                     GamePlayerBox {
                         anchors.fill: parent
                         seatIndex: seatSlot.index
                         // Rasterize the cards in the real screen size (oppScale × zoom).
                         cardRenderScale: tableZone.oppScale * tableZone.zoomRenderMul
+                        // The bet lies on the FELT between the box and the centre of
+                        // the table (landscape). In portrait the boxes stand in rows
+                        // around a free middle band – there the bet keeps sitting
+                        // next to the box, otherwise it would end up on the cards.
+                        betAt: tableZone.wide
+                               ? Qt.point((seatSlot.feltBet.x - seatSlot.boxCenterX)
+                                          / tableZone.oppScale + width / 2,
+                                          (seatSlot.feltBet.y - seatSlot.boxCenterY)
+                                          / tableZone.oppScale + height / 2)
+                               : Qt.point(-1, -1)
                         // Only the topmost box (player 5, the TC slot) shows the
                         // winner badge below it in portrait – everywhere else above.
                         winnerBelow: !tableZone.wide && seatSlot.slotName === "TC"
-                        // Let the bet/button point towards the table centre:
-                        // the left seats to the right, the right seats to the left, the top/bottom centre downwards.
-                        // In the wide (landscape) layout the upper boxes
-                        // (players 4–6) sit tightly in the arc → show the bet/icon below the box,
-                        // so that the lateral area does not overlap with the
-                        // neighbouring boxes.
+                        // Where the dealer/blind puck sits (and, in the seat style
+                        // "inset", where the bet base is shown). The bet itself lies
+                        // on the FELT now (betAt above), so this only has to keep the
+                        // puck away from the bet:
+                        //   landscape: to the OUTSIDE (away from the table centre),
+                        //              the upper boxes below the box, the top centre
+                        //              split to both sides (betSplit),
+                        //   portrait:  towards the table centre, as before.
                         betSide: tableZone.wide
                                ? (seatSlot.slot[0] < 0.45 ? "left"
                                   : seatSlot.slot[0] > 0.55 ? "right"
@@ -1414,13 +1563,13 @@ Rectangle {
                 // (the chat is anchored on the left with an 8 px distance, the width = dockedChatW).
                 var chatLeft  = 8
                 var chatRight = 8 + dockedChatW
-                // The bet/puck badge dimensions (base pixels, they scale with s) – see
-                // GamePlayerBox.betGroup. The edge seats carry the bet + the dealer/
-                // blind button LATERALLY towards the screen edge (= into the chat
-                // area), the central seats below the box. So that the
-                // bet of an opponent is never covered by the chat, the full
-                // box width PLUS the bet width counts towards the horizontal overlap.
-                var betSideExt   = (8 + 52) * s
+                // The puck/button dimensions (base pixels, they scale with s) – see
+                // GamePlayerBox.betGroup. Since the bet lies on the felt
+                // (GamePlayerBox.betAt) only the dealer/blind puck still sticks out
+                // sideways from the edge seats – towards the screen edge, i.e. into
+                // the chat area. So only its width counts towards the overlap; the
+                // chip in the middle of the table can no longer be covered here.
+                var betSideExt   = (8 + 32) * s
                 var betBottomExt = 39 * s
                 // Search through all landscape slots: which boxes overlap horizontally?
                 var slots = slotPosLandscape
@@ -1507,10 +1656,10 @@ Rectangle {
                 var visualH = oppBaseHeight * s
                 var infoRight = width - 8
                 var infoLeft  = width - 8 - dockedInfoW
-                // The bet/puck badge dimensions as with the chat (see dockedChatMaxH): the
-                // right edge seats carry the bet laterally to the right (into the
-                // info area) – the full box PLUS the bet width count.
-                var betSideExt   = (8 + 52) * s
+                // The puck/button dimensions as with the chat (see dockedChatMaxH):
+                // since the bet lies on the felt only the puck still sticks out
+                // sideways – on the right seats into the info area.
+                var betSideExt   = (8 + 32) * s
                 var betBottomExt = 39 * s
                 var slots = slotPosLandscape
                 var maxH = height + actionBar.height - 8

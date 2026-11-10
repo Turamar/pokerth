@@ -9,14 +9,24 @@ SeatBox {
     // Show the winner badge below instead of above the box – only sensible for the
     // topmost box (player 5) in portrait, otherwise it would bump into the top.
     property bool winnerBelow: false
-    // The side on which the bet chip + the dealer/blind button are shown:
-    // "top" | "bottom" | "left" | "right". The default is derived from 'up'.
+    // The side on which the dealer/blind button is shown (and, in the seat style
+    // "inset", the bet base): "top" | "bottom" | "left" | "right". The bet itself
+    // lies on the FELT in the style "classic" – see betAt below.
     property string betSide: up ? "bottom" : "top"
     // A split display: the dealer/blind button LEFT of the box, the bet
     // RIGHT of the box – both vertically centred. For the topmost box in
     // landscapeCompact, whose badge would otherwise collide below with the pot badge.
     // It overrides betSide.
     property bool betSplit: false
+
+    // Where the bet chip lies when it is NOT shown next to the box but on the
+    // felt (seat style "classic"): the centre of the chip in this item's own
+    // coordinates, put on the line from the box towards the centre of the
+    // table by GamePage (betFeltPoint). x < 0 means "not set" → the chip keeps
+    // sitting next to the box as before. The dealer/blind puck stays NEXT TO
+    // the box in both cases (it belongs to the seat, not to the bet).
+    property point betAt: Qt.point(-1, -1)
+    readonly property bool betOnFelt: betAt.x >= 0 && bet > 0 && !betInset
 
     // Effective table scaling, seat data and base dimensions: see SeatBox.
     // Dynamic width: 2×hMargin(4) + AvatarCardRow.implicitWidth(avatarH+4+2·cardW+4)
@@ -321,15 +331,17 @@ SeatBox {
     // Sides (betSide left/right): the button below the bet, both vertically centred.
     Item {
         id: betGroup
-        visible: (root.bet > 0 && !root.betInset) || root.buttonVisible
+        visible: (root.bet > 0 && !root.betInset && !root.betOnFelt) || root.buttonVisible
         z: 25
 
         readonly property bool split: root.betSplit
         readonly property bool horizontal: !split && (root.betSide === "bottom" || root.betSide === "top")
         // In the style "inset" the bet sits in the box base – the group then
-        // only carries the dealer/blind puck.
-        readonly property real betW: (root.bet > 0 && !root.betInset) ? betRow.width : 0
-        readonly property real betH: (root.bet > 0 && !root.betInset) ? betRow.height : 0
+        // only carries the dealer/blind puck. The same holds when the bet lies
+        // on the felt (betOnFelt): then the group is the puck alone.
+        readonly property bool chipHere: root.bet > 0 && !root.betInset && !root.betOnFelt
+        readonly property real betW: chipHere ? betRow.width : 0
+        readonly property real betH: chipHere ? betRow.height : 0
         readonly property real btnW: root.buttonVisible ? buttonImg.width : 0
         readonly property real btnH: root.buttonVisible ? buttonImg.height : 0
 
@@ -347,7 +359,7 @@ SeatBox {
 
         BetChip {
             id: betRow
-            visible: root.bet > 0 && !root.betInset
+            visible: betGroup.chipHere
             amount: root.bet
             textColor: "#f0f0f0"
             // split: the bet to the right NEXT TO the box; otherwise centred inside.
@@ -373,6 +385,22 @@ SeatBox {
                ? (betGroup.height - height) / 2
                : (betGroup.height * 5 / 6 - height / 2)
         }
+    }
+
+    // ── The bet ON THE FELT ──────────────────────────────────────────────────
+    // The bet is part of the table, not of the player's plate: it lies on the
+    // felt between the box and the pot, slightly offset towards the centre.
+    // Position comes from GamePage (betFeltPoint), which knows where the centre
+    // of the table is and how far the box reaches in that direction. The puck
+    // stays next to the box (betGroup above) - it belongs to the seat.
+    BetChip {
+        id: feltBet
+        visible: root.betOnFelt
+        amount: root.bet
+        textColor: "#f0f0f0"
+        z: 24
+        x: root.betAt.x - width / 2
+        y: root.betAt.y - height / 2
     }
 
     // ── Right click context menu (desktop only) ──────────────────────────────
