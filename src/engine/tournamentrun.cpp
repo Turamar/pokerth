@@ -502,10 +502,13 @@ int TournamentRun::largestTable() const
  *
  * This is the standard MTT rule - 18 seats play 9+9 and the field comes
  * together when nine are left - and it is what the balancing alone cannot do:
- * two balanced tables shrink together and would play 2+2 to the end. The rule
- * only ever breaks a table that is not the player's: he stays where he sits and
- * the others come to him. Breaking his table would rebuild the felt in front of
- * him for no reason he could see, which is exactly what the player noticed.
+ * two balanced tables shrink together and would play 2+2 to the end.
+ *
+ * Which table breaks is decided by the same rule for everybody, the player
+ * included: the table with the fewest people goes first, and if two tables are
+ * equally small, the one with the higher number. There is no exception for the
+ * table the player sits at - if the rule picks his table, he moves like
+ * everybody else; that is what makes the rule a rule and not a courtesy.
  *
  * Who waits where: the one who paid the big blind at the broken table arrives
  * last, so of all the arrivals the blinds reach him last - he does not take the
@@ -520,10 +523,15 @@ bool TournamentRun::consolidateOne()
 	const int capacity = tableCapacity();
 	if(playersLeft() > capacity * (tables - 1)) return false;
 
+	// Fewest people first; equal tables break from the top of the numbering.
 	int victim = -1;
 	for(int i = 0; i < tables; ++i) {
-		if(m_tables[i].local || m_tables[i].ids.empty()) continue;
-		if(victim < 0 || m_tables[i].ids.size() < m_tables[victim].ids.size()) victim = i;
+		if(m_tables[i].ids.empty()) continue;
+		if(victim < 0
+		   || m_tables[i].ids.size() < m_tables[victim].ids.size()
+		   || (m_tables[i].ids.size() == m_tables[victim].ids.size() && i > victim)) {
+			victim = i;
+		}
 	}
 	if(victim < 0) return false;
 
@@ -624,25 +632,15 @@ int TournamentRun::moveOne(Table &from, Table &to)
 {
 	// Who goes: the player who just paid the big blind. He is the one who has
 	// the longest wait for the button anyway, so moving costs him least - and it
-	// cannot make him pay the big blind twice in a row.
-	//
-	// Never the host's player: his table is never the one the merge breaks, and
-	// the balancing never takes from it while somebody else is seated there.
-	// The felt he sees is rebuilt only when people arrive, never because he
-	// left: he plays the whole tournament in the same chair.
+	// cannot make him pay the big blind twice in a row. The player at the client
+	// is moved by this same rule: his table is just a table, and a rule that
+	// spares him is not a rule.
 	int mover = -1;
-	if(from.lastBigBlind >= 0 && from.lastBigBlind != m_hostId
-	   && contains(from.ids, from.lastBigBlind)) {
+	if(from.lastBigBlind >= 0 && contains(from.ids, from.lastBigBlind)) {
 		mover = from.lastBigBlind;
 	} else {
-		for(size_t i = from.ids.size(); i > 0; --i) {
-			if(from.ids[i - 1] != m_hostId) {
-				mover = from.ids[i - 1];
-				break;
-			}
-		}
+		mover = from.ids.back();
 	}
-	if(mover < 0) mover = from.ids.back();
 	from.ids.erase(remove(from.ids.begin(), from.ids.end(), mover), from.ids.end());
 
 	// Where: the newcomer becomes the button, so he posts no blind in his first

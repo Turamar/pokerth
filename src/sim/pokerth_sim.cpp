@@ -1052,16 +1052,14 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 				check(result.biggestTable <= PlayerState::MaxTournamentTableSeats,
 					  QStringLiteral("my table never seated more than nine (%1)")
 					  .arg(result.biggestTable));
-				check(result.movesById.at(0) == 0,
-					  QStringLiteral("the balancing and the merge never moved the player (%1)")
-					  .arg(result.movesById.at(0)));
 				const int place = tournament.placeOf(0);
 				check(place >= 1 && place <= event.seats,
 					  QStringLiteral("the player has a place (%1 of %2)")
 					  .arg(place).arg(event.seats));
-				printf("  client-style tournament: %d steps, %d reseats, %d moves, "
-					   "final table at %d, hero place %d of %d\n", steps,
-					   host.seated() - 1, result.moves, mergedAt, place, event.seats);
+				printf("  client-style tournament: %d steps, %d reseats, %d moves "
+					   "(%d of them mine), final table at %d, hero place %d of %d\n",
+					   steps, host.seated() - 1, result.moves, result.movesById.at(0),
+					   mergedAt, place, event.seats);
 			}
 		}
 		{
