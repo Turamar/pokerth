@@ -945,6 +945,19 @@ Rectangle {
                     else
                         py = Math.max(py, blockBottom + 2 + chipHalfV)
                 }
+                // No room left between the box and the pot (a seat above the centre
+                // that even spacing put right over the pot): the clamp above pushed
+                // the chip back onto its own plate. Then the chip goes BESIDE the box
+                // – on the side away from the centre, like the dealer puck. Better a
+                // bet next to the player than a bet lying on his name.
+                var boxLeft = cx - halfW - gap, boxRight = cx + halfW + gap
+                var boxTop = cy - halfH - gap, boxBottom = cy + halfH + gap
+                if (px + chipHalfU > boxLeft && px - chipHalfU < boxRight
+                    && py + chipHalfV > boxTop && py - chipHalfV < boxBottom) {
+                    var side = cx < width / 2 ? -1 : 1
+                    px = cx + side * (halfW + gap + chipHalfU)
+                    py = cy
+                }
                 // Never beyond the edge of the table.
                 var mx = 8 + 24 * s
                 var my = 8 + 20 * s

@@ -257,167 +257,71 @@ function buildLandscapeSlots(env, s, ringCnt, forProbe) {
     // boxes get smaller.
     var radiusY = (bottomY - topY) / 2
 
-    // lowerSquash (compact only): players with sin>0 are pushed towards
-    // bottomY via sin^0.3.
+    // ── The pearl necklace, measured in PIXELS along the oval ────────────────
+    // The seats sit on an empty oval like pearls on a rail, and their distance
+    // ALONG the curve is equal. Equal ANGLES do not work: the table zone is wide
+    // and shallow, the oval is flat, and with equal angles the side seats bunch
+    // into a vertical wall while a wide hole stays at the top corners. That is
+    // exactly the player's complaint ("player 3 sits close to 2, move him towards
+    // 4"; player 7 mirrors 3).
     //
-    // sideGravity: an additional y proportional to |cos| → the side players
-    // (|cos|→1) go down, TC (cos=0) stays. In compact mode only
-    // for the upper half (sinV≤0), since lowerSquash already pushes the lower half
-    // strongly and a double push would exceed
-    // bottomY.
-    //
-    // topCosSquash: the upper half (sinV≤0) uses |cos|^topCosSquash →
-    // TL/TR (cos≈±0.62) move horizontally closer to TC, pure side players
-    // (cos≈±0.97) are hardly changed.
-    var lowerSquash        = Config.Responsive.landscapeCompact ? 0.2  : 1.0
-    var sideGravity        = 0.25
-    var topCosSquash       = 1.4
-    var gravityUpperOnly   = Config.Responsive.landscapeCompact
-    // The lower seats (sinV>0, above all the bottom boxes bem2/danielv) are
-    // additionally pulled towards bottomY proportionally to sin in normal landscape
-    // – otherwise they sit too high and too close to their
-    // upper neighbours. The limitation to bottomY (vFactor ≤ 1) keeps the
-    // selfGapY distance to the self box. In compact mode
-    // lowerSquash already does that.
-    var lowerGravity       = Config.Responsive.landscapeCompact ? 0.0 : 0.15
-    // Compact: the corners to the left/right of the self box are free.
-    // Lower side seats that pass the self box horizontally
-    // may therefore sink a bit below bottomY – that spreads the
-    // side pairs (e.g. player 2↔3 / 7↔8) vertically. At most until the
-    // lower box edge sticks 55 % into the self box height (deeper =
-    // player 1/9 move further down, more air in the middle for the
-    // community + larger boxes).
-    var maxBottomY = (selfTop + selfVisualH * 0.55 - visualH / 2) / Math.max(height, 1)
-    var vMaxLower  = radiusY > 0 ? (maxBottomY - centerY) / radiusY : 1.0
-    // Without a self box (a spectator) there are no free corners next to it →
-    // no lowering.
-    var lowerToSelf = Config.Responsive.landscapeCompact && !spectating
-    var selfClearX = (selfBaseWidth * s / 2 + visualW / 2 + 12) / Math.max(width, 1)
-    function point(degrees) {
-        var radians = degrees * Math.PI / 180
-        var sinV = Math.sin(radians)
-        var cosV = Math.cos(radians)
-        var sinOrig = sinV
-        if (sinV > 0 && lowerSquash !== 1.0)
-            sinV = Math.pow(sinV, lowerSquash)
-        if (sinV <= 0 && cosV !== 0)
-            cosV = (cosV < 0 ? -1 : 1) * Math.pow(Math.abs(cosV), topCosSquash)
-        var vFactor = sinV
-                    + ((!gravityUpperOnly || sinV <= 0) ? sideGravity * Math.abs(cosV) : 0)
-                    + (sinV > 0 ? lowerGravity * sinV : 0)
-        // Desktop landscape: spread the outer side pairs (|cos|→1)
-        // vertically in a subtle way – the upper box upwards, the
-        // lower one downwards (the direction via sinOrig). That way the
-        // WINNER badge of the lower box no longer sticks into the upper
-        // neighbouring box. Weighted by |cos|, so that the top centre (cos≈0)
-        // stays untouched. DELIBERATELY only when drawing (!forProbe):
-        // otherwise the bisection would immediately fill the larger pair distance
-        // with larger boxes again instead of creating real distance.
-        // The caps below keep the boxes on the track.
-        if (!forProbe && !Config.Responsive.landscapeCompact && cosV !== 0) {
-            var pairSpread = 0.02 * Math.abs(cosV)
-            vFactor += (sinOrig < 0 ? -pairSpread : pairSpread)
-        }
-        if (vFactor > 1.0) vFactor = 1.0   // never below bottomY (the self box)
-        if (vFactor < -1.0) vFactor = -1.0 // never above the upper track edge
-        // Desktop: flatten the upper arc – pull the upper seats (vFactor<0) 10 %
-        // towards the middle → a flatter top arc + more distance from the
-        // top box to the info bar.
-        if (!Config.Responsive.landscapeCompact && vFactor < 0)
-            vFactor *= 0.82
-        // Lower them gradually towards vMaxLower, weighted with the
-        // ORIGINAL sin: the lowest seats (BL/BR, sin≈0.88) sink
-        // almost fully, those above them (sin≈0.40) only partly – a
-        // uniform vMaxLower put them all at the same height
-        // (a flat line instead of an elliptical arc).
-        if (lowerToSelf && sinV > 0
-            && Math.abs(radiusX * cosV) > selfClearX
-            && vMaxLower > vFactor)
-            vFactor = vFactor + (vMaxLower - vFactor) * sinOrig
-        // An almost square table: lift the upper SIDE seats (player 3/7 at
-        // community height) upwards, so that they lie ABOVE the community
-        // (otherwise they overlap with the wide card row). Weighted by |cos|
-        // (pure side seats the most), only with an aspect → 1
-        // (wide windows stay unchanged).
-        var sqLift = Math.max(0, Math.min(1,
-            (1.6 - width / Math.max(height, 1)) / 0.6))
-        if (!Config.Responsive.landscapeCompact && sinV < 0 && sqLift > 0) {
-            vFactor -= 0.3 * sqLift * Math.abs(cosV)
-            if (vFactor < -1.0) vFactor = -1.0
-        }
-        return [0.5 + radiusX * cosV, centerY + radiusY * vFactor]
+    // The self box claims an arc of its own at the bottom of the oval - as much
+    // as the box needs plus half a gap on both sides. The opponents spread evenly
+    // over the rest, so the ring stays symmetric to the vertical axis by
+    // construction.
+    var cxPx = 0.5 * width
+    var cyPx = centerY * height
+    var rxPx = radiusX * width
+    var ryPx = radiusY * height
+    var SAMPLES = 1440
+    var arcTable = new Array(SAMPLES + 1)
+    arcTable[0] = 0
+    for (var sample = 1; sample <= SAMPLES; sample++) {
+        var angleA = 2 * Math.PI * (sample - 1) / SAMPLES
+        var angleB = 2 * Math.PI * sample / SAMPLES
+        var stepX = rxPx * (Math.cos(angleB) - Math.cos(angleA))
+        var stepY = ryPx * (Math.sin(angleB) - Math.sin(angleA))
+        arcTable[sample] = arcTable[sample - 1] + Math.sqrt(stepX * stepX + stepY * stepY)
     }
-
-    // The circle opens upwards:
-    //   – TL/TR at 230°/310° (instead of 240°/300°) → more horizontal
-    //     distance to TC, TL/TR move somewhat lower in the y direction.
-    //   – TLo/TRo at 200°/340° (instead of 205°/335°) → almost vertical
-    //     with L/R, which gives more y distance to TL/TR.
-    // BL/BR at 120°/60° (instead of 125°/55°): sin rises 0.819→0.866
-    // → the bottom seats move about 5 % of radiusY further towards the
-    // self box, and the vertical empty space below them shrinks.
-    // The necklace model: self is a "larger pearl" at the lower
-    // bottom point of the ellipse with an angular weighting relative to
-    // an opponent "pearl" (selfWeight). The N opponents spread
-    // EVENLY over the remaining arc.
-    //
-    // selfWeight controls how much angular arc length the self
-    // takes up. Smaller = the opponents move closer to the self / further
-    // towards the bottom centre and thus lower (more sin) → the ring closes
-    // more tightly around the self box, which then stands out only minimally
-    // (a user wish). Regular wide: 0.3; in landscapeCompact
-    // 0.5 is kept (a separate layout, tuned on its own).
-    //
-    // If a player disconnects, N changes → an automatic,
-    // clean redistribution over the angles generated below.
-    //
-    // A spectator: seat 0 is a perfectly normal pearl (selfWeight 1.0)
-    // → dOpp = 360/seatCount, firstOppAngle = 90 + dOpp. Seat 0 thus lies
-    // exactly on the bottom point (90°), the other seats follow
-    // evenly around the circle.
-    // The opponent "pearls" from the parameter (NOT from seatCount): the
-    // probe deliberately computes with _peakSeatCount, so that players who drop
-    // out do not change the box size, while the drawing uses
-    // the current seat count. rc is in both cases the number of
-    // ring seats (as a spectator including seat 0).
+    var perimeter = arcTable[SAMPLES]
+    // Arc position (in px from the right-hand point, running downwards first) → point.
+    function pointAtArc(distance) {
+        var d = distance % perimeter
+        if (d < 0) d += perimeter
+        var lo = 0, hi = SAMPLES
+        while (lo + 1 < hi) {
+            var mid = (lo + hi) >> 1
+            if (arcTable[mid] <= d) lo = mid
+            else hi = mid
+        }
+        var span = arcTable[hi] - arcTable[lo]
+        var frac = span > 0 ? (d - arcTable[lo]) / span : 0
+        var angle = 2 * Math.PI * (lo + frac) / SAMPLES
+        return [0.5 + radiusX * Math.cos(angle),
+                centerY + radiusY * Math.sin(angle)]
+    }
+    // Half of the arc the self box claims at the bottom: the box itself plus the
+    // neighbours' halves plus a gap. The curve is flat there, so half of its width
+    // is a fair measure.
+    var selfHalfArc = spectating ? 0
+        : selfBaseWidth * s / 2 + visualW / 2 + Math.max(10, selfGapY * 0.5)
+    var bottomArc = perimeter * 0.25   // 90° – the bottom point of the oval
+    // The opponents follow the parameter (NOT seatCount): the probe computes with
+    // _peakSeatCount, so that players who drop out do not change the box size,
+    // while the drawing uses the current seat count. rc is the number of ring
+    // seats in both cases (as a spectator including seat 0).
     var opps = Math.max(1, spectating ? rc - 1 : rc)
-    var selfWeight = spectating ? 1.0
-                   : (Config.Responsive.landscapeCompact ? 0.5 : 0.3)
-    var dOpp = 360 / (opps + selfWeight)
-    var dSelf = selfWeight * dOpp
-    var firstOppAngle = 90 + (dSelf + dOpp) / 2
     var slots = {}
-    // Seat 0 of the spectator: exactly on the bottom point of the ellipse.
-    if (spectating)
-        slots["opp0"] = point(90)
-    for (var i = 1; i <= opps; i++) {
-        slots["opp" + i] = point(firstOppAngle + (i - 1) * dOpp)
-    }
-
-    // The ring is top-heavy downwards by nature: sideGravity and
-    // lowerGravity push the seats downwards, and at the upper vertex
-    // (270°) nobody sits with most player counts. With a self box
-    // that is intended – the ring should close around it. As a
-    // spectator a large gap stays at the top, while the
-    // bottom seat sticks to the window edge.
-    //
-    // Instead of touching the (finely balanced) gravity terms, the
-    // FINISHED ring is centred vertically in the zone as a whole. A pure
-    // shift: all pair distances – and thereby the bisection in
-    // boxScale – stay untouched, as does the distance between the upper
-    // seats and the community (both shift by the same amount).
-    if (spectating && !forProbe) {
-        var halfH = (visualH / 2) / Math.max(height, 1)
-        var minY = Infinity, maxY = -Infinity
-        for (var name in slots) {
-            var sy = slots[name][1]
-            if (sy < minY) minY = sy
-            if (sy > maxY) maxY = sy
-        }
-        // Equal margins at the top/bottom: top + shift == 1 - (bottom + shift)
-        var shiftY = (1 - (maxY + halfH) - (minY - halfH)) / 2
-        for (var key in slots)
-            slots[key] = [slots[key][0], slots[key][1] + shiftY]
+    if (spectating) {
+        // Seat 0 goes exactly on the bottom point, the rest evenly around.
+        var stepS = perimeter / (opps + 1)
+        slots["opp0"] = pointAtArc(bottomArc)
+        for (var sIdx = 1; sIdx <= opps; sIdx++)
+            slots["opp" + sIdx] = pointAtArc(bottomArc + sIdx * stepS)
+    } else {
+        var stepO = (perimeter - 2 * selfHalfArc) / opps
+        for (var oIdx = 1; oIdx <= opps; oIdx++)
+            slots["opp" + oIdx] = pointAtArc(bottomArc + selfHalfArc + (oIdx - 0.5) * stepO)
     }
     // geom allows the probe to recover cos and vFactor from
     // [xNorm, yNorm] (x = 0.5 + radiusX·cos, y = centerY + radiusY·v).
