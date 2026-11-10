@@ -199,7 +199,9 @@ SeatBox {
             z: 10
 
             // A raised card with a soft shadow, now with the radius of the pill.
-            PlayerBoxBackground { radius: plate.height / 2 }
+            // Opaque on purpose: the hole cards lie BEHIND the plate and must not
+            // shimmer through it.
+            PlayerBoxBackground { radius: plate.height / 2; opacity: 1.0 }
 
             // Highlight: the active player gets a gold frame + a soft glow.
             PlayerTurnGlow { active: root.isAtTurn; radius: plate.height / 2 }
