@@ -1301,6 +1301,17 @@ Rectangle {
                         tableZone.oppBaseWidth * tableZone.oppScale / 2,
                         tableZone.oppBaseHeight * tableZone.oppScale / 2)
 
+                    // TEMPORARY diagnostic (goes to pokerth-debug.log as "qml: …"):
+                    // what the client really computes for this seat, so that the
+                    // question "why do the side seats show their chip outside" can be
+                    // answered from a log instead of from a screenshot.
+                    Component.onCompleted: console.log("BETDEBUG wide=" + tableZone.wide
+                        + " zone=" + Math.round(tableZone.width) + "x" + Math.round(tableZone.height)
+                        + " seat=" + index + " slot=" + slotName
+                        + " felt=" + Math.round(feltBet.x) + "," + Math.round(feltBet.y)
+                        + " centre=" + Math.round(boxCenterX) + "," + Math.round(boxCenterY)
+                        + " scale=" + tableZone.oppScale.toFixed(3))
+
                     GamePlayerBox {
                         anchors.fill: parent
                         seatIndex: seatSlot.index
@@ -1323,15 +1334,13 @@ Rectangle {
                         // "inset", where the bet base is shown). The bet itself lies
                         // on the FELT now (betAt above), so this only has to keep the
                         // puck away from the bet:
-                        //   landscape: to the OUTSIDE (away from the table centre),
-                        //              the upper boxes below the box, the top centre
-                        //              split to both sides (betSplit),
+                        //   landscape: as well towards the table centre – the player
+                        //              reported the chips of the side seats standing
+                        //              OUTSIDE their plates (away from the pot), which
+                        //              reads as if the bet belonged to the neighbour,
                         //   portrait:  towards the table centre, as before.
-                        betSide: tableZone.wide
-                               ? (seatSlot.slot[0] < 0.45 ? "left"
-                                  : seatSlot.slot[0] > 0.55 ? "right"
-                                  : "bottom")
-                               : seatSlot.slot[0] < 0.45 ? "right"
+                        // The top centre seat keeps the split (bet right, button left).
+                        betSide: seatSlot.slot[0] < 0.45 ? "right"
                                : seatSlot.slot[0] > 0.55 ? "left"
                                : "bottom"
                         // The topmost centre box (player 5): the badge below it would collide with
