@@ -65,9 +65,9 @@ Rectangle {
                                 id: soundVolumeSlider
                                 Layout.fillWidth: true
                                 from: 1
-                                to: 10
+                                to: 100
                                 stepSize: 1
-                                value: SettingsManager ? SettingsManager.readConfigInt("SoundVolume") : 8
+                                value: SettingsManager ? SettingsManager.readConfigInt("SoundVolume") : 80
                                 enabled: playSounds.checked
                                 onMoved: {
                                     if (SettingsManager) SettingsManager.writeConfigInt("SoundVolume", Math.round(value))
@@ -78,7 +78,7 @@ Rectangle {
                                 text: Math.round(soundVolumeSlider.value)
                                 color: Config.StaticData.palette.secondary.col200
                                 opacity: playSounds.checked ? 1.0 : 0.4
-                                Layout.minimumWidth: 20
+                                Layout.minimumWidth: 28
                             }
                         }
                     }

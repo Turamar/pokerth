@@ -373,7 +373,7 @@ void QtAudioPlayer::initAudio()
 	}
 
 	// Initialize selected backend
-	float vol = myConfig->readConfigInt("SoundVolume") / 10.0f;
+	float vol = myConfig->readConfigInt("SoundVolume") / 100.0f;
 
 	QAudioDevice deviceToUse = selectedDevice.isNull()
 							   ? QMediaDevices::defaultAudioOutput()
@@ -553,7 +553,7 @@ void QtAudioPlayer::playSoundPaPlay(const QString& key)
 	const QString& filePath = soundFilePaths.value(key);
 
 	// Volume: paplay uses --volume with PA volume (0-65536), 100% = 65536
-	float vol = myConfig->readConfigInt("SoundVolume") / 10.0f;
+	float vol = myConfig->readConfigInt("SoundVolume") / 100.0f;
 	QString volumeStr = QString::number(qRound(vol * 65536.0f));
 
 	QStringList args;
@@ -892,7 +892,7 @@ void QtAudioPlayer::playSoundWinMM(const QString& key)
 	}
 
 	// Re-read volume from config in case user changed it
-	float vol = myConfig->readConfigInt("SoundVolume") / 10.0f;
+	float vol = myConfig->readConfigInt("SoundVolume") / 100.0f;
 	winmmVolume = qBound(0.0f, vol, 1.0f);
 
 	// Find a free slot: prefer one that's finished playing,
@@ -1003,7 +1003,7 @@ void QtAudioPlayer::reInit()
 	// subsystem (which on some platforms causes audible glitches and,
 	// before the fix, triggered an infinite sink-recreation loop).
 	if (audioEnabled) {
-		float vol = myConfig->readConfigInt("SoundVolume") / 10.0f;
+		float vol = myConfig->readConfigInt("SoundVolume") / 100.0f;
 
 		if (backend == AudioBackend::SoftwareMixerBackend && mixer) {
 			mixer->setVolume(vol);

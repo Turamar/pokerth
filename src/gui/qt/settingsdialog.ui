@@ -961,12 +961,12 @@ p, li { white-space: pre-wrap; }
                <widget class="QLabel" name="label_soundVolume">
                 <property name="minimumSize">
                  <size>
-                  <width>20</width>
+                  <width>28</width>
                   <height>0</height>
                  </size>
                 </property>
                 <property name="text">
-                 <string>10</string>
+                 <string>80</string>
                 </property>
                </widget>
               </item>
@@ -976,10 +976,10 @@ p, li { white-space: pre-wrap; }
                  <number>1</number>
                 </property>
                 <property name="maximum">
-                 <number>10</number>
+                 <number>100</number>
                 </property>
                 <property name="value">
-                 <number>8</number>
+                 <number>80</number>
                 </property>
                 <property name="orientation">
                  <enum>Qt::Horizontal</enum>

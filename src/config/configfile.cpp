@@ -312,7 +312,9 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	// 0 = effects on (default), 1 = reduced. See config/Theme.qml.
 	configList.push_back(ConfigInfo("QmlReduceEffects", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("PlaySoundEffects", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("SoundVolume", CONFIG_TYPE_INT, "8"));
+	// Sound volume in per cent (1..100), see SoundSettings.qml and
+	// QtAudioPlayer, which divides by 100.0f.
+	configList.push_back(ConfigInfo("SoundVolume", CONFIG_TYPE_INT, "80"));
 	configList.push_back(ConfigInfo("PlayGameActions", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("PlayLobbyChatNotification", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("PlayNetworkGameNotification", CONFIG_TYPE_INT, "1"));
