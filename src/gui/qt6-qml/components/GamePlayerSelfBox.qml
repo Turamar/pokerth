@@ -56,7 +56,10 @@ SeatBox {
     readonly property int _textW: Math.max(24, Math.round(width) - _avatarD - _textX)
     // Same type scale as the opponent plates (Theme.tableFont adds 12 % at the
     // usual 1024ish window width).
-    readonly property int _nameSize: Config.Theme.tableFont(13)
+    // Same type scale as the opponent plates, but never below the previous 14 px
+    // on wide windows: the own plate used to be 14 px and the multiplier is 1.0
+    // from 1200 px on, so tableFont(13) alone would shrink it by 1 px there.
+    readonly property int _nameSize: Math.max(Config.Theme.tableFont(13), 14)
     readonly property int _stackSize: Config.Theme.tableFont(12)
 
     implicitWidth: 148
