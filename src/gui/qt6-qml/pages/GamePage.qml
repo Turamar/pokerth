@@ -1031,13 +1031,14 @@ Rectangle {
                 // fired for every side seat and threw the chip to the OUTER side –
                 // exactly the defect the player reported (bet → player → table).
                 // Since 2026-11-12 the bet is a PYRAMID of lying 22 px chips with
-                // the sum in a pill under it (BetChip): the block is 47 wide and at
-                // most 51.5 high in base px (3 stacks, up to 4 chips each, pill
-                // 13; the height follows the highest stack, so 51.5 is the maximum),
-                // so the clearance is 23.5/25.75 half size and the point returned
+                // the sum in a pill under it (BetChip): the block is 47 wide and
+                // 52.13 high in base px (the top chip stands a whole chip height
+                // above the base line + the pill 13; the split puts a stack of 2+
+                // chips only on a base slot, so nothing grows above the top chip).
+                // The clearance is 23.5/26.07 half size and the point returned
                 // here is the CENTRE of that block.
                 var chipHalfX = 23.5 * s
-                var chipHalfY = 25.75 * s
+                var chipHalfY = 26.07 * s
                 var gap = 6 * s
                 var right = width / 2 - cx          // > 0: table centre right of the box
                 var down = communityCenterY - cy    // > 0: table centre below the box

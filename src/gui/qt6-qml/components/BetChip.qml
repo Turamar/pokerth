@@ -5,8 +5,7 @@ import "../config" as Config
 // A bet (and the pot) on the felt: stacks of lying chips plus a dark pill with
 // the sum underneath. Two arrangements:
 //   • `pyramid` (a player's bet): two stacks at the base, one above between them,
-//     drawn from the back — the base stacks cover the lower edge of the top one;
-//     the block is 47 × at most 51.5 base px.
+//     drawn from the back; the block is 47 × 52.13 base px.
 //   • flat (the pot): all stacks side by side on one baseline (up to 72 × 34.7) —
 //     the strip above the board cannot take the height of a pyramid with a pill,
 //     and the top-seat bet needs the room between its plate and the pot.
@@ -21,14 +20,16 @@ import "../config" as Config
 // player's "стопка из двух работает, а из 4 нет" — a 400 bet is four 100-chips
 // and all four must show; the old `min(n, maxPerStack)` silently dropped two).
 // Only when every stack is full (maxPiles × maxPerStack) is the rest not drawn —
-// the pill has the truth. The height follows the highest stack, so a small pile
-// does not reserve room for a big one.
+// the pill has the truth.
 //
-// Each stack takes a RANDOM free slot, including the top one: a single stack can
-// end up anywhere in the pyramid (player's rule, 2026-11-12). The stacks are
-// painted back to front; lower chips of a stack are turned a little (±8°), each
-// differently, so the rim stripes never line up and the stack does not read as
-// one thick chip. The top chip stays upright for its value.
+// The stacks are painted back to front. A stack of two or more chips always takes
+// a BASE slot: in the top slot it would lift the pyramid by one band per chip and
+// the block would no longer fit between the plates and the board (see _slotDY).
+// Single chips share the free slots at random, so the top chip is a different
+// denomination every time (player's rule of 2026-11-12, kept where it costs
+// nothing). Lower chips of a stack are turned a little (±8°), each differently,
+// so the rim stripes never line up and the stack does not read as one thick chip.
+// The top chip stays upright for its value.
 //
 // The randomness is rolled when the amount changes and stored: a repaint, a
 // resize or a QML re-evaluation keeps the same picture.
@@ -70,14 +71,20 @@ Item {
     readonly property real _faceH: 0.7906 * _d
     // Visual bottom of a chip inside its square item.
     readonly property real _chipBottomInItem: _d / 2 + (_faceH + _band) / 2
-    // Base slots sit at ±_slotDX, the top slot _slotDY above them (tangent
-    // circles, no overlap).
+    // Base slots sit at ±_slotDX, the top slot _slotDY above them.
     readonly property real _slotDX: (_d + _gap) / 2
-    // The top pile sits ON the two base piles: its bottom edge is faceH − 5
-    // above the base line. A circle-triangle (√3/2·(d+1) = 19.9) would be taller
-    // and the block then does not fit between the plates; the five pixels of
-    // overlap only touch the base chips' top rim, never a face.
-    readonly property real _slotDY: _faceH - 5
+    // The top chip stands ONE FULL CHIP HEIGHT higher (face + band = 19.57 at
+    // 22 px), not "sitting on" the base chips (it was faceH − 5 = 12.4 until
+    // 2026-11-12). With the old value its lower edge hid under the base chips and
+    // the three read as merged: the player asked for the same small seam between
+    // ALL pairs ("синяя и чёрная чуть слиты вместе"). At one chip height the
+    // seam to a one-chip base stack is 2.9 px against the 3 px between the base
+    // stacks — the same small gap. A taller base stack rises towards the top chip
+    // and narrows that seam, which is what a stack in front of the back chip does.
+    // The price is height: the block is 52.13 instead of 51.5, and the reserve in
+    // GamePage/geometry.js follows it (52.13 is the last height with a clean
+    // 216-layout sweep; 52.3 already gives two findings).
+    readonly property real _slotDY: _faceH + _band
     readonly property int _pillH: Math.max(13, Math.round(fontSize) + 3)
     readonly property int _pillGap: 0
     readonly property int _pillPad: 7
@@ -86,16 +93,21 @@ Item {
     readonly property int _pileCount: _split.length
     width: pyramid ? 2 * _d + _gap
                    : Math.max(1, _pileCount) * _d + Math.max(0, _pileCount - 1) * _gap
-    // Height follows the HIGHEST stack of the current amount (the pill sits at the
-    // bottom, the chips grow upwards), so a one-chip bet is not as tall as a
-    // four-chip one. The clearances in GamePage/geometry.js reserve the maximum.
+    // Height. In the pyramid the reserve is CONSTANT: the top chip's top edge
+    // (a whole chip height above the base line) plus the pill. Base stacks never
+    // stick out above it — their chips stay below the top chip's top edge, — and
+    // a stack in the top slot is capped at one chip (see _roll), so nothing above
+    // the top chip is ever drawn. Constant height also keeps the bet's bottom line
+    // (the pill) at one distance from the plate for every amount.
+    // In a flat row (the pot) the height follows the highest stack.
     readonly property int _maxCount: {
         var m = 1
         for (var i = 0; i < _split.length; ++i)
             m = Math.max(m, _split[i].count)
         return m
     }
-    height: (pyramid && maxPiles > 2 ? _slotDY : 0) + _faceH + _maxCount * _band
+    height: ((pyramid && maxPiles > 2) ? _slotDY + _faceH + _band
+                                       : _faceH + _maxCount * _band)
             + _pillGap + _pillH
     // Baseline (visual bottom) of the stacks.
     readonly property real _baseY: height - _pillH - _pillGap
@@ -150,35 +162,74 @@ Item {
 
     // ── randomness: rolled when the bet is placed, then stored ─────────────
     property var _chips: []
+
+    function _shuffle(a) {
+        for (var i = a.length - 1; i > 0; --i) {
+            var j = Math.floor(Math.random() * (i + 1))
+            var t = a[i]; a[i] = a[j]; a[j] = t
+        }
+    }
+
+    // Slot capacities: both base slots hold a stack (up to maxPerStack chips), the
+    // top slot only ONE chip. The top slot stands a whole chip height above the
+    // base line (see _slotDY), so a second chip there would lift the block by a
+    // band and it would no longer fit the strip between the plates and the board;
+    // a tall stack also reads better in front (the reference client does the same).
+    readonly property int _topCap: 1
+
     function _roll() {
         var piles = splitOf(bet.amount)
-        if (!bet.pyramid) {
-            // Flat row: the stacks stand next to each other without gaps, so their
-            // left-to-right order is chosen randomly instead of the slot.
-            for (var q = piles.length - 1; q > 0; --q) {
-                var r = Math.floor(Math.random() * (q + 1))
-                var pt = piles[q]; piles[q] = piles[r]; piles[r] = pt
-            }
-        }
-        // One free slot per stack (0/1 base, 2 top — see the header).
-        var slots = []
-        for (var s = 0; s < Math.max(1, Math.min(3, bet.maxPiles)); ++s) slots.push(s)
-        for (var i = slots.length - 1; i > 0; --i) {
-            var j = Math.floor(Math.random() * (i + 1))
-            var t = slots[i]; slots[i] = slots[j]; slots[j] = t
-        }
-        // Assign the slots first, then draw the pyramid from the BACK: the stack on
-        // the top slot is painted FIRST, the two base stacks cover its lower edge.
-        // The other way round the top chip lay on the faces of the base chips
-        // (player's report 2026-11-12: "две нижние не перекрывают верхнюю").
         var entries = []
-        for (var p = 0; p < piles.length; ++p)
-            entries.push({ "pile": piles[p],
-                           "slot": bet.pyramid ? slots[p % slots.length] : p })
-        if (bet.pyramid)
+        if (!bet.pyramid) {
+            // Flat row (the pot): the stacks stand next to each other, so their
+            // left-to-right order is chosen randomly instead of the slot.
+            _shuffle(piles)
+            for (var q = 0; q < piles.length; ++q)
+                entries.push({ "pile": piles[q], "slot": q })
+        } else {
+            // Pyramid: stacks taller than the top slot's capacity go to the base
+            // slots first, single chips share whatever is left at random — so the
+            // top chip is a different denomination every time.
+            var multi = [], single = []
+            for (var p = 0; p < piles.length; ++p)
+                (piles[p].count > bet._topCap ? multi : single).push(piles[p])
+            _shuffle(multi)
+            _shuffle(single)
+            // The BIG stacks take the base slots: with two base slots free the two
+            // tallest piles go there, and if a third tall stack exists (three rungs
+            // with 2+ chips — a huge bet) the smallest one is the one the top slot
+            // cuts down to a single chip, which loses the fewest chips.
+            for (var t = 0; t < multi.length; ++t) multi[t]._r = Math.random()
+            multi.sort(function (a, b) {
+                return (b.count - a.count) || (a._r - b._r)
+            })
+            var free = [0, 1, 2]
+            _shuffle(free)
+            for (var m = 0; m < multi.length; ++m) {
+                var bi = -1
+                for (var f = 0; f < free.length; ++f)
+                    if (free[f] !== 2) { bi = f; break }
+                if (bi >= 0) {
+                    entries.push({ "pile": multi[m], "slot": free[bi] })
+                    free.splice(bi, 1)
+                } else {
+                    // Both base slots are taken (only huge bets with three tall
+                    // stacks): the top slot shows one chip, the pill has the sum.
+                    entries.push({ "pile": { "value": multi[m].value, "count": 1 },
+                                   "slot": 2 })
+                    free.splice(free.indexOf(2), 1)
+                }
+            }
+            for (var s = 0; s < single.length && free.length > 0; ++s)
+                entries.push({ "pile": single[s], "slot": free.pop() })
+            // Draw the pyramid from the BACK: the stack on the top slot is painted
+            // FIRST, the two base stacks cover its lower edge. The other way round
+            // the top chip lay on the faces of the base chips (player's report
+            // 2026-11-12: "две нижние не перекрывают верхнюю").
             entries.sort(function (a, b) {
                 return (a.slot === 2 ? 0 : 1) - (b.slot === 2 ? 0 : 1)
             })
+        }
         var out = []
         for (var e = 0; e < entries.length; ++e) {
             var pile = entries[e].pile
