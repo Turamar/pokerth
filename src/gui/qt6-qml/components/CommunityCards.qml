@@ -16,6 +16,10 @@ Item {
     // to the cards so that their SVG raster hits the real screen size
     // (see CardImage.renderScale).
     property real cardRenderScale: 1.0
+    // The same effective scale for the chips of the pot (see ChipImage.renderScale).
+    property real chipRenderScale: 1.0
+    // Print the denomination on the pot chips (tournaments only, see ChipImage).
+    property bool chipDigits: false
 
     // True while any board slot is currently revealing new cards
     // (stagger/backside/flip). The action bar locks the buttons on it –
@@ -165,11 +169,12 @@ Item {
     // number next to it is the truth and keeps its size whatever the pile shows.
     // A remainder below the smallest chip (5) is not drawn at all: no fake chips.
     //
-    // Height budget (Lead, GamePage): the block is 26 base pixels high and sits
-    // 6 base pixels above the card row → half a card (32) + 6 + 26 = 64 units
-    // above the centre of the card row. The old pill was 20 + 8 = 28 units above
-    // the cards (60 in total). Width = pile + amount; it is reported to GamePage
-    // for potHalfW.
+    // Height budget (Lead, GamePage): since the chips are 22 px (2026-11-12,
+    // second pass) the block is 28 base pixels high (22 px chip + one stacked
+    // chip at a 6 px step) and sits 6 base pixels above the card row → half a
+    // card (32) + 6 + 28 = 66 units above the centre of the card row (was 64 with
+    // the 26 px block of 12 px chips). Width = pile + amount; it is reported to
+    // GamePage for potHalfW (44 base half width, the pile is capped at 88).
     Item {
         id: potBadge
         anchors.horizontalCenter: cardRow.horizontalCenter
@@ -178,26 +183,31 @@ Item {
         anchors.bottomMargin: 6
         visible: (typeof GameTable !== "undefined" && GameTable) ? GameTable.totalPot > 0 : false
         width: potChip.width
-        height: 26
+        height: 28
         transformOrigin: Item.Center
 
         BetChip {
             id: potChip
             anchors.verticalCenter: parent.verticalCenter
             amount: (typeof GameTable !== "undefined" && GameTable) ? GameTable.totalPot : 0
-            // Chips of the pot are slightly smaller than on the bet: the block
-            // lives in a 26 px strip above the board. The width is capped at 66
-            // base px (GamePage potHalfW = 34 · communityScale) – when the sum is
-            // long, BetChip draws fewer columns instead of growing. No fake chips
-            // for a remainder below the smallest denomination (5): only the sum
-            // reports it.
-            iconSize: 12
+            // The pot chips are the same 22 px as a player's bet (2026-11-12):
+            // the block lives in a 28 px strip above the board, so the value is
+            // readable here too. Two columns and two chips per column keep the
+            // block at 88 base px (GamePage potHalfW = 44 · communityScale) – when
+            // the sum is long, BetChip draws fewer columns instead of growing (the
+            // sweep of 2026-11-12 showed a wider pot block pushes the felt bets
+            // into the plates). No fake chips for a remainder below the smallest
+            // denomination (5): only the sum reports it.
+            iconSize: 22
             // The amount is the readable part, the pile only decorates it.
             fontSize: Config.Theme.tableFont(12)
-            maxColumns: 5
-            maxWidth: 66
+            maxColumns: 2
+            maxPerColumn: 2
+            maxWidth: 88
             labelGap: 2
             textColor: Config.Theme.colorAccent
+            digits: root.chipDigits
+            renderScale: root.chipRenderScale
         }
 
         SequentialAnimation {

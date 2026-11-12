@@ -380,6 +380,8 @@ SeatBox {
             iconSize: 16
             fontSize: 12
             textColor: "#f0f0f0"
+            digits: root.chipDigits
+            renderScale: root.cardRenderScale
             // split: the bet to the right NEXT TO the box; otherwise centred inside.
             x: betGroup.split ? betGroup.width + 8 : (betGroup.width - width) / 2
             y: (betGroup.height - height) / 2
@@ -389,15 +391,25 @@ SeatBox {
     // ── The bet ON THE FELT ──────────────────────────────────────────────────
     // The bet is part of the table, not of the player's plate: it lies on the
     // felt between the box and the pot as a pile of chips. Position comes from
-    // GamePage (betFeltPoint).
+    // GamePage (betFeltPoint). Since 2026-11-12 the chips are 22 px (the
+    // player's own set, with the value printed where it is legible): the
+    // footprint grew a little in height (see chipHalfY in betFeltPoint).
     BetChip {
         id: feltBet
         visible: root.betOnFeltShown
         amount: root.bet
-        iconSize: 13
+        iconSize: 22
         fontSize: 10
         labelBelow: true
+        // Two columns on the felt: with 22 px chips three columns and the sum
+        // under them (41 × 53 base) still clear the plates; the third column was
+        // decoration only ("the number is the truth"), and the sweep of
+        // 2026-11-12 showed three columns do not fit at 1024/1280.
+        maxColumns: 2
+        maxPerColumn: 3
         textColor: "#f0f0f0"
+        digits: root.chipDigits
+        renderScale: root.cardRenderScale
         z: 24
         x: root.betAt.x - width / 2
         y: root.betAt.y - height / 2

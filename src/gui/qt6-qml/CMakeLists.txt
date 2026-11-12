@@ -101,6 +101,7 @@ set(QML_FILES
     components/AppText.qml
     components/SafeAreaInsets.qml
     components/BetChip.qml
+    components/ChipImage.qml
     components/BlindButtonImage.qml
     components/BrandHeader.qml
     components/CardImage.qml

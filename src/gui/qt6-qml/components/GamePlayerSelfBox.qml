@@ -261,17 +261,23 @@ SeatBox {
         id: topStrip
         z: 26
         width: root.width
-        height: 22
+        height: 28
         x: 0
         y: -height - 5
 
         // Right-aligned at the box edge (your own bet, next to your own plate).
+        // The same 22 px chips as on the felt (2026-11-12); two chips per column
+        // keep the pile inside the strip above the box.
         BetChip {
             id: betRow
             visible: root.bet > 0 && !root.betInset
             amount: root.bet
-            iconSize: 16
+            iconSize: 22
             fontSize: 12
+            maxColumns: 2
+            maxPerColumn: 2
+            digits: root.chipDigits
+            renderScale: root.cardRenderScale
             anchors.verticalCenter: parent.verticalCenter
             anchors.right: parent.right
             anchors.rightMargin: 2

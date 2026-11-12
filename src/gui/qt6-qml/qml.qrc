@@ -5,6 +5,7 @@
         <file>components/AppText.qml</file>
         <file>components/AppLabel.qml</file>
         <file>components/BetChip.qml</file>
+        <file>components/ChipImage.qml</file>
         <file>components/BlindButtonImage.qml</file>
         <file>components/PlayerActionBadge.qml</file>
         <file>components/PlayerTimeoutBar.qml</file>
@@ -344,5 +345,33 @@
         <file>resources/hands/twopair.svg</file>
         <file>resources/hands/onepair.svg</file>
         <file>resources/hands/highcard.svg</file>
+        <file>resources/chips/chip_5_sm.svg</file>
+        <file>resources/chips/chip_5_lg.svg</file>
+        <file>resources/chips/chip_5_tnum.svg</file>
+        <file>resources/chips/chip_10_sm.svg</file>
+        <file>resources/chips/chip_10_lg.svg</file>
+        <file>resources/chips/chip_10_tnum.svg</file>
+        <file>resources/chips/chip_25_sm.svg</file>
+        <file>resources/chips/chip_25_lg.svg</file>
+        <file>resources/chips/chip_25_tnum.svg</file>
+        <file>resources/chips/chip_100_sm.svg</file>
+        <file>resources/chips/chip_100_lg.svg</file>
+        <file>resources/chips/chip_100_tnum.svg</file>
+        <file>resources/chips/chip_500_sm.svg</file>
+        <file>resources/chips/chip_500_lg.svg</file>
+        <file>resources/chips/chip_500_tnum.svg</file>
+        <file>resources/chips/chip_2500_sm.svg</file>
+        <file>resources/chips/chip_2500_lg.svg</file>
+        <file>resources/chips/chip_2500_tnum.svg</file>
+        <file>resources/chips/chip_10000_sm.svg</file>
+        <file>resources/chips/chip_10000_lg.svg</file>
+        <file>resources/chips/chip_10000_tnum.svg</file>
+        <file>resources/chips/chip_50000_sm.svg</file>
+        <file>resources/chips/chip_50000_lg.svg</file>
+        <file>resources/chips/chip_50000_tnum.svg</file>
+        <file>resources/chips/chip_spare_ink_sm.svg</file>
+        <file>resources/chips/chip_spare_ink_lg.svg</file>
+        <file>resources/chips/chip_spare_bronze_sm.svg</file>
+        <file>resources/chips/chip_spare_bronze_lg.svg</file>
     </qresource>
 </RCC>

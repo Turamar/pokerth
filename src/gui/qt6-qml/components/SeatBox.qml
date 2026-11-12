@@ -24,6 +24,14 @@ Item {
     // Effective table scaling of this box (oppScale × zoom), passed on to the
     // cards so that their SVG raster hits the real screen size.
     property real cardRenderScale: 1.0
+    // Print the denomination on the chips of this seat's bet. Tournaments only:
+    // the cash ladder counts cents, so a printed "100" would mean $1 and lie
+    // there (see ChipImage). The chips themselves decide whether the value is
+    // legible at their size – `lg`/`sm` stay without a value when the chip is
+    // small (e.g. the chip in the bet base).
+    readonly property bool chipDigits:
+        (typeof GameTable !== "undefined" && GameTable
+         && GameTable.tournamentMode === true)
 
     // Bet base in the seat style "inset" (Config.SeatStyle): the bet stands
     // IN the box instead of next to it, and the box grows by exactly this height. 0 in

@@ -1029,40 +1029,57 @@ Rectangle {
                 // was "inside" its own plate by 3–4 px by construction, the test
                 // fired for every side seat and threw the chip to the OUTER side –
                 // exactly the defect the player reported (bet → player → table).
-                // Since the bet is a chip stack with the amount UNDER it (2026-11-12),
-                // the visual footprint grew to ~52×46 local units in the worst case
-                // (4 columns × 4 chips), so the clearance covers a bit more than before:
-                // 24/21 instead of 20/18.5.
-                var chipHalfX = 24 * s
-                var chipHalfY = 21 * s
+                // Since then the bet is a pile of 22 px chips with the amount UNDER
+                // it (2026-11-12, second pass): the visual footprint is 41×53 local
+                // units in the worst case (2 columns × 3 chips + amount, the columns
+                // only 14 % overlapped so the printed values stay readable), so the
+                // clearance is 21/27 half size. Three columns (60 wide) did not fit
+                // at 1024/1280 – the sweep of 2026-11-12 measured it.
+                var chipHalfX = 21 * s
+                var chipHalfY = 27 * s
                 var gap = 6 * s
                 var right = width / 2 - cx          // > 0: table centre right of the box
                 var down = communityCenterY - cy    // > 0: table centre below the box
                 // The community block: the card row is wide (±132·communityScale), the
-                // pot chip block above it is narrow (66 wide since the chip pyramid,
-                // it was a 60 px pill). A chip beside the block may come down to the
-                // cards' upper edge, one above the block not.
+                // pot chip block above it is narrow (up to 88 wide since the chips
+                // are 22 px, it was 66 with the 12 px chips). A chip beside the block
+                // may come down to the cards' upper edge, one above the block not.
                 var blockHalfW = 132 * communityScale + 6
-                var potHalfW = 34 * communityScale
+                var potHalfW = 44 * communityScale
 
                 function clampBlock(x, y) {
                     var fromCentre = Math.abs(x - width / 2)
                     if (fromCentre >= blockHalfW + chipHalfX) return y
                     var cardsTop = communityCenterY - 32 * communityScale - 2 - chipHalfY
                     var cardsBottom = communityCenterY + 32 * communityScale + 2 + chipHalfY
-                    // 64: half card (32) + pot gap (6) + chip pyramid block (26).
-                    var potTop = communityCenterY - 64 * communityScale - 2 - chipHalfY
+                    // 66: half card (32) + pot gap (6) + pot chip block (28).
+                    var potTop = communityCenterY - 66 * communityScale - 2 - chipHalfY
                     if (cy < communityCenterY)
                         return Math.min(y, fromCentre < potHalfW + chipHalfX ? potTop : cardsTop)
                     return Math.max(y, cardsBottom)
+                }
+                // ── Tolerated overlap (player's rule, 2026-11-12) ────────────────
+                // A chip may cut a few pixels into a plate or an avatar: a chip that
+                // sits close to its player reads better than a chip pushed far away
+                // into the felt. These are overlap DEPTHS in local px (the sweep
+                // model in tools/table-preview mirrors the same numbers).
+                var tolOwn = 11 * s      // the seat's own plate / avatar
+                var tolOther = 6 * s     // the neighbouring plates
+                var tolSelf = 8 * s      // the human's own box (for the bottom seats)
+
+                // Overlap depth of the chip block with a rect: > 0 only when the
+                // block overlaps in BOTH axes, which is the metric the sweep uses.
+                function overlapDepth(x, y, l, r, t, bm) {
+                    var oX = Math.min(x + chipHalfX, r) - Math.max(x - chipHalfX, l)
+                    var oY = Math.min(y + chipHalfY, bm) - Math.max(y - chipHalfY, t)
+                    return (oX > 0 && oY > 0) ? Math.min(oX, oY) : 0
                 }
                 // On the plate? Deliberately without the gap: the gap is already part
                 // of the offset, and the block clamp may eat a part of it – that is no
                 // reason to move the chip away.
                 function onPlate(x, y) {
-                    var oX = Math.min(x + chipHalfX, cx + halfW) - Math.max(x - chipHalfX, cx - halfW)
-                    var oY = Math.min(y + chipHalfY, cy + halfH) - Math.max(y - chipHalfY, cy - halfH)
-                    return oX > 0.5 && oY > 0.5
+                    return overlapDepth(x, y, cx - halfW, cx + halfW,
+                                        cy - halfH, cy + halfH) > tolOwn
                 }
                 function onOtherPlate(x, y) {
                     var players = (typeof GameTable !== "undefined" && GameTable)
@@ -1074,17 +1091,39 @@ Rectangle {
                         if (!info) continue
                         var ox = width * info.x + info.nudgeX
                         var oy = height * info.y + info.nudge
-                        if (Math.abs(x - ox) < halfW + chipHalfX
-                            && Math.abs(y - oy) < halfH + chipHalfY) return true
+                        if (overlapDepth(x, y, ox - halfW, ox + halfW,
+                                         oy - halfH, oy + halfH) > tolOther) return true
                     }
                     return false
                 }
 
-                function clear(x, y) { return !onPlate(x, y) && !onOtherPlate(x, y) }
+                // The self box is an obstacle too. It used to be skipped: the loop
+                // above starts at seat 1 and the QML placement never saw the own
+                // box, so with the bigger 22 px chips a bottom-row bet landed on it
+                // (the 216-layout sweep of 2026-11-12 found 17 such overlaps).
+                // Its visual rect: selfBaseWidth × selfBaseHeight × boxScale,
+                // horizontally centred, the lower edge 12 (wide) / 4 px above the
+                // bottom of the zone.
+                var selfW = selfBaseWidth * boxScale
+                var selfH = selfBaseHeight * boxScale
+                var selfL = width / 2 - selfW / 2
+                var selfR = width / 2 + selfW / 2
+                var selfT = height - (wide ? 12 : 4) - selfH
+                var selfB = selfT + selfH
+                function onSelfBox(x, y) {
+                    if (spectating) return false
+                    return overlapDepth(x, y, selfL, selfR, selfT, selfB) > tolSelf
+                }
 
-                // Offset up to the plate's edge plus the gap, per axis.
-                var stepX = halfW + chipHalfX + gap
-                var stepY = halfH + chipHalfY + gap
+                function clear(x, y) {
+                    return !onPlate(x, y) && !onOtherPlate(x, y) && !onSelfBox(x, y)
+                }
+
+                // Offset up to the plate's edge plus the gap, MINUS the tolerated
+                // overlap: that is the player's "closer to the player" – the chip's
+                // rim may just touch its own plate instead of floating away.
+                var stepX = halfW + chipHalfX + gap - tolOwn
+                var stepY = halfH + chipHalfY + gap - tolOwn
                 // How far the seat is offset from the centre along this axis: the top
                 // centre and the own seat have no horizontal one, and their chip must
                 // not slide sideways.
@@ -1103,26 +1142,35 @@ Rectangle {
                 //     badge (short table: a few pixels between the plate and the badge,
                 //     while two neighbouring chips sideways meet in the middle);
                 //  3) sideways at the plate's height;
-                //  4) further along the same diagonal – the chip landed on a
-                //     neighbour's plate.
+                //  4) a little further along the same diagonal – the chip landed on a
+                //     neighbour's plate. Deliberately only 1.25/1.5: the player does
+                //     not want a chip far from its seat (2026-11-12).
                 var tries = [[cx + dirX * stepX, cy + dirY * stepY],
                              [cx, cy + (down >= 0 ? 1 : -1) * stepY]]
                 if (shareX > 0.15)
                     tries.push([cx + (right >= 0 ? 1 : -1) * stepX, cy])
                 if (shareX > 0.05 && shareY > 0.05) {
-                    var ks = [1.3, 1.7, 2.2, 2.9]
+                    var ks = [1.25, 1.5]
                     for (var k = 0; k < ks.length; ++k)
                         tries.push([cx + dirX * stepX * ks[k], cy + dirY * stepY * ks[k]])
                 }
                 var px = cx, py = cy
+                var placed = false
                 for (var t = 0; t < tries.length; ++t) {
                     px = tries[t][0]
                     py = clampBlock(px, tries[t][1])
-                    if (clear(px, py)) break
+                    if (clear(px, py)) { placed = true; break }
+                }
+                // No free spot at all: the closest place in front beats a chip far
+                // away from its player – the tolerated overlap covers a small
+                // leftover (player's rule, 2026-11-12).
+                if (!placed) {
+                    px = tries[0][0]
+                    py = clampBlock(px, tries[0][1])
                 }
                 // Never beyond the edge of the table.
-                var mx = 8 + 22 * s
-                var my = 8 + 19 * s
+                var mx = 8 + chipHalfX
+                var my = 8 + chipHalfY
                 px = Math.max(mx, Math.min(width - mx, px))
                 py = Math.max(my, Math.min(height - my, py))
                 return Qt.point(px, py)
@@ -1305,6 +1353,11 @@ Rectangle {
                 scale: tableZone.communityScale
                 // Rasterize the cards in the real screen size (scale × zoom).
                 cardRenderScale: tableZone.communityScale * tableZone.zoomRenderMul
+                // The same for the chips of the pot (see ChipImage.renderScale);
+                // the value is printed on them in tournaments only.
+                chipRenderScale: tableZone.communityScale * tableZone.zoomRenderMul
+                chipDigits: (typeof GameTable !== "undefined" && GameTable
+                             && GameTable.tournamentMode === true)
             }
 
             // The winning hand (e.g. "full house") – only during the showdown.
@@ -1706,7 +1759,7 @@ Rectangle {
                 // the chat area. So only its width counts towards the overlap; the
                 // chip in the middle of the table can no longer be covered here.
                 var betSideExt   = (8 + 32) * s
-                var betBottomExt = 39 * s
+                var betBottomExt = 48 * s
                 // Search through all landscape slots: which boxes overlap horizontally?
                 var slots = slotPosLandscape
                 var maxH = height + actionBar.height - 8   // no limit → full
@@ -1795,7 +1848,7 @@ Rectangle {
                 // since the bet lies on the felt only the puck still sticks out
                 // sideways – on the right seats into the info area.
                 var betSideExt   = (8 + 32) * s
-                var betBottomExt = 39 * s
+                var betBottomExt = 48 * s
                 var slots = slotPosLandscape
                 var maxH = height + actionBar.height - 8
                 for (var name in slots) {
