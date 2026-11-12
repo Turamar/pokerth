@@ -10,8 +10,9 @@ what QtSvg can render.
 This is the repository copy of the player's chip set
 (E:\\Projects\\poker\\pokerth-chips).  It is the same generator; the differences
 are the extra tiers: "tnum" (the value printed from 24 px) and the LYING chip
-"obl" / "obln" (face squashed to 0.80, side band 6 % of the width, value absent /
-present) which the table uses since 2026-11-12.  The SVG assets under
+"obl" / "obln" (face squashed to 0.80, side band 10 % of the width, value absent /
+present) which the table uses since 2026-11-12, and the CASH label variants
+("5¢", "10¢", "$-free" dollar chips — see CASH below).  The SVG assets under
 src/gui/qt6-qml/resources/chips are built from this file (no PNG — the client
 does not use them).
 
@@ -56,6 +57,38 @@ CHIPS = [
                     mat="graphite", premium=True, label="50K", ink="#2c3138")),
     ("spare_ink",    dict(body="#1b2330", inlay="#e6ecf4", ins="#c8d2e0", n=6)),
     ("spare_bronze", dict(body="#8a5a26", inlay="#f6ecd9", ins="#f2d9a8", n=6)),
+]
+
+# Cash-table labels (2026-11-12). The cash ladder is the tournament one plus a
+# 1¢ rung, and the chips are printed in MONEY: a cent chip carries the cent sign
+# ("1¢", "5¢", "10¢", "25¢"), a dollar chip just its number ("1", "5", "25",
+# "100", "500") — "$500" would have to shrink to a different size than "$100" to
+# stay inside the inlay, so the sign is dropped and the colour/order tells the
+# rest. The bronze spare becomes the penny: it is the only body that had no
+# numbered variant.
+#
+# Only the LYING numbered tier ("obln") is generated: a cash chip is only ever
+# seen on the felt (a plate chip is below the digit threshold and uses the
+# unnumbered "obl" body of the same colour, e.g. d1 uses chip_100_obl.svg).
+CASH = [
+    ("c1",   dict(body="#8a5a26", inlay="#f6ecd9", ins="#f2d9a8", n=6,
+                  label="1\u00a2")),
+    ("c5",   dict(body="#b31d1d", inlay="#f4ece0", ins="#fbf7ef", n=6,
+                  label="5\u00a2")),
+    ("c10",  dict(body="#1f4fc4", inlay="#f4ece0", ins="#fbf7ef", n=6,
+                  label="10\u00a2")),
+    ("c25",  dict(body="#187a3c", inlay="#f4ece0", ins="#fbf7ef", n=6,
+                  label="25\u00a2")),
+    ("d1",   dict(body="#23262c", inlay="#f4ece0", ins="#fbf7ef", n=6,
+                  label="1")),
+    ("d5",   dict(body="#6a2cc0", inlay="#f4ece0", ins="#fbf7ef", n=6,
+                  label="5")),
+    ("d25",  dict(body="#b85410", inlay="#f4ece0", ins="#fbf7ef", n=6,
+                  label="25")),
+    ("d100", dict(body="#b8860b", inlay="#2b2318", ins="#f7e8c2", n=8,
+                  mat="gold", premium=True, label="100", ink="#f0cf78")),
+    ("d500", dict(body="#3a4048", inlay="#f3ecdd", ins="#d9b04a", n=8,
+                  mat="graphite", premium=True, label="500", ink="#2c3138")),
 ]
 
 # Numbers only where they fit: 48 px and up. More than three digits -> K.
@@ -551,9 +584,15 @@ def main(argv=None):
         os.makedirs(os.path.abspath(args.png_dir), exist_ok=True)
 
     total = 0
+    jobs = []
     for name, spec in CHIPS:
-        tiers = ("sm", "lg", "num", "tnum", "obln", "obl") if spec.get("label") \
-                else ("sm", "lg", "obl")
+        jobs.append((name, spec,
+                     ("sm", "lg", "num", "tnum", "obln", "obl")
+                     if spec.get("label") else ("sm", "lg", "obl")))
+    # Cash labels live in their own lying tier only (see CASH above).
+    for name, spec in CASH:
+        jobs.append((name, spec, ("obln",)))
+    for name, spec, tiers in jobs:
         if wanted:
             tiers = tuple(t for t in tiers if t in wanted)
         for tier in tiers:

@@ -1358,10 +1358,11 @@ Rectangle {
                 // Rasterize the cards in the real screen size (scale × zoom).
                 cardRenderScale: tableZone.communityScale * tableZone.zoomRenderMul
                 // The same for the chips of the pot (see ChipImage.renderScale);
-                // the value is printed on them in tournaments only.
+                // the value is printed on them in both modes (money at a cash
+                // table, chip counts in a tournament).
                 chipRenderScale: tableZone.communityScale * tableZone.zoomRenderMul
-                chipDigits: (typeof GameTable !== "undefined" && GameTable
-                             && GameTable.tournamentMode === true)
+                chipCash: (typeof GameTable !== "undefined" && GameTable
+                           && GameTable.tournamentMode !== true)
             }
 
             // The winning hand (e.g. "full house") – only during the showdown.

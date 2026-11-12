@@ -392,5 +392,14 @@
         <file>resources/chips/chip_5_obln.svg</file>
         <file>resources/chips/chip_spare_bronze_obl.svg</file>
         <file>resources/chips/chip_spare_ink_obl.svg</file>
+        <file>resources/chips/chip_c1_obln.svg</file>
+        <file>resources/chips/chip_c5_obln.svg</file>
+        <file>resources/chips/chip_c10_obln.svg</file>
+        <file>resources/chips/chip_c25_obln.svg</file>
+        <file>resources/chips/chip_d1_obln.svg</file>
+        <file>resources/chips/chip_d5_obln.svg</file>
+        <file>resources/chips/chip_d25_obln.svg</file>
+        <file>resources/chips/chip_d100_obln.svg</file>
+        <file>resources/chips/chip_d500_obln.svg</file>
     </qresource>
 </RCC>

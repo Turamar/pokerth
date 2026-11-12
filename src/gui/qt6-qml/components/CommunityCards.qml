@@ -18,8 +18,8 @@ Item {
     property real cardRenderScale: 1.0
     // The same effective scale for the chips of the pot (see ChipImage.renderScale).
     property real chipRenderScale: 1.0
-    // Print the denomination on the pot chips (tournaments only, see ChipImage).
-    property bool chipDigits: false
+    // Cash table: money ladder with the 1¢ rung and money labels (see ChipImage).
+    property bool chipCash: false
 
     // True while any board slot is currently revealing new cards
     // (stagger/backside/flip). The action bar locks the buttons on it –
@@ -213,7 +213,7 @@ Item {
             // the board has no room for a bigger one.
             fontSize: 10
             textColor: Config.Theme.colorAccent
-            digits: root.chipDigits
+            cash: root.chipCash
             renderScale: root.chipRenderScale
         }
 

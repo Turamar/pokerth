@@ -40,8 +40,9 @@ Item {
     property color textColor: "#eff1f5"
     // Width (diameter) of one chip in base pixels.
     property int chipSize: 22
-    // Print the denomination (tournament only — see ChipImage).
-    property bool digits: false
+    // Cash table: the ladder gains the 1¢ rung (money, cents) and the chips
+    // print money — see ChipImage and `_ladder`. Tournaments count chips.
+    property bool cash: false
     // Effective screen scale of the parents, passed to ChipImage.
     property real renderScale: 1
     property int fontSize: Config.Theme.tableFont(11)
@@ -57,8 +58,15 @@ Item {
     // Pyramid (a bet) vs a flat row of stacks (the pot) — see the header.
     property bool pyramid: true
 
-    readonly property var _ladder: [50000, 10000, 2500, 500, 100, 25, 10, 5]
-    readonly property int _minChipValue: 5
+    // The ladder (top rung first, the last one is the smallest chip):
+    //   • tournament — chip counts 5 … 50000, eight rungs (the smallest is 5, so
+    //     an all-in below it is drawn as the neutral spare chip);
+    //   • cash — money in CENTS with the 1¢ rung added (2026-11-12): every amount
+    //     is then a whole number of pennies, so a cash bet has no spare chip.
+    readonly property var _ladder: cash
+        ? [50000, 10000, 2500, 500, 100, 25, 10, 5, 1]
+        : [50000, 10000, 2500, 500, 100, 25, 10, 5]
+    readonly property int _minChipValue: _ladder[_ladder.length - 1]
 
     // ── geometry constants (see ChipImage for the asset proportions) ────────
     readonly property real _d: chipSize
@@ -137,8 +145,11 @@ Item {
     function splitOf(a) {
         a = Math.max(0, Math.round(a))
         if (a <= 0) return []
-        // Below the smallest chip (e.g. a 4c bet): one neutral chip as
-        // decoration, never a stack of copies of it, and the pill tells the sum.
+        // Below the smallest chip: one neutral chip as decoration, never a stack
+        // of copies of it, and the pill tells the sum. Cash has the 1¢ rung, so
+        // this is a tournament all-in of 1–4 chips; the rest of a cash remainder
+        // (a raise that is not a whole number of rungs) is simply not drawn —
+        // floor, the pill is the truth (player's rule of 2026-11-12).
         if (a < bet._minChipValue) return [{ "value": 0, "count": 1 }]
         var rest = a, out = []
         for (var i = 0; i < bet._ladder.length && rest > 0; ++i) {
@@ -262,7 +273,7 @@ Item {
             required property var modelData
             chipSize: bet._d
             value: modelData.value
-            digits: bet.digits
+            cash: bet.cash
             renderScale: bet.renderScale
             rotation: modelData.rot
             x: bet.width / 2 + bet.slotCentre(modelData.slot) - width / 2

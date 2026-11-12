@@ -380,7 +380,7 @@ SeatBox {
             chipSize: 16
             fontSize: 12
             textColor: "#f0f0f0"
-            digits: root.chipDigits
+            cash: root.chipCash
             renderScale: root.cardRenderScale
             // Up to four chips per stack: a 400 bet is four 100-chips and all of
             // them must show (player's bug of 2026-11-12 in a plate's bet).
@@ -405,7 +405,7 @@ SeatBox {
         chipSize: 22
         fontSize: 10
         textColor: "#f0f0f0"
-        digits: root.chipDigits
+        cash: root.chipCash
         renderScale: root.cardRenderScale
         z: 24
         x: root.betAt.x - width / 2

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Checks the generated chip assets and builds the contact sheet.
 
-For the 46 SVG files in src/gui/qt6-qml/resources/chips:
+For the 55 SVG files in src/gui/qt6-qml/resources/chips:
   * every file is well-formed XML, 1024x1024 viewBox, no <filter>/<mask>/<clipPath>
     (QtSvg cannot render those), and no filter/mask/clip-path reference;
   * every file renders through resvg at 24/28/35/48/96 px;
@@ -13,6 +13,7 @@ For the 46 SVG files in src/gui/qt6-qml/resources/chips:
       - "tnum 1:1": all 8 values at 24 / 28 / 35 px,
       - "лежачие 1:1": all 8 values lying (obln) at 28 px and the same chips
         without a value (obl) at 24 px,
+      - "кэш 1:1": the nine cash labels lying (obln) at 22 / 28 px,
       - "sm/lg 1:1": all 10 chips at 16 (sm) and 22 (lg) px,
       - "x3": 5 / 100 / 2.5K / 10K at 96 px.
 
@@ -40,10 +41,15 @@ NOMINALS = [("5", "5"), ("10", "10"), ("25", "25"), ("100", "100"),
             ("50000", "50K")]
 ALL_CHIPS = NOMINALS + [("spare_ink", "spare ink"),
                         ("spare_bronze", "spare bronze")]
+# Cash-table labels (chipgen.CASH), only the lying numbered tier exists for them.
+CASH_CHIPS = [("c1", "1¢"), ("c5", "5¢"), ("c10", "10¢"), ("c25", "25¢"),
+              ("d1", "1"), ("d5", "5"), ("d25", "25"), ("d100", "100"),
+              ("d500", "500")]
 ZOOM = [("5", "5"), ("100", "100"), ("2500", "2.5K"), ("10000", "10K")]
 
 CHECK_SIZES = (24, 28, 35, 48, 96)
 TNUM_SIZES = (24, 28, 35)
+CASH_SIZES = (22, 28, 35, 48, 96)
 
 
 def asset_path(name, tier):
@@ -153,6 +159,20 @@ def render_all():
             with open(p, "wb") as f:
                 f.write(data)
             rendered += 1
+    # the cash labels: only the lying numbered tier exists
+    for name, _disp in CASH_CHIPS:
+        with open(asset_path(name, "obln"), "r", encoding="utf-8") as f:
+            svg = f.read()
+        for px in CASH_SIZES:
+            try:
+                data = chipgen.render(svg, px)
+            except Exception as e:  # noqa: BLE001
+                errors.append("%s obln %d px: %s" % (name, px, e))
+                continue
+            p = os.path.join(PNG_DIR, "chip_%s_obln_%d.png" % (name, px))
+            with open(p, "wb") as f:
+                f.write(data)
+            rendered += 1
     return (not errors), errors, rendered
 
 
@@ -183,7 +203,7 @@ def chip(name, tier, px):
 
 
 def build_sheet():
-    H = 1100                      # cropped to content afterwards
+    H = 1320                      # cropped to content afterwards
     img = Image.new("RGB", (W, H), FELT)
     d = ImageDraw.Draw(img)
     f_title = font(24, True)
@@ -196,7 +216,8 @@ def build_sheet():
     y = 26
     d.text((40, y), "PokerTH — фишки на столе: контрольный лист (tnum + лежачие)", font=f_title, fill=WHITE)
     y += 34
-    d.text((40, y), "46 SVG в src/gui/qt6-qml/resources/chips (8 номиналов × sm/lg/tnum/obln/obl, 2 запасных × sm/lg/obl), "
+    d.text((40, y), "55 SVG в src/gui/qt6-qml/resources/chips (8 номиналов × sm/lg/tnum/obln/obl, "
+                    "2 запасных × sm/lg/obl, 9 кэш-вариантов × obln), "
                     "рендер resvg 1:1", font=f_sub, fill=DIM)
     y += 20
     d.text((40, y), "tnum: борт как у lg — инлей 0.70 R, вставки от 0.745 R, шаг 0.034, без пина; "
@@ -246,9 +267,9 @@ def build_sheet():
     y += 18
 
     # ── block 3: the lying chips ──────────────────────────────────────────
-    d.text((40, y), "лежачие 1:1 — obln 28 px (с цифрой) и obl 24 px (кэш, без цифры)",
+    d.text((40, y), "лежачие 1:1 — obln 28 px (с цифрой) и obl 24 px (без цифры: чип мельче порога)",
            font=f_block, fill=WHITE)
-    d.text((40, y + 26), "лицо 0.80 ширины + боковина 6 %: фишка лежит на сукне, стопка = сдвиг на высоту боковины",
+    d.text((40, y + 26), "лицо 0.80 ширины + боковина 10 %: фишка лежит на сукне, стопка = сдвиг на высоту боковины",
            font=f_sub, fill=DIM)
     y += 46
     cell = 116
@@ -265,7 +286,28 @@ def build_sheet():
     d.line([40, y, W - 40, y], fill=RULE, width=1)
     y += 18
 
-    # ── block 4: x3 zoom ──────────────────────────────────────────────────
+    # ── block 4: the cash labels ──────────────────────────────────────────
+    d.text((40, y), "кэш 1:1 — obln 22 / 28 px: сумма напечатана на фишке",
+           font=f_block, fill=WHITE)
+    d.text((40, y + 26), "центы со знаком ¢ (1¢ 5¢ 10¢ 25¢), доллары числом (1 5 25 100 500): "
+                         "«$500» пришлось бы мельчить против «$100»",
+           font=f_sub, fill=DIM)
+    y += 46
+    cell = 116
+    x0 = (W - cell * len(CASH_CHIPS)) // 2
+    for px in (22, 28):
+        d.text((x0 - 58, y + px / 2 - 9), "%d px" % px, font=f_row, fill=ACCENT)
+        for i, (name, disp) in enumerate(CASH_CHIPS):
+            cx = x0 + i * cell + cell // 2
+            im = chip(name, "obln", px)
+            img.paste(im, (cx - im.width // 2, y), im)
+            ctext(d, cx, y + px + 4, disp, f_cap, DIM)
+        y += px + 34
+    y += 8
+    d.line([40, y, W - 40, y], fill=RULE, width=1)
+    y += 18
+
+    # ── block 5: x3 zoom ──────────────────────────────────────────────────
     d.text((40, y), "×3 — 5 / 100 / 2.5K / 10K крупно (96 px)",
            font=f_block, fill=WHITE)
     d.text((40, y + 26), "3× от 32 px: видно форму цифр и кромку; те же tnum SVG, просто больше",
@@ -282,7 +324,7 @@ def build_sheet():
     y += 14
     d.line([40, y, W - 40, y], fill=RULE, width=1)
     y += 12
-    d.text((40, y), "Источник: pokerth-src/tools/chipgen/chipgen.py → resources/chips/*.svg (46 файлов) · "
+    d.text((40, y), "Источник: pokerth-src/tools/chipgen/chipgen.py → resources/chips/*.svg (55 файлов) · "
                     "фон #17452e · рендер resvg_py",
            font=f_small, fill=DIM)
     y += 26

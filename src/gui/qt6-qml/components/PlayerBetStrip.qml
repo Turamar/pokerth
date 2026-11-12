@@ -16,6 +16,8 @@ Item {
     id: strip
 
     property int amount: 0
+    // Cash table: money ladder with the 1¢ rung and money labels (see BetChip).
+    property bool cash: false
     // Unfolded? Controls the height – the box follows it.
     property bool open: false
 
@@ -54,6 +56,7 @@ Item {
             anchors.centerIn: parent
             visible: strip.amount > 0
             amount: strip.amount
+            cash: strip.cash
             chipSize: 12
             fontSize: 11
             textColor: "#eff1f5"

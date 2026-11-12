@@ -23,7 +23,8 @@ Item {
     property color textColor: "#eff1f5"
     // Width (diameter) of one chip in base pixels.
     property int chipSize: 16
-    property bool digits: false
+    // Cash table: money ladder with the 1¢ rung, money labels (see BetChip).
+    property bool cash: false
     property real renderScale: 1
     property int fontSize: Config.Theme.tableFont(11)
     // Test hook (see BetChip): printed instead of GameTable.amount().
@@ -34,8 +35,12 @@ Item {
     // it still fits the 28 px bet strip above the own box.
     property int maxPerColumn: 4
 
-    readonly property var _ladder: [50000, 10000, 2500, 500, 100, 25, 10, 5]
-    readonly property int _minChipValue: 5
+    // Same two ladders as the felt pile (see BetChip): cash is money in cents
+    // with the 1¢ rung, a tournament counts chips.
+    readonly property var _ladder: cash
+        ? [50000, 10000, 2500, 500, 100, 25, 10, 5, 1]
+        : [50000, 10000, 2500, 500, 100, 25, 10, 5]
+    readonly property int _minChipValue: _ladder[_ladder.length - 1]
 
     readonly property real _d: chipSize
     readonly property real _band: 0.0988 * _d
@@ -123,7 +128,7 @@ Item {
                     required property int index
                     chipSize: row._d
                     value: entry.value
-                    digits: row.digits
+                    cash: row.cash
                     renderScale: row.renderScale
                     rotation: (index < rots.length) ? rots[index] : 0
                     x: (row._d - width) / 2

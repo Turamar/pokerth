@@ -250,6 +250,7 @@ SeatBox {
             id: betStrip
             open: root.stripOpen
             amount: root.bet
+            cash: root.chipCash
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
@@ -277,7 +278,7 @@ SeatBox {
             fontSize: 12
             maxColumns: 2
             maxPerColumn: 4
-            digits: root.chipDigits
+            cash: root.chipCash
             renderScale: root.cardRenderScale
             anchors.verticalCenter: parent.verticalCenter
             anchors.right: parent.right

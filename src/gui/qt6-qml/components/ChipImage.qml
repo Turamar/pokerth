@@ -20,9 +20,16 @@ import QtQuick.Window
 // player reported that chips "lose their digit when they get into the pot"
 // (2026-11-12). The pot now uses the same 22 px chips as a bet.
 //
-// The value is printed only in tournaments: the cash ladder counts cents, so a
-// printed "100" would mean $1 and lie. `value` 0 is the neutral fallback chip
-// for an amount below the smallest denomination — the spare chip without a value.
+// The value is printed in tournaments AND at cash tables since 2026-11-12. A
+// cash bet is money, and since the ladder is cents the printed value is honest
+// exactly (the old worry "a printed 100 would mean $1" is gone because the
+// smallest chip is 1¢): a cent chip carries the cent sign ("1¢", "5¢", "10¢",
+// "25¢"), a dollar chip just its number ("1", "5", "25", "100", "500") — "$500"
+// would have to shrink against "$100" to stay in the inlay. `cash` picks the
+// LABELLED set (chip_c5_obln.svg); the unnumbered tier ("obl", e.g. the chip in
+// a plate / a bet base) uses the same bodies in both modes, except the bronze
+// penny, which has no tournament twin (`spare_bronze`). `value` 0 is the neutral
+// spare chip for an amount below the smallest denomination of the ladder.
 //
 // Rasterisation: the SVG is rasterised at the real screen pixel size
 // (logical size × parent scale × devicePixelRatio), exactly like CardImage:
@@ -31,14 +38,14 @@ import QtQuick.Window
 Item {
     id: chip
 
-    // Ladder value of the chip (5 … 50000), 0 = the neutral spare chip.
+    // Ladder value of the chip (1 … 50000), 0 = the neutral spare chip.
     property int value: 5
     // Diameter (width) in the caller's logical (table base) pixels.
     property int chipSize: 22
     // Effective screen scale of the parents (boxScale/oppScale/communityScale × zoom).
     property real renderScale: 1
-    // Print the denomination (tournaments only — see the header).
-    property bool digits: false
+    // Cash table (money labels) instead of tournament chips (chip counts).
+    property bool cash: false
     // Lying geometry (the table chips). false = the old round top-down tiers,
     // kept so that a caller can still ask for the flat look.
     property bool lying: true
@@ -51,7 +58,9 @@ Item {
     readonly property real _dpr: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
 
     // The file name inside the set (`chip_<name>_<tier>.svg`).
-    readonly property string _name: {
+    // Tournament chips count chips, the cash ones count money (see the header):
+    // the same body carries different values, so the labelled asset differs.
+    readonly property string _tournamentName: {
         switch (value) {
         case 5:     return "5"
         case 10:    return "10"
@@ -64,13 +73,34 @@ Item {
         default:    return "spare_ink"       // 0 = neutral, no denomination
         }
     }
-    readonly property bool _numbered: _name !== "spare_ink" && _name !== "spare_bronze"
+    // Cash labels: 1¢/5¢/10¢/25¢ and the dollar rungs as plain numbers.
+    readonly property string _cashName: {
+        if (_tier === "obln") {
+            switch (value) {
+            case 1:     return "c1"
+            case 5:     return "c5"
+            case 10:    return "c10"
+            case 25:    return "c25"
+            case 100:   return "d1"
+            case 500:   return "d5"
+            case 2500:  return "d25"
+            case 10000: return "d100"
+            case 50000: return "d500"
+            default:    return "spare_ink"
+            }
+        }
+        // Small chip (no room for the value): the same bodies as the tournament
+        // set — only the bronze penny has no tournament twin.
+        return value === 1 ? "spare_bronze" : _tournamentName
+    }
+    readonly property string _name: cash ? _cashName : _tournamentName
+    readonly property bool _numbered: value > 0
     readonly property string _tier: {
         if (lying) {
-            // the lying set only carries numbers for the eight denominations
-            return (digits && _numbered && _screenPx >= 22) ? "obln" : "obl"
+            // the lying set carries numbers for every ladder rung of the mode
+            return (_numbered && _screenPx >= 22) ? "obln" : "obl"
         }
-        return (digits && _numbered && _screenPx >= 24) ? "tnum"
+        return (_numbered && _screenPx >= 24) ? "tnum"
              : (_screenPx >= 21 ? "lg" : "sm")
     }
     readonly property int _rasterPx: Math.max(1, Math.ceil(_screenPx * _dpr))
