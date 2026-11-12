@@ -29,7 +29,7 @@ Item {
     readonly property int _minChipValue: 5
 
     readonly property real _d: chipSize
-    readonly property real _band: 0.0593 * _d
+    readonly property real _band: 0.0988 * _d
     readonly property real _faceH: 0.7906 * _d
     readonly property real _chipBottomInItem: _d / 2 + (_faceH + _band) / 2
     readonly property real _colStep: _d + 1

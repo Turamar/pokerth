@@ -231,10 +231,10 @@ TIERS = {
     # (tournament).
     "obl": dict(ins_in=0.700, ins_from=0.745, ang=22.0, step=0.034, pin=0.0,
                 spec=0.050, dark=0.050, edge=0.008, inlay_tint=1.0, ins_tint=1.0,
-                sy=0.80, band=0.06),
+                sy=0.80, band=0.10),
     "obln": dict(ins_in=0.700, ins_from=0.745, ang=22.0, step=0.034, pin=0.0,
                  spec=0.050, dark=0.050, edge=0.008, inlay_tint=1.0, ins_tint=1.0,
-                 label=True, sy=0.80, band=0.06),
+                 label=True, sy=0.80, band=0.10),
 }
 
 # How the value is drawn on the lying chip: "squash" = part of the squashed face
@@ -372,12 +372,12 @@ def band_svg(spec, g, cy):
     el.append('<path d="%s" fill="url(#oblside)"/>' % _band_path(cy, ry, band))
     # 4. a light line right under the face (the face's edge catches the light)
     el.append('<path d="M %.2f %.2f A %.2f %.2f 0 0 0 %.2f %.2f" fill="none" '
-              'stroke="%s" stroke-opacity="0.55" stroke-width="%.1f"/>'
-              % (C - R, cy, R, ry, C + R, cy, hx(light(rgb(spec["inlay"]), 1.0)), R * 0.012))
+              'stroke="%s" stroke-opacity="0.70" stroke-width="%.1f"/>'
+              % (C - R, cy, R, ry, C + R, cy, hx(light(rgb(spec["inlay"]), 1.0)), R * 0.022))
     # 5. the bottom edge of the side
     el.append('<path d="M %.2f %.2f A %.2f %.2f 0 0 0 %.2f %.2f" fill="none" '
-              'stroke="#000000" stroke-opacity="0.45" stroke-width="%.1f"/>'
-              % (C + R, cy + band, R, ry, C - R, cy + band, R * 0.012))
+              'stroke="#000000" stroke-opacity="0.55" stroke-width="%.1f"/>'
+              % (C + R, cy + band, R, ry, C - R, cy + band, R * 0.022))
     return el
 
 

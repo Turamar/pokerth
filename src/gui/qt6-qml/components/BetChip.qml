@@ -46,7 +46,7 @@ Item {
     // ── geometry constants (see ChipImage for the asset proportions) ────────
     readonly property real _d: chipSize
     readonly property real _gap: 1
-    readonly property real _band: 0.0593 * _d
+    readonly property real _band: 0.0988 * _d
     readonly property real _faceH: 0.7906 * _d
     // Visual bottom of a chip inside its square item.
     readonly property real _chipBottomInItem: _d / 2 + (_faceH + _band) / 2
@@ -57,9 +57,9 @@ Item {
     // above the base line. A circle-triangle (√3/2·(d+1) = 19.9) would be taller
     // and the block then does not fit between the plates; the two pixels of
     // overlap only touch the base chips' top rim, never a face.
-    readonly property real _slotDY: _faceH - 3
+    readonly property real _slotDY: _faceH - 5
     readonly property int _pillH: Math.max(13, Math.round(fontSize) + 3)
-    readonly property int _pillGap: 1
+    readonly property int _pillGap: 0
     readonly property int _pillPad: 7
 
     width: 2 * _d + _gap

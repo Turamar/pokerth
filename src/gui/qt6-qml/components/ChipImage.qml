@@ -73,7 +73,7 @@ Item {
     // offsetting the next chip up by exactly `bandStep`; then every lower chip
     // shows only its own side.
     readonly property real faceHeight: 0.7906 * chipSize     // 2R·0.80 of the canvas
-    readonly property real bandStep: 0.0593 * chipSize       // 0.06·2R of the canvas
+    readonly property real bandStep: 0.0988 * chipSize       // 0.10·2R of the canvas
     // Visual bottom/top of the chip inside the square item (for stacking maths).
     readonly property real chipBottom: chipSize / 2 + (faceHeight + bandStep) / 2
     readonly property real chipTop: chipSize / 2 - (faceHeight + bandStep) / 2

@@ -1035,7 +1035,7 @@ Rectangle {
                 // so the clearance is 22.5/30.25 half size and the point returned
                 // here is the CENTRE of that block.
                 var chipHalfX = 22.5 * s
-                var chipHalfY = 24.85 * s
+                var chipHalfY = 24.65 * s
                 var gap = 6 * s
                 var right = width / 2 - cx          // > 0: table centre right of the box
                 var down = communityCenterY - cy    // > 0: table centre below the box
@@ -1758,7 +1758,7 @@ Rectangle {
                 // the chat area. So only its width counts towards the overlap; the
                 // chip in the middle of the table can no longer be covered here.
                 var betSideExt   = (8 + 32) * s
-                var betBottomExt = 45 * s
+                var betBottomExt = 44 * s
                 // Search through all landscape slots: which boxes overlap horizontally?
                 var slots = slotPosLandscape
                 var maxH = height + actionBar.height - 8   // no limit → full
@@ -1847,7 +1847,7 @@ Rectangle {
                 // since the bet lies on the felt only the puck still sticks out
                 // sideways – on the right seats into the info area.
                 var betSideExt   = (8 + 32) * s
-                var betBottomExt = 45 * s
+                var betBottomExt = 44 * s
                 var slots = slotPosLandscape
                 var maxH = height + actionBar.height - 8
                 for (var name in slots) {
