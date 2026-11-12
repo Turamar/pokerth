@@ -41,7 +41,9 @@ Item {
     readonly property real _band: 0.0988 * _d
     readonly property real _faceH: 0.7906 * _d
     readonly property real _chipBottomInItem: _d / 2 + (_faceH + _band) / 2
-    readonly property real _colStep: _d + 1
+    // 3 px between the columns: a rotated lower chip is wider than its upright
+    // neighbour, 1 px let the bands of two neighbouring stacks touch.
+    readonly property real _colStep: _d + 3
 
     // A PURE function of the amount: the rotation roll below must not read the
     // `_columns` binding (it is stale inside `onAmountChanged` — the same bug the
@@ -70,9 +72,10 @@ Item {
     }
     readonly property var _columns: columnsOf(amount)
     // Rotation of the lower chips of every stack (the top chip stays upright so
-    // its value is readable). Rolled when the amount changes and stored: a repaint
-    // or a resize keeps the picture — and the rim stripes of the chips never line
-    // up, so a stack does not read as one thick chip (player's rule, 2026-11-12).
+    // its value is readable). ±8°: the rim stripes still never line up, but a
+    // rotated band does not stick out into the neighbouring column (a ±15° turn
+    // reached 2.2 px sideways). Rolled when the amount changes and stored: a
+    // repaint or a resize keeps the picture.
     property var _rots: []
     function _rollRots() {
         var cols = columnsOf(row.amount)
@@ -80,7 +83,7 @@ Item {
         for (var c = 0; c < cols.length; ++c) {
             var arr = []
             for (var k = 0; k < cols[c].count; ++k)
-                arr.push(k === cols[c].count - 1 ? 0 : (Math.random() * 30 - 15))
+                arr.push(k === cols[c].count - 1 ? 0 : (Math.random() * 16 - 8))
             out.push(arr)
         }
         row._rots = out

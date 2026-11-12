@@ -4,9 +4,10 @@ import "../config" as Config
 
 // A bet (and the pot) on the felt: stacks of lying chips plus a dark pill with
 // the sum underneath. Two arrangements:
-//   • `pyramid` (a player's bet): two stacks at the base, one above between them;
-//     the returned block is 45 × at most 51.5 base px.
-//   • flat (the pot): all stacks side by side on one baseline (up to 68 × 34.7) —
+//   • `pyramid` (a player's bet): two stacks at the base, one above between them,
+//     drawn from the back — the base stacks cover the lower edge of the top one;
+//     the block is 47 × at most 51.5 base px.
+//   • flat (the pot): all stacks side by side on one baseline (up to 72 × 34.7) —
 //     the strip above the board cannot take the height of a pyramid with a pill,
 //     and the top-seat bet needs the room between its plate and the pot.
 //
@@ -24,9 +25,10 @@ import "../config" as Config
 // does not reserve room for a big one.
 //
 // Each stack takes a RANDOM free slot, including the top one: a single stack can
-// end up anywhere in the pyramid (player's rule, 2026-11-12). Lower chips of a
-// stack are rotated a little, each differently, so the rim stripes never line up;
-// the top chip stays upright for its value.
+// end up anywhere in the pyramid (player's rule, 2026-11-12). The stacks are
+// painted back to front; lower chips of a stack are turned a little (±8°), each
+// differently, so the rim stripes never line up and the stack does not read as
+// one thick chip. The top chip stays upright for its value.
 //
 // The randomness is rolled when the amount changes and stored: a repaint, a
 // resize or a QML re-evaluation keeps the same picture.
@@ -59,7 +61,11 @@ Item {
 
     // ── geometry constants (see ChipImage for the asset proportions) ────────
     readonly property real _d: chipSize
-    readonly property real _gap: 1
+    // Gap between the stacks (3 px since 2026-11-12, was 1): a rotated lower chip
+    // is wider than its upright neighbour, and with a 1 px gap the two base stacks
+    // of the pyramid touched/overlapped (player: "они реально накладываются друг
+    // на друга"). 3 px guarantees a visible seam between the piles.
+    readonly property real _gap: 3
     readonly property real _band: 0.0988 * _d
     readonly property real _faceH: 0.7906 * _d
     // Visual bottom of a chip inside its square item.
@@ -161,16 +167,35 @@ Item {
             var j = Math.floor(Math.random() * (i + 1))
             var t = slots[i]; slots[i] = slots[j]; slots[j] = t
         }
+        // Assign the slots first, then draw the pyramid from the BACK: the stack on
+        // the top slot is painted FIRST, the two base stacks cover its lower edge.
+        // The other way round the top chip lay on the faces of the base chips
+        // (player's report 2026-11-12: "две нижние не перекрывают верхнюю").
+        var entries = []
+        for (var p = 0; p < piles.length; ++p)
+            entries.push({ "pile": piles[p],
+                           "slot": bet.pyramid ? slots[p % slots.length] : p })
+        if (bet.pyramid)
+            entries.sort(function (a, b) {
+                return (a.slot === 2 ? 0 : 1) - (b.slot === 2 ? 0 : 1)
+            })
         var out = []
-        for (var p = 0; p < piles.length; ++p) {
-            var count = piles[p].count
+        for (var e = 0; e < entries.length; ++e) {
+            var pile = entries[e].pile
+            var count = pile.count
             for (var k = 0; k < count; ++k) {
                 out.push({
-                    "value": piles[p].value,
-                    "slot": bet.pyramid ? slots[p % slots.length] : p,
+                    "value": pile.value,
+                    "slot": entries[e].slot,
                     "level": k,
-                    "rot": (k === count - 1) ? 0 : (Math.random() * 30 - 15),
-                    "jx": Math.random() * 1.2 - 0.6,
+                    // ±8° (was ±15°): the rim stripes still never line up, but a
+                    // rotated lower chip no longer sticks out into the neighbour
+                    // stack (with a 15° turn its band reached 2.2 px sideways and
+                    // the piles touched).
+                    "rot": (k === count - 1) ? 0 : (Math.random() * 16 - 8),
+                    // No horizontal jitter — it closed the seam between the base
+                    // stacks of the pyramid.
+                    "jx": 0,
                     "jy": Math.random() * 1.2 - 0.6
                 })
             }

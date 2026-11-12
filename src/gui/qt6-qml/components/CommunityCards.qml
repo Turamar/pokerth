@@ -166,8 +166,8 @@ Item {
     // The pot is the same chips as a player's bet (`BetChip`), but laid out as a
     // FLAT ROW of up to three stacks (two chips each) with the sum in a dark pill
     // under them. A pyramid with its top stack would be 51.5 base px high and push
-    // the top-centre seat's bet into its plate on a small table; the row is 34.7
-    // high and still shows up to six chips.
+    // the top-centre seat's bet into its plate on a small table; the row is 72 wide
+    // and 34.7 high and still shows up to six chips.
     //
     // Since 2026-11-12 the pot shows ONLY COLLECTED chips (`GameTable.pot`, not
     // `totalPot` = pot + the current betting round): when a player bets, the

@@ -1031,22 +1031,22 @@ Rectangle {
                 // fired for every side seat and threw the chip to the OUTER side –
                 // exactly the defect the player reported (bet → player → table).
                 // Since 2026-11-12 the bet is a PYRAMID of lying 22 px chips with
-                // the sum in a pill under it (BetChip): the block is 45 wide and at
-                // most 51.5 high in base px (3 stacks, up to 4 chips each, pill 13;
-                // the height follows the highest stack, so 51.5 is the maximum),
-                // so the clearance is 22.5/25.75 half size and the point returned
+                // the sum in a pill under it (BetChip): the block is 47 wide and at
+                // most 51.5 high in base px (3 stacks, up to 4 chips each, pill
+                // 13; the height follows the highest stack, so 51.5 is the maximum),
+                // so the clearance is 23.5/25.75 half size and the point returned
                 // here is the CENTRE of that block.
-                var chipHalfX = 22.5 * s
+                var chipHalfX = 23.5 * s
                 var chipHalfY = 25.75 * s
                 var gap = 6 * s
                 var right = width / 2 - cx          // > 0: table centre right of the box
                 var down = communityCenterY - cy    // > 0: table centre below the box
                 // The community block: the card row is wide (±132·communityScale), the
                 // pot block above it is narrow (a flat row of three 22 px stacks,
-                // 68 wide, plus the pill). A chip beside the block may come down to
+                // 72 wide, plus the pill). A chip beside the block may come down to
                 // the cards' upper edge, one above the block not.
                 var blockHalfW = 132 * communityScale + 6
-                var potHalfW = 34 * communityScale
+                var potHalfW = 36 * communityScale
 
                 function clampBlock(x, y) {
                     var fromCentre = Math.abs(x - width / 2)
