@@ -8,21 +8,23 @@ only circles, annular-sector paths and linear/radial gradients, i.e. exactly
 what QtSvg can render.
 
 This is the repository copy of the player's chip set
-(E:\\Projects\\poker\\pokerth-chips).  It is the same generator; the difference
-is the extra tier "tnum": on our table a chip is 22 base px (27–39 px on
-screen), so the value has to stay legible from 24 px.  The rim stays as thick as
-in lg (inlay 0.70 R, inserts from 0.745 R) and carries the value fitted up to
-0.88 of the inlay.  The SVG assets under
-src/gui/qt6-qml/resources/chips are built from this file (tiers sm / lg / tnum
-only; no PNG — the client does not use them).
+(E:\\Projects\\poker\\pokerth-chips).  It is the same generator; the differences
+are the extra tiers: "tnum" (the value printed from 24 px) and the LYING chip
+"obl" / "obln" (face squashed to 0.80, side band 6 % of the width, value absent /
+present) which the table uses since 2026-11-12.  The SVG assets under
+src/gui/qt6-qml/resources/chips are built from this file (no PNG — the client
+does not use them).
 
     python chipgen.py --out DIR                 # SVG masters only (default: svg/)
     python chipgen.py --out DIR --png           # also PNGs (default: png/ next to this file)
     python chipgen.py --out DIR --png --png-dir PNGDIR
-    python chipgen.py --out DIR --tiers sm,lg,tnum   # subset of tiers
+    python chipgen.py --out DIR --tiers sm,lg,tnum,obl,obln   # subset of tiers
+    python chipgen.py --out DIR --tiers obln --oblique-label squash|flat
 
-Without --png nothing is rasterised; the tier "tnum" is SVG-only unless --png
-is passed, in which case it renders 24/28/32/36/40/48/96 px.
+Without --png nothing is rasterised; "tnum" and the lying tiers render their own
+sizes (TNUM_PNG_SIZES / OBL_PNG_SIZES).  --oblique-label chooses how the value is
+drawn on a lying chip: "squash" (inside the squashed face — chosen for the game)
+or "flat" (normal proportions fitted into the ellipse — kept as an alternative).
 """
 import argparse
 import math
@@ -218,7 +220,27 @@ TIERS = {
     "tnum": dict(ins_in=0.700, ins_from=0.745, ang=22.0, step=0.034, pin=0.0,
                  spec=0.050, dark=0.050, edge=0.008, inlay_tint=1.0, ins_tint=1.0,
                  label=True),
+    # 24 px and up, LYING ON THE TABLE (2026-11-12): the face is squashed to
+    # `sy` and a `band`-high side is drawn underneath, i.e. the chip is a
+    # cylinder seen from slightly above — exactly what the reference client does
+    # (measured: 25 x 20 px face = 0.80, band ~2-3 px per chip). A stack is then
+    # a row of these assets offset by the band height, so every lower chip shows
+    # only its own side. The band carries the rim colours as vertical stripes,
+    # darkens towards the bottom and gets a light line right under the face.
+    # Two variants: without a value (cash — the ladder counts cents) and with it
+    # (tournament).
+    "obl": dict(ins_in=0.700, ins_from=0.745, ang=22.0, step=0.034, pin=0.0,
+                spec=0.050, dark=0.050, edge=0.008, inlay_tint=1.0, ins_tint=1.0,
+                sy=0.80, band=0.06),
+    "obln": dict(ins_in=0.700, ins_from=0.745, ang=22.0, step=0.034, pin=0.0,
+                 spec=0.050, dark=0.050, edge=0.008, inlay_tint=1.0, ins_tint=1.0,
+                 label=True, sy=0.80, band=0.06),
 }
+
+# How the value is drawn on the lying chip: "squash" = part of the squashed face
+# (like the reference), "flat" = drawn with normal proportions and fitted into
+# the ellipse by its corners. Set by --oblique-label.
+OBL_LABEL = "squash"
 
 
 def body_stops(spec):
@@ -249,11 +271,129 @@ def ins_stops(spec):
     return [(0, hx(light(s, 1.06))), (1, hx(dark(s, 1.16)))]
 
 
+def label_svg_flat(spec, r_inlay, tier, cy, sy):
+    """The value for the lying chip, drawn with NORMAL proportions: the text box
+    is fitted into the ellipse by its corners (a circular fit would shrink it to
+    the small semi-axis and lose the point of the whole exercise)."""
+    text = spec.get("label")
+    if not text:
+        return ""
+    h_fit, w_fit, c_fit = LABEL_FIT.get(tier, LABEL_FIT["num"])
+    placed, (xmin, ymin, xmax, ymax) = text_outlines(text)
+    w, h = xmax - xmin, ymax - ymin
+    k = w / h
+    a = c_fit * r_inlay          # ellipse the box has to stay inside
+    b = a * sy
+    h_final = 1.0 / math.sqrt(k * k / (4 * a * a) + 1.0 / (4 * b * b))
+    h_final = min(h_final, h_fit * r_inlay)
+    s = h_final / h
+    if w * s > w_fit * r_inlay:
+        s = w_fit * r_inlay / w
+    tx = C - (xmin + w / 2) * s
+    ty = cy + (ymin + h / 2) * s
+    ink = spec.get("ink") or hx(dark(rgb(spec["body"]), 2.6))
+    out = ['<g transform="translate(%.2f %.2f) scale(%.4f -%.4f)">'
+           % (tx, ty, s, s)]
+    for _gn, d, ox in placed:
+        if d:
+            out.append('<path d="%s" transform="translate(%.1f 0)" fill="%s"/>'
+                       % (d, ox, ink))
+    out.append("</g>")
+    return "".join(out)
+
+
+# ─────────────────────── the side of a lying chip ───────────────────────────
+def _y_top(x, cy, ry):
+    t = max(-1.0, min(1.0, (x - C) / R))
+    return cy + ry * math.sqrt(max(0.0, 1.0 - t * t))
+
+
+def _band_path(cy, ry, band):
+    """The silhouette of the side: the face's lower arc, its copy shifted down by
+    `band`, and two vertical sides."""
+    return ("M %.2f %.2f A %.2f %.2f 0 0 0 %.2f %.2f L %.2f %.2f "
+            "A %.2f %.2f 0 0 1 %.2f %.2f Z"
+            % (C - R, cy, R, ry, C + R, cy,
+               C + R, cy + band,
+               R, ry, C - R, cy + band))
+
+
+def _slab_path(xl, xr, cy, ry, band):
+    ytl, ytr = _y_top(xl, cy, ry), _y_top(xr, cy, ry)
+    return ("M %.2f %.2f A %.2f %.2f 0 0 0 %.2f %.2f L %.2f %.2f "
+            "A %.2f %.2f 0 0 1 %.2f %.2f Z"
+            % (xl, ytl, R, ry, xr, ytr,
+               xr, ytr + band,
+               R, ry, xl, ytl + band))
+
+
+def band_svg(spec, g, cy):
+    """Elements of the chip's side, drawn BEFORE the face."""
+    ry = R * g["sy"]
+    band = g["band"] * 2.0 * R
+    body = rgb(spec["body"])
+    ins = rgb(spec.get("ins") or spec["body"])
+    n = spec["n"]
+    ang = g["ang"]
+    el = []
+    # 1. the side itself: base colour, slightly darker than the face
+    el.append('<path d="%s" fill="url(#oblband)"/>' % _band_path(cy, ry, band))
+    # 2. the rim colours extruded: for every x of the lower silhouette, the
+    #    chip's own colour there — this is what makes the side read as "the same
+    #    chip", not as a grey stripe.
+    x = C - R
+    step = 2.0
+    seg_prev = None
+    x_start = None
+    while True:
+        xc = max(C - R, min(C + R, x))
+        theta = math.degrees(math.acos(max(-1.0, min(1.0, (xc - C) / R))))
+        seg = None
+        for i in range(n):
+            c = (270.0 + 360.0 * i / n) % 360.0
+            d = abs(((theta - c + 180.0) % 360.0) - 180.0)
+            if d <= ang / 2.0:
+                seg = i
+                break
+        if seg != seg_prev:
+            if seg_prev is not None and x_start is not None:
+                el.append('<path d="%s" fill="url(#oblins)"/>'
+                          % _slab_path(x_start, xc, cy, ry, band))
+            seg_prev = seg
+            x_start = xc
+        if xc >= C + R:
+            break
+        x += step
+    if seg_prev is not None and x_start is not None:
+        el.append('<path d="%s" fill="url(#oblins)"/>'
+                  % _slab_path(x_start, C + R, cy, ry, band))
+    # 3. shading: darker towards the bottom and at both ends
+    el.append('<path d="%s" fill="url(#oblshade)"/>' % _band_path(cy, ry, band))
+    el.append('<path d="%s" fill="url(#oblside)"/>' % _band_path(cy, ry, band))
+    # 4. a light line right under the face (the face's edge catches the light)
+    el.append('<path d="M %.2f %.2f A %.2f %.2f 0 0 0 %.2f %.2f" fill="none" '
+              'stroke="%s" stroke-opacity="0.55" stroke-width="%.1f"/>'
+              % (C - R, cy, R, ry, C + R, cy, hx(light(rgb(spec["inlay"]), 1.0)), R * 0.012))
+    # 5. the bottom edge of the side
+    el.append('<path d="M %.2f %.2f A %.2f %.2f 0 0 0 %.2f %.2f" fill="none" '
+              'stroke="#000000" stroke-opacity="0.45" stroke-width="%.1f"/>'
+              % (C + R, cy + band, R, ry, C - R, cy + band, R * 0.012))
+    return el
+
+
 def build_svg(spec, tier):
     g = TIERS[tier]
     sm = tier == "sm"
     b = rgb(spec["body"])
     n = spec["n"]
+    # A lying chip: squashed face + a side underneath (tier "obl").
+    sy = g.get("sy", 1.0)
+    oblique = sy < 1.0
+    if oblique:
+        band_px = g["band"] * 2.0 * R
+        face_cy = (BOX - (2.0 * R * sy + band_px)) / 2.0 + R * sy
+    else:
+        face_cy = C
     r_in = R * g["ins_in"]
     r_ins_from = R * g.get("ins_from", g["ins_in"])
     face_c = hx(mix(rgb(spec["inlay"]), (0, 0, 0), 1 - g.get("inlay_tint", 1.0)))
@@ -289,6 +429,25 @@ def build_svg(spec, tier):
         grad_lin("steplight", [(0, hx(light(f, 1.15)), 0), (.45, hx(light(f, 1.15)), .10),
                                (1, hx(light(f, 1.15)), .70)]),
     ]
+    if oblique:
+        band_px = g["band"] * 2.0 * R
+        y_top, y_bot = face_cy, face_cy + band_px + R * sy
+        defs += [
+            grad_lin("oblband", [(0, hx(light(b, 1.05))), (.55, hx(b)),
+                                 (1, hx(dark(b, 1.65)))],
+                     C, y_top, C, y_bot),
+            grad_lin("oblins", [(0, hx(light(rgb(spec.get("ins") or spec["body"]), 1.02))),
+                                (1, hx(dark(rgb(spec.get("ins") or spec["body"]), 1.55)))],
+                     C, y_top, C, y_bot),
+            # vertical darkening of the side towards its bottom edge
+            grad_lin("oblshade", [(0, "#000000", 0.0), (.55, "#000000", 0.06),
+                                  (1, "#000000", 0.22)],
+                     C, y_top, C, y_bot),
+            # and darkening towards both ends (the cylinder curves away)
+            grad_lin("oblside", [(0, "#000000", 0.22), (.18, "#000000", 0.03),
+                                 (.82, "#000000", 0.03), (1, "#000000", 0.22)],
+                     C - R, C, C + R, C),
+        ]
 
     el = []
     # body + the dark physical edge
@@ -321,8 +480,9 @@ def build_svg(spec, tier):
             el.append(arc(R * (g["ins_in"] - 0.135), 0, 359.9, R * g["pin"] * 0.55,
                           pin_c, 0.35))
 
-    # the value, printed in the inlay
-    if g.get("label"):
+    # the value, printed in the inlay (for the lying chip: either squashed with
+    # the face, or drawn flat after the group)
+    if g.get("label") and (not oblique or OBL_LABEL == "squash"):
         el.append(label_svg(spec, R * g["ins_in"], tier))
 
     # rim: rounded bevel all around, brighter top-left, shadow bottom-right
@@ -337,9 +497,22 @@ def build_svg(spec, tier):
               'stroke-opacity="0.42" stroke-width="%.2f"/>'
               % (C, C, R - R * max(g["edge"], 0.008) * 0.5, R * max(g["edge"], 0.008)))
 
+    if not oblique:
+        body = "".join(el)
+    else:
+        band_px = g["band"] * 2.0 * R
+        # the face is squashed about its own centre and moved so that the side
+        # sits right under it; the side itself is drawn in canvas coordinates
+        shift = face_cy - C * sy
+        body = ("".join(band_svg(spec, g, face_cy))
+                + '<g transform="translate(0 %.2f) scale(1 %.4f)">%s</g>'
+                % (shift, sy, "".join(el)))
+        if OBL_LABEL == "flat":
+            body += label_svg_flat(spec, R * g["ins_in"], tier, face_cy, sy)
+
     return ('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" '
             'viewBox="0 0 %d %d"><defs>%s</defs>%s</svg>'
-            % (int(BOX), int(BOX), int(BOX), int(BOX), "".join(defs), "".join(el)))
+            % (int(BOX), int(BOX), int(BOX), int(BOX), "".join(defs), body))
 
 
 def render(svg, px):
@@ -350,6 +523,7 @@ def render(svg, px):
 PNG_SIZES = (13, 15, 16, 20, 24, 32, 48, 64, 96, 128, 256, 512, 1024)
 NUM_PNG_SIZES = (48, 64, 96, 128, 256, 512, 1024)
 TNUM_PNG_SIZES = (24, 28, 32, 36, 40, 48, 96)
+OBL_PNG_SIZES = (20, 24, 28, 32, 36, 40, 48, 64, 96, 192)
 
 
 def main(argv=None):
@@ -362,7 +536,13 @@ def main(argv=None):
                     help="PNG output directory (default: <script>/png)")
     ap.add_argument("--tiers", default="",
                     help="comma-separated tier subset, e.g. sm,lg,tnum")
+    ap.add_argument("--oblique-label", default="squash",
+                    choices=("squash", "flat"),
+                    help="value on the lying chip (tier obl): squashed with the "
+                         "face (squash) or drawn with normal proportions (flat)")
     args = ap.parse_args(argv)
+    global OBL_LABEL
+    OBL_LABEL = args.oblique_label
 
     wanted = [t.strip() for t in args.tiers.split(",") if t.strip()]
     out_svg = os.path.abspath(args.out)
@@ -372,7 +552,8 @@ def main(argv=None):
 
     total = 0
     for name, spec in CHIPS:
-        tiers = ("sm", "lg", "num", "tnum") if spec.get("label") else ("sm", "lg")
+        tiers = ("sm", "lg", "num", "tnum", "obln", "obl") if spec.get("label") \
+                else ("sm", "lg", "obl")
         if wanted:
             tiers = tuple(t for t in tiers if t in wanted)
         for tier in tiers:
@@ -384,7 +565,9 @@ def main(argv=None):
             total += 1
             if not args.png:
                 continue
-            if tier == "tnum":
+            if tier in ("obl", "obln"):
+                sizes = OBL_PNG_SIZES
+            elif tier == "tnum":
                 sizes = TNUM_PNG_SIZES
             elif tier == "num":
                 sizes = NUM_PNG_SIZES

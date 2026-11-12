@@ -266,13 +266,13 @@ SeatBox {
         y: -height - 5
 
         // Right-aligned at the box edge (your own bet, next to your own plate).
-        // The same 22 px chips as on the felt (2026-11-12); two chips per column
-        // keep the pile inside the strip above the box.
-        BetChip {
+        // A row of lying 22 px chips: the strip above the box is 28 px high, a
+        // pyramid with its pill needs ~60 and would eat the table.
+        BetRows {
             id: betRow
             visible: root.bet > 0 && !root.betInset
             amount: root.bet
-            iconSize: 22
+            chipSize: 22
             fontSize: 12
             maxColumns: 2
             maxPerColumn: 2

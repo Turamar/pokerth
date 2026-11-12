@@ -50,11 +50,11 @@ Item {
             color: Qt.rgba(1, 1, 1, 0.10)
         }
 
-        BetChip {
+        BetRows {
             anchors.centerIn: parent
             visible: strip.amount > 0
             amount: strip.amount
-            iconSize: 12
+            chipSize: 12
             fontSize: 11
             textColor: "#eff1f5"
         }

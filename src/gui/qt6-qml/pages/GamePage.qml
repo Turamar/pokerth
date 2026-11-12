@@ -1029,31 +1029,30 @@ Rectangle {
                 // was "inside" its own plate by 3–4 px by construction, the test
                 // fired for every side seat and threw the chip to the OUTER side –
                 // exactly the defect the player reported (bet → player → table).
-                // Since then the bet is a pile of 22 px chips with the amount UNDER
-                // it (2026-11-12, second pass): the visual footprint is 41×53 local
-                // units in the worst case (2 columns × 3 chips + amount, the columns
-                // only 14 % overlapped so the printed values stay readable), so the
-                // clearance is 21/27 half size. Three columns (60 wide) did not fit
-                // at 1024/1280 – the sweep of 2026-11-12 measured it.
-                var chipHalfX = 21 * s
-                var chipHalfY = 27 * s
+                // Since 2026-11-12 the bet is a PYRAMID of lying 22 px chips with
+                // the sum in a pill under it (BetChip): the block is 45 wide and
+                // ~60.5 high in base px (2d+1 × √3/2·(d+1) + face + 4 bands + pill),
+                // so the clearance is 22.5/30.25 half size and the point returned
+                // here is the CENTRE of that block.
+                var chipHalfX = 22.5 * s
+                var chipHalfY = 24.85 * s
                 var gap = 6 * s
                 var right = width / 2 - cx          // > 0: table centre right of the box
                 var down = communityCenterY - cy    // > 0: table centre below the box
                 // The community block: the card row is wide (±132·communityScale), the
-                // pot chip block above it is narrow (up to 88 wide since the chips
-                // are 22 px, it was 66 with the 12 px chips). A chip beside the block
-                // may come down to the cards' upper edge, one above the block not.
+                // pot block above it is narrow (18 px chips, ~37 wide up to the pill).
+                // A chip beside the block may come down to the cards' upper edge, one
+                // above the block not.
                 var blockHalfW = 132 * communityScale + 6
-                var potHalfW = 44 * communityScale
+                var potHalfW = 24 * communityScale
 
                 function clampBlock(x, y) {
                     var fromCentre = Math.abs(x - width / 2)
                     if (fromCentre >= blockHalfW + chipHalfX) return y
                     var cardsTop = communityCenterY - 32 * communityScale - 2 - chipHalfY
                     var cardsBottom = communityCenterY + 32 * communityScale + 2 + chipHalfY
-                    // 66: half card (32) + pot gap (6) + pot chip block (28).
-                    var potTop = communityCenterY - 66 * communityScale - 2 - chipHalfY
+                    // 68: half card (32) + pot gap (6) + the pot block with its pill (~30).
+                    var potTop = communityCenterY - 68 * communityScale - 2 - chipHalfY
                     if (cy < communityCenterY)
                         return Math.min(y, fromCentre < potHalfW + chipHalfX ? potTop : cardsTop)
                     return Math.max(y, cardsBottom)
@@ -1759,7 +1758,7 @@ Rectangle {
                 // the chat area. So only its width counts towards the overlap; the
                 // chip in the middle of the table can no longer be covered here.
                 var betSideExt   = (8 + 32) * s
-                var betBottomExt = 48 * s
+                var betBottomExt = 45 * s
                 // Search through all landscape slots: which boxes overlap horizontally?
                 var slots = slotPosLandscape
                 var maxH = height + actionBar.height - 8   // no limit → full
@@ -1848,7 +1847,7 @@ Rectangle {
                 // since the bet lies on the felt only the puck still sticks out
                 // sideways – on the right seats into the info area.
                 var betSideExt   = (8 + 32) * s
-                var betBottomExt = 48 * s
+                var betBottomExt = 45 * s
                 var slots = slotPosLandscape
                 var maxH = height + actionBar.height - 8
                 for (var name in slots) {

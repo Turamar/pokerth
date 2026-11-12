@@ -163,48 +163,41 @@ Item {
     }
 
     // ── The pot ──────────────────────────────────────────────────────────────
-    // The pot looks exactly like a player's bet (BetChip): one chip column per
-    // denomination of the greedy split, never more than four chips per column,
-    // with the amount to the right of the pile. The pyramid is decoration – the
-    // number next to it is the truth and keeps its size whatever the pile shows.
-    // A remainder below the smallest chip (5) is not drawn at all: no fake chips.
+    // The pot is the same pyramid as a player's bet (`BetChip`): up to two
+    // stacks of lying chips and the sum in a dark pill under them. Two stacks,
+    // not three: the pot lives in the strip above the board and a third one
+    // would push the cards down. The pile is decoration — the pill is the truth.
     //
-    // Height budget (Lead, GamePage): since the chips are 22 px (2026-11-12,
-    // second pass) the block is 28 base pixels high (22 px chip + one stacked
-    // chip at a 6 px step) and sits 6 base pixels above the card row → half a
-    // card (32) + 6 + 28 = 66 units above the centre of the card row (was 64 with
-    // the 26 px block of 12 px chips). Width = pile + amount; it is reported to
-    // GamePage for potHalfW (44 base half width, the pile is capped at 88).
+    // Since 2026-11-12 the pot shows ONLY COLLECTED chips (`GameTable.pot`, not
+    // `totalPot` = pot + the current betting round): when a player bets, the
+    // chips are in front of him, not in the pot yet. The pill and the chips
+    // change when the engine collects the round — that is when they "arrive".
+    //
+    // Height budget (Lead, GamePage): the block is ~36 base pixels high (18 px
+    // chips + pill) and sits 6 above the card row → half a card (32) + 6 + 36 =
+    // 74 units above the centre of the card row for `potTop` in GamePage.
     Item {
         id: potBadge
         anchors.horizontalCenter: cardRow.horizontalCenter
         anchors.bottom: cardRow.top
         // Fixed by the vertical budget above: 6 both in landscape and portrait.
         anchors.bottomMargin: 6
-        visible: (typeof GameTable !== "undefined" && GameTable) ? GameTable.totalPot > 0 : false
+        visible: (typeof GameTable !== "undefined" && GameTable) ? GameTable.pot > 0 : false
         width: potChip.width
-        height: 28
+        height: potChip.height
         transformOrigin: Item.Center
 
         BetChip {
             id: potChip
-            anchors.verticalCenter: parent.verticalCenter
-            amount: (typeof GameTable !== "undefined" && GameTable) ? GameTable.totalPot : 0
-            // The pot chips are the same 22 px as a player's bet (2026-11-12):
-            // the block lives in a 28 px strip above the board, so the value is
-            // readable here too. Two columns and two chips per column keep the
-            // block at 88 base px (GamePage potHalfW = 44 · communityScale) – when
-            // the sum is long, BetChip draws fewer columns instead of growing (the
-            // sweep of 2026-11-12 showed a wider pot block pushes the felt bets
-            // into the plates). No fake chips for a remainder below the smallest
-            // denomination (5): only the sum reports it.
-            iconSize: 22
-            // The amount is the readable part, the pile only decorates it.
-            fontSize: Config.Theme.tableFont(12)
-            maxColumns: 2
-            maxPerColumn: 2
-            maxWidth: 88
-            labelGap: 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            amount: (typeof GameTable !== "undefined" && GameTable) ? GameTable.pot : 0
+            // Slightly smaller than a player's bet (18 px) so the block stays in
+            // the strip above the board; the pill is the readable part anyway.
+            chipSize: 18
+            maxPiles: 2
+            maxPerStack: 1
+            fontSize: Config.Theme.tableFont(11)
             textColor: Config.Theme.colorAccent
             digits: root.chipDigits
             renderScale: root.chipRenderScale
@@ -217,8 +210,8 @@ Item {
         }
         Connections {
             target: (typeof GameTable !== "undefined") ? GameTable : null
-            function onTotalPotChanged() {
-                if (GameTable && GameTable.totalPot > 0) potPop.restart()
+            function onPotChanged() {
+                if (GameTable && GameTable.pot > 0) potPop.restart()
             }
         }
     }

@@ -5,6 +5,7 @@
         <file>components/AppText.qml</file>
         <file>components/AppLabel.qml</file>
         <file>components/BetChip.qml</file>
+        <file>components/BetRows.qml</file>
         <file>components/ChipImage.qml</file>
         <file>components/BlindButtonImage.qml</file>
         <file>components/PlayerActionBadge.qml</file>
@@ -373,5 +374,23 @@
         <file>resources/chips/chip_spare_ink_lg.svg</file>
         <file>resources/chips/chip_spare_bronze_sm.svg</file>
         <file>resources/chips/chip_spare_bronze_lg.svg</file>
+        <file>resources/chips/chip_10000_obl.svg</file>
+        <file>resources/chips/chip_10000_obln.svg</file>
+        <file>resources/chips/chip_100_obl.svg</file>
+        <file>resources/chips/chip_100_obln.svg</file>
+        <file>resources/chips/chip_10_obl.svg</file>
+        <file>resources/chips/chip_10_obln.svg</file>
+        <file>resources/chips/chip_2500_obl.svg</file>
+        <file>resources/chips/chip_2500_obln.svg</file>
+        <file>resources/chips/chip_25_obl.svg</file>
+        <file>resources/chips/chip_25_obln.svg</file>
+        <file>resources/chips/chip_50000_obl.svg</file>
+        <file>resources/chips/chip_50000_obln.svg</file>
+        <file>resources/chips/chip_500_obl.svg</file>
+        <file>resources/chips/chip_500_obln.svg</file>
+        <file>resources/chips/chip_5_obl.svg</file>
+        <file>resources/chips/chip_5_obln.svg</file>
+        <file>resources/chips/chip_spare_bronze_obl.svg</file>
+        <file>resources/chips/chip_spare_ink_obl.svg</file>
     </qresource>
 </RCC>

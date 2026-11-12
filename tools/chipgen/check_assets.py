@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Checks the generated chip assets and builds the contact sheet.
 
-For the 28 SVG files in src/gui/qt6-qml/resources/chips:
+For the 46 SVG files in src/gui/qt6-qml/resources/chips:
   * every file is well-formed XML, 1024x1024 viewBox, no <filter>/<mask>/<clipPath>
     (QtSvg cannot render those), and no filter/mask/clip-path reference;
   * every file renders through resvg at 24/28/35/48/96 px;
@@ -11,6 +11,8 @@ For the 28 SVG files in src/gui/qt6-qml/resources/chips:
   * all renders are saved to dist/shots/chips/gen/png/;
   * a felt-green contact sheet is written to dist/shots/chips/gen/contact.png:
       - "tnum 1:1": all 8 values at 24 / 28 / 35 px,
+      - "лежачие 1:1": all 8 values lying (obln) at 28 px and the same chips
+        without a value (obl) at 24 px,
       - "sm/lg 1:1": all 10 chips at 16 (sm) and 22 (lg) px,
       - "x3": 5 / 100 / 2.5K / 10K at 96 px.
 
@@ -108,8 +110,11 @@ def render_all():
     errors = []
     rendered = 0
     for name, _disp in ALL_CHIPS:
-        tiers = ("sm", "lg", "tnum") if any(name == n for n, _ in NOMINALS) \
-            else ("sm", "lg")
+        nominal = any(name == n for n, _ in NOMINALS)
+        tiers = ("sm", "lg", "tnum", "obln", "obl") if nominal \
+            else ("sm", "lg", "obl")
+        if "obln" in tiers:
+            tiers = tuple(x for x in tiers if x != "obln") + ("obln",)
         for tier in tiers:
             with open(asset_path(name, tier), "r", encoding="utf-8") as f:
                 svg = f.read()
@@ -189,9 +194,9 @@ def build_sheet():
     f_small = font(11)
 
     y = 26
-    d.text((40, y), "PokerTH — фишки на столе: контрольный лист тира tnum", font=f_title, fill=WHITE)
+    d.text((40, y), "PokerTH — фишки на столе: контрольный лист (tnum + лежачие)", font=f_title, fill=WHITE)
     y += 34
-    d.text((40, y), "28 SVG в src/gui/qt6-qml/resources/chips (8 номиналов × sm/lg/tnum + 2 запасных × sm/lg), "
+    d.text((40, y), "46 SVG в src/gui/qt6-qml/resources/chips (8 номиналов × sm/lg/tnum/obln/obl, 2 запасных × sm/lg/obl), "
                     "рендер resvg 1:1", font=f_sub, fill=DIM)
     y += 20
     d.text((40, y), "tnum: борт как у lg — инлей 0.70 R, вставки от 0.745 R, шаг 0.034, без пина; "
@@ -240,7 +245,27 @@ def build_sheet():
     d.line([40, y, W - 40, y], fill=RULE, width=1)
     y += 18
 
-    # ── block 3: x3 zoom ──────────────────────────────────────────────────
+    # ── block 3: the lying chips ──────────────────────────────────────────
+    d.text((40, y), "лежачие 1:1 — obln 28 px (с цифрой) и obl 24 px (кэш, без цифры)",
+           font=f_block, fill=WHITE)
+    d.text((40, y + 26), "лицо 0.80 ширины + боковина 6 %: фишка лежит на сукне, стопка = сдвиг на высоту боковины",
+           font=f_sub, fill=DIM)
+    y += 46
+    cell = 116
+    x0 = (W - cell * len(NOMINALS)) // 2
+    for px, tier in ((28, "obln"), (24, "obl")):
+        d.text((x0 - 58, y + px / 2 - 9), "%d px" % px, font=f_row, fill=ACCENT)
+        for i, (name, disp) in enumerate(NOMINALS):
+            cx = x0 + i * cell + cell // 2
+            im = chip(name, tier, px)
+            img.paste(im, (cx - im.width // 2, y), im)
+            ctext(d, cx, y + px + 4, "%s · %s" % (disp, tier), f_cap, DIM)
+        y += px + 34
+    y += 8
+    d.line([40, y, W - 40, y], fill=RULE, width=1)
+    y += 18
+
+    # ── block 4: x3 zoom ──────────────────────────────────────────────────
     d.text((40, y), "×3 — 5 / 100 / 2.5K / 10K крупно (96 px)",
            font=f_block, fill=WHITE)
     d.text((40, y + 26), "3× от 32 px: видно форму цифр и кромку; те же tnum SVG, просто больше",
@@ -257,7 +282,7 @@ def build_sheet():
     y += 14
     d.line([40, y, W - 40, y], fill=RULE, width=1)
     y += 12
-    d.text((40, y), "Источник: pokerth-src/tools/chipgen/chipgen.py → resources/chips/*.svg (28 файлов) · "
+    d.text((40, y), "Источник: pokerth-src/tools/chipgen/chipgen.py → resources/chips/*.svg (46 файлов) · "
                     "фон #17452e · рендер resvg_py",
            font=f_small, fill=DIM)
     y += 26
