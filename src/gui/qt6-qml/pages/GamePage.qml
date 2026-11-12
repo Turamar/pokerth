@@ -757,15 +757,16 @@ Rectangle {
                     // (was 0.72) – the cards were a touch small in a 1024×621 window.
                     var floor     = boxScale * (isCmp ? 0.85 : 0.76)
                     var res       = Math.max(0.55, Math.min(cap, Math.max(floor, gapFill)))
-                    // The block (pot + cards) is 96·scale high (the chip-pot block is
-                    // 64 above the card row centre + 32 below) and has to fit into the
-                    // band between the top row and the self box - with air. On a table
-                    // with FEW players the boxes are huge and the band is narrow: there
-                    // the block shrinks (3 players at 1024x621 otherwise touched the
-                    // self box). It only ever makes the cards smaller, so dense tables
-                    // (where gapFill is the binding limit anyway) stay unchanged.
+                    // The block (pot + cards) is 104.7·scale high (the pot block is
+                    // 72.7 above the card row centre + 32 below) and has to fit into
+                    // the band between the top row and the self box - with air. On a
+                    // table with FEW players the boxes are huge and the band is
+                    // narrow: there the block shrinks (3 players at 1024x621
+                    // otherwise touched the self box). It only ever makes the cards
+                    // smaller, so dense tables (where gapFill is the binding limit
+                    // anyway) stay unchanged.
                     var band      = selfVisualTopY - topOpponentBottomY
-                    var fitBand   = band > 0 ? (band - 16) / 96 : 0.55
+                    var fitBand   = band > 0 ? (band - 16) / 104.7 : 0.55
                     return Math.max(0.55, Math.min(res, fitBand))
                 }
                 // Portrait: the community sits vertically BETWEEN the upper (~0.345)
@@ -1030,29 +1031,31 @@ Rectangle {
                 // fired for every side seat and threw the chip to the OUTER side –
                 // exactly the defect the player reported (bet → player → table).
                 // Since 2026-11-12 the bet is a PYRAMID of lying 22 px chips with
-                // the sum in a pill under it (BetChip): the block is 45 wide and
-                // ~60.5 high in base px (2d+1 × √3/2·(d+1) + face + 4 bands + pill),
-                // so the clearance is 22.5/30.25 half size and the point returned
+                // the sum in a pill under it (BetChip): the block is 45 wide and at
+                // most 51.5 high in base px (3 stacks, up to 4 chips each, pill 13;
+                // the height follows the highest stack, so 51.5 is the maximum),
+                // so the clearance is 22.5/25.75 half size and the point returned
                 // here is the CENTRE of that block.
                 var chipHalfX = 22.5 * s
-                var chipHalfY = 24.65 * s
+                var chipHalfY = 25.75 * s
                 var gap = 6 * s
                 var right = width / 2 - cx          // > 0: table centre right of the box
                 var down = communityCenterY - cy    // > 0: table centre below the box
                 // The community block: the card row is wide (±132·communityScale), the
-                // pot block above it is narrow (18 px chips, ~37 wide up to the pill).
-                // A chip beside the block may come down to the cards' upper edge, one
-                // above the block not.
+                // pot block above it is narrow (a flat row of three 22 px stacks,
+                // 68 wide, plus the pill). A chip beside the block may come down to
+                // the cards' upper edge, one above the block not.
                 var blockHalfW = 132 * communityScale + 6
-                var potHalfW = 24 * communityScale
+                var potHalfW = 34 * communityScale
 
                 function clampBlock(x, y) {
                     var fromCentre = Math.abs(x - width / 2)
                     if (fromCentre >= blockHalfW + chipHalfX) return y
                     var cardsTop = communityCenterY - 32 * communityScale - 2 - chipHalfY
                     var cardsBottom = communityCenterY + 32 * communityScale + 2 + chipHalfY
-                    // 68: half card (32) + pot gap (6) + the pot block with its pill (~30).
-                    var potTop = communityCenterY - 68 * communityScale - 2 - chipHalfY
+                    // 72.7: half card (32) + pot gap (6) + the pot block with its
+                    // pill (at most 34.7 — see CommunityCards).
+                    var potTop = communityCenterY - 72.7 * communityScale - 2 - chipHalfY
                     if (cy < communityCenterY)
                         return Math.min(y, fromCentre < potHalfW + chipHalfX ? potTop : cardsTop)
                     return Math.max(y, cardsBottom)
@@ -1286,12 +1289,13 @@ Rectangle {
                 var cs = communityScale
                 var bandTop = topOpponentRealBottomY
                 var bandBottom = selfVisualTopY
-                // The block reaches 64·cs above and 32·cs below the card row centre
-                // (card half 32 + pot gap 6 + chip-pot block 26), so its centre sits
-                // 16·cs above the row centre. Compensate that, then it is really centred.
-                var cy = (bandTop + bandBottom) / 2 + 16 * cs
+                // The block reaches 72.7·cs above and 32·cs below the card row
+                // centre (card half 32 + pot gap 6 + pot block 34.7), so its centre
+                // sits 20.35·cs above the row centre. Compensate that, then it is
+                // really centred.
+                var cy = (bandTop + bandBottom) / 2 + 20.35 * cs
                 // Keep the block inside the band as long as it fits in there at all.
-                var lo = bandTop + 64 * cs
+                var lo = bandTop + 72.7 * cs
                 var hi = bandBottom - 32 * cs
                 if (lo <= hi && (cy < lo || cy > hi))
                     cy = Math.max(lo, Math.min(hi, cy))

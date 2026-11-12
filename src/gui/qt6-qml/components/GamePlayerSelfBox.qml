@@ -267,7 +267,8 @@ SeatBox {
 
         // Right-aligned at the box edge (your own bet, next to your own plate).
         // A row of lying 22 px chips: the strip above the box is 28 px high, a
-        // pyramid with its pill needs ~60 and would eat the table.
+        // stack of four chips is 24 px and still fits, while a pyramid with its
+        // pill needs ~52 and would eat the table.
         BetRows {
             id: betRow
             visible: root.bet > 0 && !root.betInset
@@ -275,7 +276,7 @@ SeatBox {
             chipSize: 22
             fontSize: 12
             maxColumns: 2
-            maxPerColumn: 2
+            maxPerColumn: 4
             digits: root.chipDigits
             renderScale: root.cardRenderScale
             anchors.verticalCenter: parent.verticalCenter

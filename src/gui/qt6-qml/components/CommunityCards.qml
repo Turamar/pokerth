@@ -163,19 +163,29 @@ Item {
     }
 
     // ── The pot ──────────────────────────────────────────────────────────────
-    // The pot is the same pyramid as a player's bet (`BetChip`): up to two
-    // stacks of lying chips and the sum in a dark pill under them. Two stacks,
-    // not three: the pot lives in the strip above the board and a third one
-    // would push the cards down. The pile is decoration — the pill is the truth.
+    // The pot is the same chips as a player's bet (`BetChip`), but laid out as a
+    // FLAT ROW of up to three stacks (two chips each) with the sum in a dark pill
+    // under them. A pyramid with its top stack would be 51.5 base px high and push
+    // the top-centre seat's bet into its plate on a small table; the row is 34.7
+    // high and still shows up to six chips.
     //
     // Since 2026-11-12 the pot shows ONLY COLLECTED chips (`GameTable.pot`, not
     // `totalPot` = pot + the current betting round): when a player bets, the
     // chips are in front of him, not in the pot yet. The pill and the chips
     // change when the engine collects the round — that is when they "arrive".
     //
-    // Height budget (Lead, GamePage): the block is ~36 base pixels high (18 px
-    // chips + pill) and sits 6 above the card row → half a card (32) + 6 + 36 =
-    // 74 units above the centre of the card row for `potTop` in GamePage.
+    // The chips are 22 px, the same as on a bet (they were 18 px): at 18 px the
+    // chip was below the digit threshold on a small table and the player reported
+    // that chips "lose their digit when they get into the pot" (2026-11-12);
+    // two lone discs also did not read as a pile ("стопок в банке тоже нет" — that
+    // 1195 was the pot). Up to two chips per stack: four chips of one denomination
+    // (e.g. a 400 pot) are spread 2+2, and a stack of four would add 2.2 px of
+    // height for nothing — the ladder never gives more than four of one rung.
+    //
+    // Height budget (Lead, GamePage): 22 px chips + pill = at most 34.7 base
+    // pixels, sits 6 above the card row → 32 (half a card) + 6 + 34.7 = 72.7
+    // units above the centre of the card row for `potTop` in GamePage; the whole
+    // "pot + cards" block is 104.7 high.
     Item {
         id: potBadge
         anchors.horizontalCenter: cardRow.horizontalCenter
@@ -192,12 +202,16 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
             amount: (typeof GameTable !== "undefined" && GameTable) ? GameTable.pot : 0
-            // Slightly smaller than a player's bet (18 px) so the block stays in
-            // the strip above the board; the pill is the readable part anyway.
-            chipSize: 18
-            maxPiles: 2
-            maxPerStack: 1
-            fontSize: Config.Theme.tableFont(11)
+            // Same chip size as a player's bet, flat row of three stacks: the value
+            // is the readable part (`ChipImage` prints it from 22 screen px), the
+            // pill below is the truth.
+            chipSize: 22
+            pyramid: false
+            maxPiles: 3
+            maxPerStack: 2
+            // Same pill height as the felt bets (font 10 → 13 px): the strip above
+            // the board has no room for a bigger one.
+            fontSize: 10
             textColor: Config.Theme.colorAccent
             digits: root.chipDigits
             renderScale: root.chipRenderScale

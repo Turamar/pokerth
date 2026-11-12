@@ -5,14 +5,20 @@ import QtQuick.Window
 // tools/chipgen/chipgen.py — copy of the design set in pokerth-chips).
 //
 // Since 2026-11-12 the chip LIES on the felt (tiers "obl" without a value and
-// "obln" with it): the SVG is a squashed face (0.80 of the width) with a 6 %
+// "obln" with it): the SVG is a squashed face (0.80 of the width) with a 10 %
 // side band under it, so a single chip has thickness and a stack shows the edge
 // of every lower chip. The reference client (25x20 px face) was measured for
 // that; PLAN.md §6, "Фишки — не круги".
 //
 // The asset is a 1024x1024 canvas: the chip itself is 0.988 of the width,
-// 0.85 of the height (face 0.79 + band 0.06) and centred. ChipImage keeps the
+// 0.89 of the height (face 0.79 + band 0.10) and centred. ChipImage keeps the
 // square item size; BetChip/BetRows stack the chips by `bandStep`.
+//
+// The value appears from 22 screen px. `_rs` never drops below 1, so a 22 px
+// chip always gets its number; the pot used to be drawn with 18 px chips and on
+// a small table (`communityScale` ≈ 0.92) those fell below the threshold — the
+// player reported that chips "lose their digit when they get into the pot"
+// (2026-11-12). The pot now uses the same 22 px chips as a bet.
 //
 // The value is printed only in tournaments: the cash ladder counts cents, so a
 // printed "100" would mean $1 and lie. `value` 0 is the neutral fallback chip

@@ -382,6 +382,10 @@ SeatBox {
             textColor: "#f0f0f0"
             digits: root.chipDigits
             renderScale: root.cardRenderScale
+            // Up to four chips per stack: a 400 bet is four 100-chips and all of
+            // them must show (player's bug of 2026-11-12 in a plate's bet).
+            maxColumns: 2
+            maxPerColumn: 4
             // split: the bet to the right NEXT TO the box; otherwise centred inside.
             x: betGroup.split ? betGroup.width + 8 : (betGroup.width - width) / 2
             y: (betGroup.height - height) / 2
