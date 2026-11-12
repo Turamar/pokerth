@@ -57,6 +57,11 @@ Item {
     property int maxPerStack: 4
     // Pyramid (a bet) vs a flat row of stacks (the pot) — see the header.
     property bool pyramid: true
+    // Print the sum in the pill under the chips. The pot's sum moved to the top of
+    // the felt on 2026-11-13 (`PotAmount`, between the two topmost seats) — the
+    // chips there stay without a pill, so that the strip above the board is free
+    // for the pot the player wants to build there. A player's bet always keeps it.
+    property bool showAmount: true
 
     // The ladder (top rung first, the last one is the smallest chip):
     //   • tournament — chip counts 5 … 50000, eight rungs (the smallest is 5, so
@@ -116,9 +121,11 @@ Item {
     }
     height: ((pyramid && maxPiles > 2) ? _slotDY + _faceH + _band
                                        : _faceH + _maxCount * _band)
-            + _pillGap + _pillH
+            + _pillTotal
+    // Money the pill occupies at the bottom (0 when the sum is printed elsewhere).
+    readonly property int _pillTotal: showAmount ? (_pillGap + _pillH) : 0
     // Baseline (visual bottom) of the stacks.
-    readonly property real _baseY: height - _pillH - _pillGap
+    readonly property real _baseY: height - _pillTotal
     // In a flat row the stacks share one baseline; their centres are one chip plus
     // the gap apart. In the pyramid slot 2 is the one on TOP of the two base
     // stacks (their centres are _slotDX = half that step to each side).
@@ -288,7 +295,7 @@ Item {
     // ── the sum (the truth, the pile is decoration) ─────────────────────────
     Rectangle {
         id: pill
-        visible: bet.amount > 0
+        visible: bet.amount > 0 && bet.showAmount
         anchors.horizontalCenter: parent.horizontalCenter
         y: bet.height - bet._pillH
         width: pillLabel.implicitWidth + 2 * bet._pillPad

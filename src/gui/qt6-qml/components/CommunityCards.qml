@@ -20,6 +20,12 @@ Item {
     property real chipRenderScale: 1.0
     // Cash table: money ladder with the 1¢ rung and money labels (see ChipImage).
     property bool chipCash: false
+    // Landscape: the pot sum hangs at the TOP of the felt (`PotAmount` in GamePage,
+    // between the two topmost seats, player's request 2026-11-13), so the chips here
+    // stay without their pill and the strip above the board holds only the pot
+    // picture. Portrait keeps the pill under the chips: there the top-centre seat
+    // stands exactly where the label would go.
+    property bool amountAtTop: false
 
     // True while any board slot is currently revealing new cards
     // (stagger/backside/flip). The action bar locks the buttons on it –
@@ -185,7 +191,10 @@ Item {
     // Height budget (Lead, GamePage): 22 px chips + pill = at most 34.7 base
     // pixels, sits 6 above the card row → 32 (half a card) + 6 + 34.7 = 72.7
     // units above the centre of the card row for `potTop` in GamePage; the whole
-    // "pot + cards" block is 104.7 high.
+    // "pot + cards" block is 104.7 high. In landscape the pill moves to the top of
+    // the felt (2026-11-13) and the chips alone are 21.73 high – but the page keeps
+    // the 72.7 reserve: the pot picture that goes into that strip is the next step,
+    // and a reserve is cheaper than moving the cards again.
     Item {
         id: potBadge
         anchors.horizontalCenter: cardRow.horizontalCenter
@@ -215,6 +224,8 @@ Item {
             textColor: Config.Theme.colorAccent
             cash: root.chipCash
             renderScale: root.chipRenderScale
+            // Landscape: the sum hangs at the top of the felt (PotAmount).
+            showAmount: !root.amountAtTop
         }
 
         SequentialAnimation {

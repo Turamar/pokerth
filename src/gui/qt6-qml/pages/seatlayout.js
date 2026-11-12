@@ -22,6 +22,33 @@
 // is what the shape is built from; the zone width can only make it rounder.
 var landscapeOvalAspect = 2.0
 
+// ── The shoulders of the ring go out to the walls (player's request 2026-11-13) ─
+// Player: "p3/p6 к их стенкам, p4/p5 чуть развести в стороны … чтобы освободить
+// центр над картами" (the screenshot of his table: the upper side seats hang a good
+// hand's width off the side walls, and the two top seats stand almost over the card
+// row). The equal-angle oval puts the top pair at |x−centre| = 0.34·radiusX and the
+// shoulder pair at 0.87·radiusX: the top of the ring is crowded exactly where the
+// pot label and the growing pot want the room.
+//
+// So the ring keeps its oval HEIGHTS (a seat's y is untouched – every clearance to
+// the cards, to the plates and to the pot keeps its vertical reserve) and its
+// horizontal point is pushed outwards:
+//
+//     offset = radiusX · ( |cos| + landscapeShoulderSpread · |cos|^landscapeShoulderExp )
+//
+// With the spread below (0.085 / 0.6) the nine-seat table at 1020×551 moves the top
+// pair from ±146 to ±165 px and the shoulders from ±368 to ±401 px (the waist pair
+// is already on the wall and clamps there), i.e. the upper arc hugs the walls while
+// the top pair spreads just enough for the pot pill between them. The exponent below
+// 1 pushes the SHOULDERS further than the top pair: a·0.866^0.6 : a·0.342^0.6 =
+// 1.73, while the plain oval would give 2.53 – the shoulders have to reach the wall,
+// the top pair only has to part a little.
+//
+// The same numbers as `tools/table-preview/geometry.js`/`sweep.js` (they call this
+// file directly) – `sweep.js` re-checks the 216 layouts, the bets included.
+var landscapeShoulderSpread = 0.085
+var landscapeShoulderExp = 0.6
+
 // Desktop portrait: hard-wired slot fractions.
 var slotPosPortraitFixed = ({
     "L_bottom": [0.15, 0.785],
@@ -283,6 +310,19 @@ function buildLandscapeSlots(env, s, ringCnt, forProbe) {
     // seats are mirrored around the bottom vertex.
     var rxPx = Math.min(landscapeOvalAspect * ryPx,
                         Math.max(1, W / 2 - visualW / 2 - edge))
+    // The horizontal point of one ring seat: the oval point pushed towards the
+    // wall by the shoulder spread (see landscapeShoulderSpread) and clamped so
+    // that the plate keeps its `edge` distance to the zone border. The y stays on
+    // the oval: the shoulder spread only widens the ring, it does not lower it.
+    function ringX(ang) {
+        var c = Math.cos(ang)
+        var ax = Math.abs(c)
+        var off = rxPx * (ax
+                          + landscapeShoulderSpread * Math.pow(ax, landscapeShoulderExp))
+        var maxOff = W / 2 - visualW / 2 - edge
+        if (off > maxOff) off = maxOff
+        return 0.5 + (c < 0 ? -off : off) / W
+    }
     var slots = {}
     if (spectating) {
         // No self box: all ring seats (seat 0 included) at equal angles, seat 0 on
@@ -290,7 +330,7 @@ function buildLandscapeSlots(env, s, ringCnt, forProbe) {
         var mS = Math.max(1, rc)
         for (var iS = 0; iS < rc; iS++) {
             var angS = Math.PI / 2 + iS * 2 * Math.PI / mS
-            slots["opp" + iS] = [0.5 + rxPx * Math.cos(angS) / W,
+            slots["opp" + iS] = [ringX(angS),
                                  (cyPx + ryPx * Math.sin(angS)) / H]
         }
     } else {
@@ -301,12 +341,14 @@ function buildLandscapeSlots(env, s, ringCnt, forProbe) {
         for (var iO = 0; iO < nOpp; iO++) {
             var angO = Math.PI / 2 + (iO + 1) * 2 * Math.PI / mO
             slots[seqO[iO] || ("opp" + (iO + 1))] =
-                [0.5 + rxPx * Math.cos(angO) / W,
+                [ringX(angO),
                  (cyPx + ryPx * Math.sin(angO)) / H]
         }
     }
-    // geom allows the probe to recover cos and sin from
-    // [xNorm, yNorm] (x = 0.5 + radiusX·cos, y = centerY + radiusY·sin).
+    // geom allows the probe to recover cos and sin from [xNorm, yNorm]
+    // (y = centerY + radiusY·sin; x is the oval point PLUS the shoulder spread, so
+    // the recovered "cos" is the widened one – the probe only uses it for the
+    // "is this the central top seat" test, where the spread changes no verdict).
     return { slots: slots,
              geom: { radiusX: rxPx / W, radiusY: ryPx / H, centerY: cyPx / H } }
 }

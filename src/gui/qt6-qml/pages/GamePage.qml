@@ -1303,6 +1303,51 @@ Rectangle {
                 return cy
             }
 
+            // ── The pot sum at the top of the felt (2026-11-13) ────────────────
+            // Player: "Перенести число денег в банке так же наверх между p4/p5 …
+            // чтобы освободить центр над картами для красивого банка фишек". The sum
+            // used to be the pill under the pot chips; now it hangs between the two
+            // topmost plates and the strip above the board holds only chips.
+            //
+            // Only the page can place it: it knows the ring slots. `potLabelTop` is
+            // the TOP edge of the pill: the name line of the two top plates, i.e. 13
+            // base px below the centre of their boxes (GamePlayerBox: the plate is
+            // 26..70 of the 70 high box → its centre 48, the box centre 35).
+            //
+            // The top vertex is free only on an EVEN ring: an odd number of
+            // opponents puts one seat exactly on the vertex (its plate fills the top
+            // centre and its bet chip hangs below it). There the pill keeps its old
+            // place under the chips (`CommunityCards.amountAtTop` is false) – a
+            // label on top would be printed over that plate.
+            readonly property int potLabelH:
+                Math.max(18, Config.Theme.tableFont(12) + 6)
+            // Half the pill's width plus air – only used to decide whether a plate
+            // occupies the top centre (the pill itself sizes to its text).
+            readonly property int potLabelHalfW: 62
+            readonly property bool potLabelFits: {
+                var seq = slotSeq[ringCount] || []
+                for (var i = 0; i < seq.length; ++i) {
+                    var p = slotPos[seq[i]]
+                    if (!p) continue
+                    if (p[1] * height > height * 0.45) continue          // lower half
+                    if (Math.abs(p[0] * width - width / 2)
+                        < potLabelHalfW + oppBaseWidth * oppScale / 2)
+                        return false
+                }
+                return true
+            }
+            readonly property bool potAmountAtTop: wide && potLabelFits
+            readonly property real potLabelTop: {
+                var seq = slotSeq[ringCount] || []
+                var minY = Infinity
+                for (var i = 0; i < seq.length; ++i) {
+                    var p = slotPos[seq[i]]
+                    if (p && p[1] < minY) minY = p[1]
+                }
+                if (!isFinite(minY)) return height * 0.2
+                return minY * height + 13 * oppScale - potLabelH / 2
+            }
+
             // ── The zoom layer: the opponents + the community – scalable + pannable ─────────
             // actionBar and gameBackground lie OUTSIDE and stay fixed.
             // selfBox is INSIDE the zoomable layer now.
@@ -1363,6 +1408,26 @@ Rectangle {
                 chipRenderScale: tableZone.communityScale * tableZone.zoomRenderMul
                 chipCash: (typeof GameTable !== "undefined" && GameTable
                            && GameTable.tournamentMode !== true)
+                // Landscape with a free top vertex: the sum hangs up between the top
+                // plates (PotAmount below); otherwise the pill stays under the chips.
+                amountAtTop: tableZone.potAmountAtTop
+            }
+
+            // The pot sum at the top centre, between the topmost seats – the pill
+            // moved out of the community block (see tableZone.potLabelTop). Inside
+            // the zoom content, so that it follows the table when the compact layout
+            // zooms/pans; the boxes (z: 1) still win over it.
+            PotAmount {
+                id: potAmountLabel
+                visible: tableZone.potAmountAtTop
+                         && (typeof GameTable !== "undefined" && GameTable)
+                         && GameTable.pot > 0
+                width: implicitWidth
+                height: tableZone.potLabelH
+                fontSize: Config.Theme.tableFont(12)
+                amount: (typeof GameTable !== "undefined" && GameTable) ? GameTable.pot : 0
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: tableZone.potLabelTop
             }
 
             // The winning hand (e.g. "full house") – only during the showdown.
