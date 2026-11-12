@@ -69,8 +69,13 @@ Item {
     readonly property real _baseY: height - _pillH - _pillGap
 
     // ── the split ───────────────────────────────────────────────────────────
-    readonly property var _split: {
-        var a = Math.max(0, Math.round(bet.amount))
+    // A PURE function of the amount. `_roll()` must call it with the current
+    // amount instead of reading the `_split` binding: when `amount` changes, the
+    // handler runs while that binding is still stale, so the pile lagged one
+    // change behind (the player's bug of 2026-11-12: "не все фишки отображаются",
+    // and the pot showed the chips of the previous round).
+    function splitOf(a) {
+        a = Math.max(0, Math.round(a))
         if (a <= 0) return []
         // Below the smallest chip (e.g. a 4c bet): one neutral chip as
         // decoration, never a stack of copies of it, and the pill tells the sum.
@@ -86,11 +91,12 @@ Item {
         }
         return out
     }
+    readonly property var _split: splitOf(amount)
 
     // ── randomness: rolled when the bet is placed, then stored ─────────────
     property var _chips: []
     function _roll() {
-        var piles = bet._split
+        var piles = splitOf(bet.amount)
         var slots = [0, 1, 2]
         for (var i = slots.length - 1; i > 0; --i) {
             var j = Math.floor(Math.random() * (i + 1))
