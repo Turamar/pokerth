@@ -53,8 +53,14 @@ Rectangle {
                         CustomSpinBox {
                             id: netNumberOfPlayers
                             from: 2
-                            to: 10
-                            value: SettingsManager ? SettingsManager.readConfigInt("NetNumberOfPlayers") : 10
+                            // The common table limit, as on the cash page.
+                            to: (typeof SettingsManager !== "undefined" && SettingsManager)
+                                ? SettingsManager.maxPlayers : 9
+                            value: Math.max(2, Math.min(
+                                       (typeof SettingsManager !== "undefined" && SettingsManager)
+                                       ? SettingsManager.readConfigInt("NetNumberOfPlayers") : 9,
+                                       (typeof SettingsManager !== "undefined" && SettingsManager)
+                                       ? SettingsManager.maxPlayers : 9))
                             onValueModified: {
                                 if (SettingsManager) SettingsManager.writeConfigInt("NetNumberOfPlayers", value)
                             }

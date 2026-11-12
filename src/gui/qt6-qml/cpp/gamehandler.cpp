@@ -2317,7 +2317,10 @@ bool GameHandler::startCashGame(int players, int buyIn, int limitIndex)
 	if (limitIndex < 0 || limitIndex >= PlayerState::cashLimitCount())
 		return false;
 
-	const int seatCount = qBound(2, players, 10);
+	// One limit for every table of ours (game_defs.h): nine seats, so eight
+	// opponents. The spinbox on the cash page offers the same range; the clamp
+	// here keeps a stale config (a ten-seat value from an older build) honest.
+	const int seatCount = qBound(MIN_NUMBER_OF_PLAYERS, players, MAX_TABLE_SEATS);
 	const PlayerState::CashLimit &limit = PlayerState::cashLimit(limitIndex);
 	const int blind = static_cast<int>(limit.smallBlind);
 

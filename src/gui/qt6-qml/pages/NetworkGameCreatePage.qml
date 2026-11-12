@@ -66,7 +66,9 @@ Rectangle {
     }
 
     Component.onCompleted: {
-        maxPlayersSpinBox.value      = cfgInt("NetNumberOfPlayers", 10)
+        maxPlayersSpinBox.value      = Math.min(cfgInt("NetNumberOfPlayers", 9),
+                                                (typeof SettingsManager !== "undefined" && SettingsManager)
+                                                ? SettingsManager.maxPlayers : 9)
         startCashSpinBox.value       = cfgInt("NetStartCash", 3000)
         firstBlindSpinBox.value      = cfgInt("NetFirstSmallBlind", 10)
         raiseEveryHandsSpinBox.value = cfgInt("NetRaiseSmallBlindEveryHands", 8)
@@ -194,8 +196,11 @@ Rectangle {
                     CustomSpinBox {
                         id: maxPlayersSpinBox
                         from: 2
-                        to: 10
-                        value: 10
+                        // The common table limit (game_defs.h, MAX_TABLE_SEATS):
+                        // nine-handed tables everywhere, cash and network alike.
+                        to: (typeof SettingsManager !== "undefined" && SettingsManager)
+                            ? SettingsManager.maxPlayers : 9
+                        value: 9
                     }
                 }
 

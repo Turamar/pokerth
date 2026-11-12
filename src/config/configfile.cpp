@@ -326,7 +326,7 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	configList.push_back(ConfigInfo("PlayLobbyChatNotification", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("PlayNetworkGameNotification", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("PlayBlindRaiseNotification", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("NumberOfPlayers", CONFIG_TYPE_INT, "10"));
+	configList.push_back(ConfigInfo("NumberOfPlayers", CONFIG_TYPE_INT, "9"));
 	configList.push_back(ConfigInfo("StartCash", CONFIG_TYPE_INT, "5000"));
 	configList.push_back(ConfigInfo("FirstSmallBlind", CONFIG_TYPE_INT, "10"));
 	configList.push_back(ConfigInfo("RaiseBlindsAtHands", CONFIG_TYPE_INT, "1"));
@@ -347,7 +347,7 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	// ever plays without one will not get used to it (PLAN.md, "Темп и таймер").
 	configList.push_back(ConfigInfo("ActionTimer", CONFIG_TYPE_INT, "30"));
 	configList.push_back(ConfigInfo("ShowGameSettingsDialogOnNewGame", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("NetNumberOfPlayers", CONFIG_TYPE_INT, "10"));
+	configList.push_back(ConfigInfo("NetNumberOfPlayers", CONFIG_TYPE_INT, "9"));
 	configList.push_back(ConfigInfo("NetStartCash", CONFIG_TYPE_INT, "3000"));
 	configList.push_back(ConfigInfo("NetFirstSmallBlind", CONFIG_TYPE_INT, "10"));
 	configList.push_back(ConfigInfo("NetRaiseBlindsAtHands", CONFIG_TYPE_INT, "1"));

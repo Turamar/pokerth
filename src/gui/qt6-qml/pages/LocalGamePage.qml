@@ -51,6 +51,21 @@ Rectangle {
     readonly property int bottomGate: limits.length > 0 ? limits[0].gate : 0
     readonly property int bigBlind: currentLimit ? currentLimit.bigBlind : 0
 
+    // The one seat limit of every table (game_defs.h, MAX_TABLE_SEATS = 9): the
+    // cash table is nine-handed like a tournament table. QML gets the number from
+    // SettingsManager so there is no second copy of it; the fallback only serves a
+    // page opened before the context property exists.
+    readonly property int maxPlayers: (typeof SettingsManager !== "undefined"
+                                       && SettingsManager) ? SettingsManager.maxPlayers : 9
+
+    // The player count the spinbox opens with: the saved value, clamped to the
+    // table limit (a config written by an older ten-seat build reads as nine).
+    function defaultPlayerCount() {
+        var saved = (typeof SettingsManager !== "undefined" && SettingsManager)
+                ? SettingsManager.readConfigInt("NumberOfPlayers") : maxPlayers
+        return Math.max(2, Math.min(maxPlayers, saved))
+    }
+
     // The buy-in is chosen in big blinds - 20 to 100, the breadth every limit
     // has - so that the field never shows cents. The money is the stack times
     // the big blind of the limit.
@@ -288,8 +303,10 @@ Rectangle {
                         CustomSpinBox {
                             id: numPlayers
                             from: 2
-                            to: 10
-                            value: SettingsManager ? SettingsManager.readConfigInt("NumberOfPlayers") : 6
+                            to: localGamePagePage.maxPlayers
+                            // A stale config may still hold the old ten; the
+                            // spinbox and the engine clamp it to the table limit.
+                            value: localGamePagePage.defaultPlayerCount()
                             onValueModified: {
                                 if (SettingsManager) SettingsManager.writeConfigInt("NumberOfPlayers", value)
                             }

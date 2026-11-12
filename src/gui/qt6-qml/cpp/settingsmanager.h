@@ -25,6 +25,8 @@
 #include <QVariantList>
 #include <boost/shared_ptr.hpp>
 
+#include "game_defs.h"
+
 class ConfigFile;
 
 class SettingsManager : public QObject
@@ -52,6 +54,11 @@ class SettingsManager : public QObject
 	// configRevision: the notes hang off the seats at the table, and any
 	// other setting should not make their bindings re-evaluate.
 	Q_PROPERTY(int playerNotesRevision READ playerNotesRevision NOTIFY playerNotesChanged)
+	// The seat limit shared by every table (game_defs.h, MAX_TABLE_SEATS = 9).
+	// The QML player-count spinboxes (cash page, network game creation) bind
+	// their `to` to it, so a table can never be configured above the engine
+	// path's own clamp in GameHandler::startCashGame.
+	Q_PROPERTY(int maxPlayers READ maxPlayers CONSTANT)
 
 public:
 	explicit SettingsManager(boost::shared_ptr<ConfigFile> config, QObject *parent = nullptr);
@@ -70,6 +77,10 @@ public:
 	int playerNotesRevision() const
 	{
 		return m_playerNotesRevision;
+	}
+	int maxPlayers() const
+	{
+		return MAX_TABLE_SEATS;
 	}
 	bool systemDark() const;
 

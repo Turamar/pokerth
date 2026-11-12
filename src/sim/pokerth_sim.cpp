@@ -100,7 +100,7 @@ void printUsage()
 	printf(
 		"pokerth_sim - headless simulation of a PokerTH game\n"
 		"\n"
-		"  --players N       seats at the table (2-10, default 6)\n"
+		"  --players N       seats at the table (2-9, default 6)\n"
 		"  --stack N         starting chips per seat (default 1000)\n"
 		"  --sb N            first small blind (default 10)\n"
 		"  --hands N         stop after N hands at the latest (default 200)\n"

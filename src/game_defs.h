@@ -34,6 +34,13 @@
 #define MIN_NUMBER_OF_PLAYERS		2
 #define MAX_NUMBER_OF_PLAYERS		10
 
+/* How many players a table of OURS seats (decision 2026-11-12, "9 игроков и общий
+ * лимит для любых столов"): a cash table, a local game and a tournament table are
+ * all nine-handed - eight opponents and the player. The engine keeps its ten seats
+ * (arrays, protocol, ranking games of an upstream server): the tenth seat simply
+ * stays empty, so a legacy ten-player game can still be rendered. */
+#define MAX_TABLE_SEATS				9
+
 #define MIN_GUI_SPEED			1
 #define MAX_GUI_SPEED			11
 

@@ -164,9 +164,9 @@ bool runSimulation(ConfigFile *config, const SimOptions &options, SimReport &rep
 	error.clear();
 	report = SimReport();
 
-	if(options.players < 2 || options.players > MAX_NUMBER_OF_PLAYERS) {
+	if(options.players < MIN_NUMBER_OF_PLAYERS || options.players > MAX_TABLE_SEATS) {
 		ostringstream oss;
-		oss << "players must be between 2 and " << MAX_NUMBER_OF_PLAYERS;
+		oss << "players must be between 2 and " << MAX_TABLE_SEATS;
 		error = oss.str();
 		return false;
 	}

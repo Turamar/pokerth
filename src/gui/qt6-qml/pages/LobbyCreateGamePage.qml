@@ -92,7 +92,9 @@ Rectangle {
                     gameNameField.text = title
             })
         }
-        maxPlayersSpinBox.value = 10
+        // A template opens a nine-handed table (the common limit), never ten.
+        maxPlayersSpinBox.value = (typeof SettingsManager !== "undefined" && SettingsManager)
+                ? SettingsManager.maxPlayers : 9
         startCashSpinBox.value = p.startCash
         firstBlindSpinBox.value = p.firstSmallBlind
         raiseByHandsRadio.checked = p.raiseOnHands
@@ -116,7 +118,8 @@ Rectangle {
     function loadGameSettings() {
         if (!SettingsManager)
             return
-        maxPlayersSpinBox.value        = SettingsManager.readConfigInt("NetNumberOfPlayers")
+        maxPlayersSpinBox.value        = Math.min(SettingsManager.readConfigInt("NetNumberOfPlayers"),
+                                                SettingsManager.maxPlayers)
         startCashSpinBox.value         = SettingsManager.readConfigInt("NetStartCash")
         spectatorsToggle.checked       = SettingsManager.readConfigInt("InternetGameAllowSpectators") !== 0
         firstBlindSpinBox.value        = SettingsManager.readConfigInt("NetFirstSmallBlind")
@@ -570,8 +573,10 @@ Rectangle {
                     CustomSpinBox {
                         id: maxPlayersSpinBox
                         from: 2
-                        to: 10
-                        value: 10
+                        // The common table limit (game_defs.h, MAX_TABLE_SEATS).
+                        to: (typeof SettingsManager !== "undefined" && SettingsManager)
+                            ? SettingsManager.maxPlayers : 9
+                        value: 9
                         enabled: !lobbyCreateGamePage.fieldsLocked
                     }
                 }
