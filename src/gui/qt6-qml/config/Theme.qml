@@ -260,6 +260,27 @@ QtObject {
     // Text / icon on a colored (accent / chart) background — always light
     readonly property color colorOnAccent: "#ffffff"
 
+    // ── Game table surfaces (2026-11-12) ─────────────────────────────────────
+    // The table is its own deliberately matte "graphite" world: no accent wash
+    // on the player plates (the style accent may live on the felt and on a thin
+    // edge line only). One place to tune the furniture that sits on the felt.
+    readonly property color tablePlateTop:       "#1b2129"
+    readonly property color tablePlateBottom:    "#0f1318"
+    readonly property color tablePlateEdge:      "#333c48"
+    readonly property color tablePlateHighlight: Qt.rgba(1, 1, 1, 0.07)
+    readonly property color tableBarSurface:     "#14181e"
+    readonly property color tableBarEdge:        Qt.rgba(1, 1, 1, 0.06)
+    readonly property color tablePotSurface:     "#0b0e12"
+    readonly property color tablePotEdge:        Qt.rgba(1, 1, 1, 0.10)
+
+    // Optical type scale for the game table. In the usual small window
+    // (1024×621 — about a third of a FullHD screen) 10–13 px read too small;
+    // in a big window the same px are fine. One knob for every table font:
+    // use it as `font.pixelSize: Config.Theme.tableFont(13)`.
+    function tableFont(size) {
+        return Math.round(size * (windowWidth < 1200 ? 1.12 : 1.0))
+    }
+
     // ── Elevation / shadow ────────────────────────────────────────────────────
     // A subtle drop shadow for panel cards (lobby columns, settings boxes).
     // Centrally, so that the depth of the whole app can be fine-tuned in one

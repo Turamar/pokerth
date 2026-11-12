@@ -158,67 +158,51 @@ Item {
         CommunitySlot { id: slot4; boardIndex: 4 }
     }
 
-    // The pot prominently in the centre of the table (above the cards): chip icon +
-    // amount with a golden glow. Pops when the pot grows (micro animation).
+    // ── The pot ──────────────────────────────────────────────────────────────
+    // The pot looks exactly like a player's bet (BetChip): one chip column per
+    // denomination of the greedy split, never more than four chips per column,
+    // with the amount to the right of the pile. The pyramid is decoration – the
+    // number next to it is the truth and keeps its size whatever the pile shows.
+    // A remainder below the smallest chip (5) is not drawn at all: no fake chips.
+    //
+    // Height budget (Lead, GamePage): the block is 26 base pixels high and sits
+    // 6 base pixels above the card row → half a card (32) + 6 + 26 = 64 units
+    // above the centre of the card row. The old pill was 20 + 8 = 28 units above
+    // the cards (60 in total). Width = pile + amount; it is reported to GamePage
+    // for potHalfW.
     Item {
         id: potBadge
         anchors.horizontalCenter: cardRow.horizontalCenter
         anchors.bottom: cardRow.top
-        // The same distance to the card row as the winning hand badge
-        // below it; portrait more compact (6) than landscape (8). Scales
-        // with oppScale, being inside communityArea.
-        anchors.bottomMargin: root.wide ? 8 : 6
+        // Fixed by the vertical budget above: 6 both in landscape and portrait.
+        anchors.bottomMargin: 6
         visible: (typeof GameTable !== "undefined" && GameTable) ? GameTable.totalPot > 0 : false
-        width: potRow.width + 12
-        height: 20
+        width: potChip.width
+        height: 26
         transformOrigin: Item.Center
 
-        // Background with a golden glow. A layer of its own so that the MultiEffect
-        // renders only the pill (not the chip/text) – otherwise the text and the
-        // puck would be overlaid by the glow and get blurry when scaled up (oppScale).
-        Rectangle {
-            anchors.fill: parent
-            radius: 12
-            color: Qt.rgba(0, 0, 0, 0.62)
-            border.color: Config.Theme.colorAccent
-            border.width: 1
-
-            layer.enabled: Config.Theme.effectsEnabled
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                shadowColor: Config.Theme.colorAccent
-                shadowOpacity: 0.45
-                shadowBlur: 0.9
-                shadowVerticalOffset: 0
-            }
-        }
-
-        // The chip + the amount lie above the glow and are rendered directly
-        // (as vectors, without a layer texture) → they stay razor sharp.
-        Row {
-            id: potRow
-            anchors.centerIn: parent
-            z: 1
-            spacing: 4
-            Image {
-                anchors.verticalCenter: parent.verticalCenter
-                width: 14; height: 14
-                source: "../resources/chipStack.svg"
-                fillMode: Image.PreserveAspectFit
-            }
-            AppText {
-                anchors.verticalCenter: parent.verticalCenter
-                text: GameTable ? GameTable.amount(GameTable.totalPot) : ""
-                color: Config.Theme.colorAccent
-                font.pixelSize: 11
-                font.bold: true
-                font.letterSpacing: 0.3
-            }
+        BetChip {
+            id: potChip
+            anchors.verticalCenter: parent.verticalCenter
+            amount: (typeof GameTable !== "undefined" && GameTable) ? GameTable.totalPot : 0
+            // Chips of the pot are slightly smaller than on the bet: the block
+            // lives in a 26 px strip above the board. The width is capped at 66
+            // base px (GamePage potHalfW = 34 · communityScale) – when the sum is
+            // long, BetChip draws fewer columns instead of growing. No fake chips
+            // for a remainder below the smallest denomination (5): only the sum
+            // reports it.
+            iconSize: 12
+            // The amount is the readable part, the pile only decorates it.
+            fontSize: Config.Theme.tableFont(12)
+            maxColumns: 5
+            maxWidth: 66
+            labelGap: 2
+            textColor: Config.Theme.colorAccent
         }
 
         SequentialAnimation {
             id: potPop
-            NumberAnimation { target: potBadge; property: "scale"; from: 1.0; to: 1.18; duration: 110; easing.type: Easing.OutQuad }
+            NumberAnimation { target: potBadge; property: "scale"; from: 1.0; to: 1.15; duration: 110; easing.type: Easing.OutQuad }
             NumberAnimation { target: potBadge; property: "scale"; to: 1.0; duration: 170; easing.type: Easing.OutBack }
         }
         Connections {

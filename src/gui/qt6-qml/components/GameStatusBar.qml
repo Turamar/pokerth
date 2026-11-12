@@ -9,7 +9,9 @@ import "../config" as Config
 // right the game phase, game ID and hand number – analogous to the Qt widgets client
 // next to the community cards. Height/layout are set by the caller via Layout.*.
 Rectangle {
-    color: Qt.rgba(0, 0, 0, 0.78)
+    // Matte graphite strip: an opaque dark surface with a single hairline at the
+    // lower edge instead of the old translucent black with a plastic frame.
+    color: Config.Theme.tableBarSurface
 
     // Horizontally centred at the top: table name (network games only). For local
     // games Lobby.currentGameId == 0 → currentGameName() is empty and the display
@@ -66,7 +68,8 @@ Rectangle {
         visible: text !== ""
         text: tableName
         color: "#FFFFFF"
-        font.pixelSize: Config.Responsive.landscapeCompact ? 12 : 14
+        // Optical table scale: 17 px in the usual 1024×621 window (was 14).
+        font.pixelSize: Config.Theme.tableFont(Config.Responsive.landscapeCompact ? 11 : 15)
         font.weight: Font.DemiBold
         font.letterSpacing: 0.5
         readonly property bool clickable: tableStatsUrl !== ""
@@ -107,6 +110,13 @@ Rectangle {
         }
     }
 
+    // Matte surface: only one hairline at the lower edge, no frame.
+    Rectangle {
+        anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+        height: 1
+        color: Config.Theme.tableBarEdge
+    }
+
     RowLayout {
         anchors { fill: parent; leftMargin: 16; rightMargin: 16 }
         spacing: 0
@@ -120,14 +130,15 @@ Rectangle {
                 spacing: 4
                 AppText {
                     text: qsTr("Total:")
-                    color: "#9e9e9e"
-                    font.pixelSize: Config.Responsive.landscapeCompact ? 11 : 13
+                    color: "#a3adb9"
+                    font.pixelSize: Config.Theme.tableFont(Config.Responsive.landscapeCompact ? 9 : 13)
                     font.weight: Font.Medium
                 }
                 AppText {
                     text: GameTable ? GameTable.amount(GameTable.pot) : ""
-                    color: "#99D500"
-                    font.pixelSize: Config.Responsive.landscapeCompact ? 11 : 13
+                    color: "#b7ea2f"
+                    // The pot is the loudest number on the table: 16 px (was 13).
+                    font.pixelSize: Config.Theme.tableFont(Config.Responsive.landscapeCompact ? 10 : 14)
                     font.bold: true
                 }
             }
@@ -135,17 +146,27 @@ Rectangle {
                 spacing: 4
                 AppText {
                     text: qsTr("Bets:")
-                    color: "#9e9e9e"
-                    font.pixelSize: Config.Responsive.landscapeCompact ? 10 : 11
+                    color: "#a3adb9"
+                    font.pixelSize: Config.Theme.tableFont(Config.Responsive.landscapeCompact ? 9 : 12)
                     font.weight: Font.Medium
                 }
                 AppText {
                     text: GameTable ? GameTable.amount(GameTable.totalPot - GameTable.pot) : ""
-                    color: "#7aa800"
-                    font.pixelSize: Config.Responsive.landscapeCompact ? 10 : 11
-                    font.weight: Font.Medium
+                    color: "#9ecb1f"
+                    font.pixelSize: Config.Theme.tableFont(Config.Responsive.landscapeCompact ? 10 : 12)
+                    font.weight: Font.DemiBold
                 }
             }
+        }
+
+        // Hairline separator between the pot block and the centred table name.
+        Rectangle {
+            Layout.alignment: Qt.AlignVCenter
+            Layout.preferredWidth: 1
+            Layout.preferredHeight: parent.height * 0.5
+            Layout.leftMargin: 14
+            Layout.rightMargin: 14
+            color: Config.Theme.tableBarEdge
         }
 
         Item { Layout.fillWidth: true }
@@ -168,7 +189,7 @@ Rectangle {
                 anchors.centerIn: parent
                 text: qsTr("Spectating")
                 color: Config.Theme.colorAccent
-                font.pixelSize: Config.Responsive.landscapeCompact ? 10 : 12
+                font.pixelSize: Config.Theme.tableFont(Config.Responsive.landscapeCompact ? 9 : 12)
                 font.bold: true
             }
         }
@@ -184,7 +205,7 @@ Rectangle {
 
             SvgIcon {
                 anchors.verticalCenter: parent.verticalCenter
-                width: Config.Responsive.landscapeCompact ? 14 : 16
+                width: Config.Responsive.landscapeCompact ? 15 : 18
                 height: width
                 source: "../resources/eye.svg"
                 layer.enabled: true
@@ -197,7 +218,7 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 text: GameTable ? GameTable.spectatorCount : 0
                 color: "#FFFFFF"
-                font.pixelSize: Config.Responsive.landscapeCompact ? 11 : 13
+                font.pixelSize: Config.Theme.tableFont(Config.Responsive.landscapeCompact ? 10 : 14)
                 font.bold: true
             }
 
@@ -209,6 +230,16 @@ Rectangle {
             }
         }
 
+        // Hairline separator between the centre and the phase/hand block.
+        Rectangle {
+            Layout.alignment: Qt.AlignVCenter
+            Layout.preferredWidth: 1
+            Layout.preferredHeight: parent.height * 0.5
+            Layout.leftMargin: 14
+            Layout.rightMargin: 14
+            color: Config.Theme.tableBarEdge
+        }
+
         // Right: phase + game ID + level + hand number (1:1 like the widget client to
         // the right of the community cards; the level only in a tournament).
         Column {
@@ -218,7 +249,7 @@ Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: GameTable ? GameTable.phaseText : qsTr("Preflop")
                 color: "#FFFFFF"
-                font.pixelSize: Config.Responsive.landscapeCompact ? 11 : 13
+                font.pixelSize: Config.Theme.tableFont(Config.Responsive.landscapeCompact ? 10 : 14)
                 font.weight: Font.DemiBold
                 font.letterSpacing: 0.5
             }
@@ -230,8 +261,8 @@ Rectangle {
                     // counts its tables from 1, which says nothing to the player.
                     visible: GameTable ? GameTable.isInternetGameRunning() : false
                     text: qsTr("Game: %1").arg(GameTable ? GameTable.gameId : 0)
-                    color: "#9e9e9e"
-                    font.pixelSize: Config.Responsive.landscapeCompact ? 9 : 11
+                    color: "#a3adb9"
+                    font.pixelSize: Config.Theme.tableFont(Config.Responsive.landscapeCompact ? 9 : 11)
                     font.weight: Font.Medium
                 }
                 // A tournament plays levels: which one is running and what it
@@ -244,14 +275,14 @@ Rectangle {
                               .arg(GameTable ? GameTable.blindLevel : 0)
                               .arg(GameTable ? GameTable.smallBlind : 0)
                               .arg(GameTable ? GameTable.bigBlind : 0)
-                    color: "#99D500"
-                    font.pixelSize: Config.Responsive.landscapeCompact ? 9 : 11
+                    color: "#b7ea2f"
+                    font.pixelSize: Config.Theme.tableFont(Config.Responsive.landscapeCompact ? 10 : 11)
                     font.weight: Font.DemiBold
                 }
                 AppText {
                     text: qsTr("Hand: %1").arg(GameTable ? GameTable.handNumber : 1)
-                    color: "#9e9e9e"
-                    font.pixelSize: Config.Responsive.landscapeCompact ? 9 : 11
+                    color: "#a3adb9"
+                    font.pixelSize: Config.Theme.tableFont(Config.Responsive.landscapeCompact ? 9 : 11)
                     font.weight: Font.Medium
                 }
             }

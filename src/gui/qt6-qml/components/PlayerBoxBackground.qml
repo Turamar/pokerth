@@ -3,17 +3,17 @@ import QtQuick.Effects
 
 import "../config" as Config
 
-// Card background of the player boxes: subtle gradient + soft drop shadow, so
-// that the box looks like a raised card instead of a flat surface.
+// Matte graphite plate of a player box: an opaque graphite gradient, a 1 px
+// slate edge and one thin specular line on the upper rim. It stays a "raised
+// card" (pill radius, soft shadow), but it is deliberately matte: no gloss wash,
+// no bright outline.
 //
-// A table style may tint the box via <PlayerBoxAccent> (e.g. the Star Trek
-// style with the blue of the bridge consoles). The accent tints the gradient and the frame,
-// but does not replace them – the box stays dark and the text on it readable. Without
-// the tag the neutral, bundled look remains.
-//
-// The strengths apply to ALL styles together. With stronger values, warm
-// accents have to be chosen carefully: orange on the blue-grey base tone
-// quickly turns brownish.
+// Since 2026-11-12 the table style accent (<PlayerBoxAccent>) may NO LONGER tint
+// the surface. For the style "lemming" the accent is grey (#9aa0a6) and the
+// former 22–34 % tint turned the whole plate grey, "like a game from 2000"
+// (player report 2026-11-10). The accent now lives only on the thin upper
+// highlight – a hairline, not a fill. Without the tag the neutral theme
+// highlight is used, so the bundled look stays.
 Rectangle {
     id: boxBackground
 
@@ -23,39 +23,44 @@ Rectangle {
     readonly property bool hasAccent: accentName !== ""
     readonly property color accent: hasAccent ? accentName : "transparent"
 
-    // Base gradient of the neutral look: near black with a cool tint. Opaque on
-    // purpose – since 2026-11-10 the hole cards lie BEHIND the plate and must not
-    // shimmer through it.
-    readonly property color baseTop: "#22272f"
-    readonly property color baseBottom: "#0d1014"
-
-    function tinted(base, strength) {
-        return boxBackground.hasAccent
-               ? Qt.tint(base, Qt.rgba(boxBackground.accent.r, boxBackground.accent.g,
-                                       boxBackground.accent.b, strength))
-               : base
-    }
+    // The matte graphite surface. Opaque on purpose – since 2026-11-10 the hole
+    // cards lie BEHIND the plate and must not shimmer through it.
+    readonly property color surfaceTop: Config.Theme.tablePlateTop
+    readonly property color surfaceBottom: Config.Theme.tablePlateBottom
 
     anchors.fill: parent
     radius: 6
     opacity: 1.0
     gradient: Gradient {
-        GradientStop { position: 0.0; color: boxBackground.tinted(boxBackground.baseTop, 0.34) }
-        GradientStop { position: 1.0; color: boxBackground.tinted(boxBackground.baseBottom, 0.22) }
+        GradientStop { position: 0.0; color: boxBackground.surfaceTop }
+        GradientStop { position: 1.0; color: boxBackground.surfaceBottom }
     }
-    border.color: boxBackground.hasAccent
-                  ? Qt.rgba(boxBackground.accent.r, boxBackground.accent.g,
-                            boxBackground.accent.b, 0.60)
-                  : Qt.rgba(1, 1, 1, 0.10)
     border.width: 1
+    border.color: Config.Theme.tablePlateEdge
 
+    // The only "gloss": a 1 px specular line on the flat part of the upper rim,
+    // inset by the corner radius. A style accent may colour this hairline;
+    // it never becomes a fill.
+    Rectangle {
+        anchors.top: parent.top
+        anchors.topMargin: 1
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.max(0, parent.width - 2 * parent.radius)
+        height: 1
+        radius: 0.5
+        color: boxBackground.hasAccent
+               ? Config.Theme.withAlpha(boxBackground.accent, 0.20)
+               : Config.Theme.tablePlateHighlight
+    }
+
+    // Soft drop shadow: lift the matte plate off the felt without a hard edge.
     layer.enabled: Config.Theme.effectsEnabled
     layer.effect: MultiEffect {
         shadowEnabled: true
         shadowColor: "#000000"
-        shadowOpacity: 0.42
-        shadowBlur: 0.9
-        shadowVerticalOffset: 3
+        shadowOpacity: 0.45
+        shadowBlur: 1.0
+        shadowVerticalOffset: 2
         shadowHorizontalOffset: 0
     }
 }

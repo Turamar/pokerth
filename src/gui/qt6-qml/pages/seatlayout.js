@@ -13,6 +13,15 @@
 // exactly the slots that would be drawn at this scale as well - the probe
 // and the drawing share buildLandscapeSlots() or buildPortraitSlots().
 // ─────────────────────────────────────────────────────────────────────────────
+// The semi-axis ratio (x : y) of the landscape oval the seats sit on. The player
+// asked for a "slightly elongated oval" (PLAN §6.4); a poker table is wider than
+// tall, but the ring must not degenerate into a horizontal band with vertical side
+// walls – which is exactly what the old, very flat ellipse (radiusX 0.36·width
+// against radiusY limited to the strip above the self box, ratio ≈ 2.7–3) looked
+// like on 9–10 seats. The oval is derived from the available height, so the ratio
+// is what the shape is built from; the zone width can only make it rounder.
+var landscapeOvalAspect = 2.0
+
 // Desktop portrait: hard-wired slot fractions.
 var slotPosPortraitFixed = ({
     "L_bottom": [0.15, 0.785],
@@ -41,11 +50,25 @@ var slotSeqPortrait = ({
     9: ["L_bottom", "L_lower", "L_upper", "TL", "TC", "TR", "R_upper", "R_lower", "R_bottom"]
 })
 
+// The angular order of the landscape ring: slot name of the 1st, 2nd, … seat
+// counted counter-clockwise from the place right of the self box. The NAMES are
+// rotated by half a ring – not the seats: `GamePage.seatNudge` (flankWide) pulls
+// the two ring seats named `opp1` / `oppN` down and OUTWARDS into the corners
+// whenever they sit in the lower half – a leftover of the old flat ring, which had
+// to squeeze the bottom pair past the self box. On the oval the bottom pair is part
+// of the arc and there are no corners any more, so the numbering starts half a ring
+// higher: those two names then live near the TOP vertex, where that nudge can never
+// fire. The seat → position mapping stays the natural one (seat 1 = first place
+// after the self box), because slotSeq() below returns this same order.
+function landscapeRingName(n, i) {
+    return "opp" + (((i + Math.floor(n / 2)) % n) + 1)
+}
+
 var slotSeqLandscape = (function() {
     var dict = {}
     for (var n = 1; n <= 9; n++) {
         var seq = []
-        for (var i = 1; i <= n; i++) seq.push("opp" + i)
+        for (var i = 0; i < n; i++) seq.push(landscapeRingName(n, i))
         dict[n] = seq
     }
     return dict
@@ -53,14 +76,22 @@ var slotSeqLandscape = (function() {
 
 // It depends on the orientation (the slot names differ), hence a
 // function instead of a table.
+// Watching at the table there is no self box: all seats sit on the same oval and
+// are numbered in angular order – no rotated names here (the nudge above is
+// switched off for spectators anyway), the bottom point is an ordinary seat.
 function slotSeqSpectate(wide) {
-    var base  = wide ? slotSeqLandscape : slotSeqPortrait
-    var first = wide ? "opp0" : "BC"
     var dict  = {}
-    dict[1] = [first]
+    dict[1] = [wide ? "opp0" : "BC"]
     for (var n = 2; n <= 10; n++) {
-        var rest = base[n - 1]
-        if (rest) dict[n] = [first].concat(rest)
+        var seq = [wide ? "opp0" : "BC"]
+        if (wide) {
+            for (var i = 1; i < n; i++) seq.push("opp" + i)
+        } else {
+            var rest = slotSeqPortrait[n - 1]
+            if (!rest) continue
+            seq = seq.concat(rest)
+        }
+        dict[n] = seq
     }
     return dict
 }
@@ -187,146 +218,97 @@ function buildPortraitSlots(env, s, ringCnt) {
 }
 
 function buildLandscapeSlots(env, s, ringCnt, forProbe) {
-    var width = env.width, height = env.height, wide = env.wide,
-        spectating = env.spectating, seatCount = env.seatCount,
-        ringCount = env.ringCount, _peakSeatCount = env.peakSeatCount,
+    var width = env.width, height = env.height,
+        spectating = env.spectating, ringCount = env.ringCount,
+        peakSeatCount = env.peakSeatCount,
         oppBaseWidth = env.oppBaseWidth, oppBaseHeight = env.oppBaseHeight,
-        selfBaseWidth = env.selfBaseWidth, selfBaseHeight = env.selfBaseHeight,
-        opponentGapBase = env.opponentGapBase,
-        opponentHorizontalGapBase = env.opponentHorizontalGapBase,
-        selfGapBase = env.selfGapBase, selfBadgeGapBase = env.selfBadgeGapBase,
-        sideBadgeGapBase = env.sideBadgeGapBase,
-        landscapeRowCount = env.landscapeRowCount,
+        selfBaseHeight = env.selfBaseHeight,
         Config = env.Config
+    var W = Math.max(width, 1)
+    var H = Math.max(height, 1)
     var rc = (ringCnt === undefined) ? ringCount : ringCnt
     var visualW = oppBaseWidth * s
     var visualH = oppBaseHeight * s
-    // A spectator: no self box below the ellipse – its bottom point
-    // is itself the centre of the lowest ring seat.
+    // A spectator: no self box below the oval – the bottom point of the oval is
+    // itself the centre of the lowest ring seat.
     var selfVisualH = spectating ? 0 : selfBaseHeight * s
-    var sideMargin = Math.max(18, width * 0.025) + sideBadgeGapBase * s
-    var wantedGapY = opponentGapBase * s
-    var gapY = Math.max(8, wantedGapY)
-    // In landscapeCompact we pull the lower half of the ellipse closer
-    // to the self box: that gives the side pairs more
-    // vertical room (otherwise player 7↔8 / 2↔3 visually stick
-    // together). selfBadgeGapBase stays as a minimum, so that bet/
-    // action badges below the bottom row do not stick into the self avatar.
-    // hineinragen.
-    var selfGapY = spectating ? 0
-        : (Config.Responsive.landscapeCompact
-           ? Math.max(8, selfBadgeGapBase * s * 0.5)
-           : selfBadgeGapBase * s)
-    var sideX = (sideMargin + visualW / 2) / Math.max(width, 1)
-    // radiusX as large as possible (the side seats land at the edge).
-    // The top trio fits into this arc segment automatically thanks to the boxScale cap
-    // (see boxScale above), without us having to inflate radiusX
-    // further here (otherwise the side seats slip out).
-    // Cap radiusX at 0.36 → the side seats stay closer to the centre
-    // in wide windows (instead of moving all the way to the
-    // edge).
-    var radiusX = Math.min(0.36, Math.max(0.22, 0.5 - sideX))
-    // The top and bottom margins are deliberately small – the open ellipse
-    // should take up as much vertical room as possible, so that
-    // with a medium scale player 2↔3 (L↔TLo) get enough
-    // air.
-    // Compact: the topmost box flush with the upper table edge (0 instead of 4) –
-    // it creates air between its bet badge and the pot badge.
-    // The desktop top pad 8 (instead of 4): more distance from the topmost box to the
-    // status/info bar.
-    // ONLY in the probe: a reservation for a bet badge BELOW the
-    // topmost box. The drawn layout does not need it (the
-    // top centre box shows the bet and the puck to its LEFT/
-    // RIGHT since betSplit), but the bisection deliberately keeps the room free on the
-    // desktop compact and caps the boxes there
-    // accordingly. On mobile devices 0, on desktop ultrawide (not
-    // compact) as well - nothing hangs below there any more.
+    // Air between a plate and the zone border: the plate always lies inside the
+    // zone with at least 8 px (the player's minimum, PLAN §6.4).
+    var edge = 8
+    // ONLY in the probe: a reservation for a bet badge BELOW the topmost box. The
+    // drawn layout does not need it (the top centre box shows the bet and the puck
+    // to its LEFT/RIGHT since betSplit), but the bisection deliberately keeps the
+    // room free on desktop compact and caps the boxes there accordingly.
     var topBadgeExt = (forProbe && Config.Responsive.landscapeCompact
                        && !Config.Responsive.isMobile) ? 39 * s : 0
-    var topY = ((Config.Responsive.landscapeCompact ? 0 : 12)
-                + visualH / 2 + topBadgeExt) / Math.max(height, 1)
-    var selfTop = height - 4 - selfVisualH
-    var bottomY = (selfTop - selfGapY - visualH / 2) / Math.max(height, 1)
-    var centerY = (topY + bottomY) / 2
-    // Limit radiusY STRICTLY to the available track segment:
-    // otherwise the top slot centre at `centerY - radiusY` can slip below
-    // the `topY` value → the box visual is drawn beyond the tableZone
-    // and overlaps the status bar. If the
-    // resulting radiusY is too small for the necessary pair separation,
-    // the boxScale cap (bisection) makes sure that the
-    // boxes get smaller.
-    var radiusY = (bottomY - topY) / 2
+    // The top vertex of the oval: the centre of the topmost plate.
+    var topPx = edge + visualH / 2 + topBadgeExt
+    // The bottom vertex of the oval: the centre of the self box. The player is thus
+    // the lowest seat of the ring, and the bottom pair of opponents flanks it on the
+    // bottom arc. (The old ring stopped ABOVE the self box and was therefore a flat
+    // band as soon as the box scale grew.) A spectator has no self box: there the
+    // lowest ring seat sits on the bottom point with the same edge.
+    var bottomPx = spectating
+        ? H - edge - visualH / 2
+        : H - 12 - selfVisualH / 2
+    var cyPx = (topPx + bottomPx) / 2
+    var ryPx = (bottomPx - topPx) / 2
+    if (ryPx < 1) ryPx = 1
+    // The shape is derived from the PEAK seat count, not from the current one: the
+    // angle the self box cuts out of the oval is the smallest it ever gets then, so
+    // its lowest possible seat is inside the zone – and the oval keeps its shape
+    // while players drop out (only the seats redistribute on it).
+    var refSeats = Math.max(2, Math.max(spectating ? rc : rc + 1,
+                                        peakSeatCount || 1))
+    // The lowest seat of a refSeats distribution sits 2π/refSeats away from the
+    // bottom vertex: its plate has to stay inside the zone as well.
+    var bottomSeatCos = Math.cos(2 * Math.PI / refSeats)
+    var maxRy = (H - edge - topPx - visualH / 2) / (1 + bottomSeatCos)
+    if (maxRy > 0 && ryPx > maxRy) ryPx = maxRy
 
-    // ── The pearl necklace, measured in PIXELS along the oval ────────────────
-    // The seats sit on an empty oval like pearls on a rail, and their distance
-    // ALONG the curve is equal. Equal ANGLES do not work: the table zone is wide
-    // and shallow, the oval is flat, and with equal angles the side seats bunch
-    // into a vertical wall while a wide hole stays at the top corners. That is
-    // exactly the player's complaint ("player 3 sits close to 2, move him towards
-    // 4"; player 7 mirrors 3).
+    // ── The oval: slightly elongated, one sector per seat ─────────────────────
+    // The player's complaint ("the seats and the player must form a slightly
+    // elongated oval, now it is unclear what", PLAN §6.4) came from the flat ring:
+    // radiusX was pinned at 0.36 · width, radiusY was cut off by the strip above the
+    // self box (ratio ≈ 2.7–3), the seats were spaced along the ARC – which on such
+    // an ellipse produces a level top row, vertical side walls and two plates pulled
+    // into the bottom corners by GamePage.seatNudge. Read as a rectangle.
     //
-    // The self box claims an arc of its own at the bottom of the oval - as much
-    // as the box needs plus half a gap on both sides. The opponents spread evenly
-    // over the rest, so the ring stays symmetric to the vertical axis by
-    // construction.
-    var cxPx = 0.5 * width
-    var cyPx = centerY * height
-    var rxPx = radiusX * width
-    var ryPx = radiusY * height
-    var SAMPLES = 1440
-    var arcTable = new Array(SAMPLES + 1)
-    arcTable[0] = 0
-    for (var sample = 1; sample <= SAMPLES; sample++) {
-        var angleA = 2 * Math.PI * (sample - 1) / SAMPLES
-        var angleB = 2 * Math.PI * sample / SAMPLES
-        var stepX = rxPx * (Math.cos(angleB) - Math.cos(angleA))
-        var stepY = ryPx * (Math.sin(angleB) - Math.sin(angleA))
-        arcTable[sample] = arcTable[sample - 1] + Math.sqrt(stepX * stepX + stepY * stepY)
-    }
-    var perimeter = arcTable[SAMPLES]
-    // Arc position (in px from the right-hand point, running downwards first) → point.
-    function pointAtArc(distance) {
-        var d = distance % perimeter
-        if (d < 0) d += perimeter
-        var lo = 0, hi = SAMPLES
-        while (lo + 1 < hi) {
-            var mid = (lo + hi) >> 1
-            if (arcTable[mid] <= d) lo = mid
-            else hi = mid
-        }
-        var span = arcTable[hi] - arcTable[lo]
-        var frac = span > 0 ? (d - arcTable[lo]) / span : 0
-        var angle = 2 * Math.PI * (lo + frac) / SAMPLES
-        return [0.5 + radiusX * Math.cos(angle),
-                centerY + radiusY * Math.sin(angle)]
-    }
-    // Half of the arc the self box claims at the bottom: the box itself plus the
-    // neighbours' halves plus a gap. The curve is flat there, so half of its width
-    // is a fair measure.
-    var selfHalfArc = spectating ? 0
-        : selfBaseWidth * s / 2 + visualW / 2 + Math.max(10, selfGapY * 0.5)
-    var bottomArc = perimeter * 0.25   // 90° – the bottom point of the oval
-    // The opponents follow the parameter (NOT seatCount): the probe computes with
-    // _peakSeatCount, so that players who drop out do not change the box size,
-    // while the drawing uses the current seat count. rc is the number of ring
-    // seats in both cases (as a spectator including seat 0).
-    var opps = Math.max(1, spectating ? rc - 1 : rc)
+    // Now the oval is the starting point, not the leftover: the semi-axes keep the
+    // ratio landscapeOvalAspect, and the seats are placed at EQUAL ANGLES – one
+    // sector per seat, the self box takes the bottom sector (the bottom vertex), the
+    // opponents the rest. Equal angles need a ratio near the recommended one: on a
+    // flat ellipse they would bunch at the ends, on the oval they give the classic
+    // even ring. Symmetry to the vertical axis holds by construction, because the
+    // seats are mirrored around the bottom vertex.
+    var rxPx = Math.min(landscapeOvalAspect * ryPx,
+                        Math.max(1, W / 2 - visualW / 2 - edge))
     var slots = {}
     if (spectating) {
-        // Seat 0 goes exactly on the bottom point, the rest evenly around.
-        var stepS = perimeter / (opps + 1)
-        slots["opp0"] = pointAtArc(bottomArc)
-        for (var sIdx = 1; sIdx <= opps; sIdx++)
-            slots["opp" + sIdx] = pointAtArc(bottomArc + sIdx * stepS)
+        // No self box: all ring seats (seat 0 included) at equal angles, seat 0 on
+        // the bottom point (that is what selfVisualTopY looks up in GamePage).
+        var mS = Math.max(1, rc)
+        for (var iS = 0; iS < rc; iS++) {
+            var angS = Math.PI / 2 + iS * 2 * Math.PI / mS
+            slots["opp" + iS] = [0.5 + rxPx * Math.cos(angS) / W,
+                                 (cyPx + ryPx * Math.sin(angS)) / H]
+        }
     } else {
-        var stepO = (perimeter - 2 * selfHalfArc) / opps
-        for (var oIdx = 1; oIdx <= opps; oIdx++)
-            slots["opp" + oIdx] = pointAtArc(bottomArc + selfHalfArc + (oIdx - 0.5) * stepO)
+        var nOpp = Math.max(1, rc)
+        var mO = nOpp + 1
+        // The rotated angular order – see landscapeRingName()/slotSeqLandscape.
+        var seqO = slotSeqLandscape[nOpp] || []
+        for (var iO = 0; iO < nOpp; iO++) {
+            var angO = Math.PI / 2 + (iO + 1) * 2 * Math.PI / mO
+            slots[seqO[iO] || ("opp" + (iO + 1))] =
+                [0.5 + rxPx * Math.cos(angO) / W,
+                 (cyPx + ryPx * Math.sin(angO)) / H]
+        }
     }
-    // geom allows the probe to recover cos and vFactor from
-    // [xNorm, yNorm] (x = 0.5 + radiusX·cos, y = centerY + radiusY·v).
+    // geom allows the probe to recover cos and sin from
+    // [xNorm, yNorm] (x = 0.5 + radiusX·cos, y = centerY + radiusY·sin).
     return { slots: slots,
-             geom: { radiusX: radiusX, radiusY: radiusY, centerY: centerY } }
+             geom: { radiusX: rxPx / W, radiusY: ryPx / H, centerY: cyPx / H } }
 }
 
 function boxScale(env) {
@@ -418,17 +400,21 @@ function boxScale(env) {
         // bisection caps boxScale lower → smaller boxes without
         // overlaps.
         var gap = Config.Responsive.landscapeCompact ? 12 : 4
-        // The ring seats in angular order. With spectators, opp0 sits
-        // on the bottom point (90°) in addition, so that the
-        // pair opp0↔opp1 is checked as well; the wrap pair oppN↔opp0 is
-        // mirror symmetric to it and thereby covered.
+        // The ring seats in ANGULAR order. The slot NAMES are rotated by half a ring
+        // (slotSeqLandscape), so the name order is NOT the order around the table -
+        // the pairs have to be checked in the order the seats really follow each
+        // other. (The old natural "opp1..oppN" order was the angular order.)
         var probeSeq = []
-        if (spectating) probeSeq.push("opp0")
-        for (var iSeq = 1; iSeq <= (spectating ? ringCnt - 1 : ringCnt); iSeq++)
-            probeSeq.push("opp" + iSeq)
+        if (spectating) {
+            for (var iSeqS = 0; iSeqS < ringCnt; iSeqS++) probeSeq.push("opp" + iSeqS)
+        } else {
+            var seqW = slotSeqLandscape[ringCnt] || []
+            for (var iSeq = 0; iSeq < seqW.length; iSeq++) probeSeq.push(seqW[iSeq])
+        }
 
         function feasibleAt(sTest) {
-            if (oppCnt < 2) return true
+            if (sTest <= 0) return false
+            var visualW = oppBaseWidth * sTest
             var visualH = oppBaseHeight * sTest
             // A spectator: there is no self box below the ellipse,
             // the lowest seat IS the bottom point of the ellipse.
@@ -451,7 +437,7 @@ function boxScale(env) {
                 // community row is checked: the self box or - as a
                 // spectator - the lowest ring seat itself.
                 var bottomContentTop = spectating
-                    ? height - 4 - visualH
+                    ? height - 8 - visualH
                     : height - 12 - selfVisualH
                 // The lowest bottom edge of the upper seats - the central
                 // top box additionally counts its bet badge pointing
@@ -462,18 +448,109 @@ function boxScale(env) {
                     // Compute the ellipse vector back:
                     //   x = 0.5 + radiusX·cos,  y = centerY + radiusY·v
                     var vY = (pC[1] - geom.centerY) / geom.radiusY
-                    if (vY >= 0) continue          // upper seats only
+                    // Upper seats only. The band around zero is skipped deliberately:
+                    // the seats at the waist sit far to the SIDES (|cos| ≈ 1), their
+                    // plates never reach the card row, and sin(0)/sin(360°) differ in
+                    // the last bit – without the band a waist seat would randomly
+                    // count as an "upper" one and cap the whole table for nothing.
+                    if (vY >= -0.06) continue
                     var vX = (pC[0] - 0.5) / geom.radiusX
                     var b = pC[1] * height + visualH / 2
                           + (Math.abs(vX) < 0.25 ? sTest * 25 : 0)
                     if (b > topOppBottom) topOppBottom = b
                 }
-                // The total community height (card row 64 + pot badge 40 +
-                // winner badge 20) · communityScale + the pad.
+                // The total community height (card row 64 + pot block 26 + 6 gap +
+                // winner badge) · communityScale + the pad.
                 if (topOppBottom > -1e9
                     && bottomContentTop - topOppBottom
                        < 0.72 * sTest * 124 + 28)
                     return false
+            }
+
+            // ── the room for a bet chip of the upper row ──────────────────────
+            // GamePage.betFeltPoint clamps a chip of the upper row to the upper edge
+            // of the pot block: it may not reach into the block, so the strip between
+            // that plate and the block has to be able to hold the whole chip, or the
+            // chip lies ON its own plate (found by sweep.js with the taller pot block
+            // of 2026-11-12). The block position follows GamePage.communityScale +
+            // communityCenterY and is mirrored here, because it is what makes the
+            // strip: the block is pushed down by the LOWEST upper plate that hangs
+            // over the card row. That is why a dense ring has room and a four-seat
+            // ring (the top plate is the only one over the cards) has not.
+            var isCmp = Config.Responsive.landscapeCompact
+            var topSlot = null
+            for (var kTop in pos)
+                if (topSlot === null || pos[kTop][1] < topSlot[1]) topSlot = pos[kTop]
+            if (topSlot !== null) {
+                var topBottom = topSlot[1] * height + visualH / 2
+                var selfTopC = spectating ? height - 8 - visualH
+                                          : height - 12 - selfVisualH
+                var dropY
+                if (isCmp || spectating) {
+                    dropY = (topBottom + selfTopC) / 2
+                } else {
+                    var sumY = height - 12 - selfBaseHeight * sTest / 2, nY = 1
+                    for (var kY in pos) { sumY += pos[kY][1] * height; nY++ }
+                    dropY = sumY / nY
+                }
+                // communityScale (GamePage): fills the band around the drop point
+                var topB = topBottom + (isCmp ? 39 : 26) * sTest
+                var avail = Math.min(dropY - topB - 6, selfTopC - dropY - 6)
+                var gapFill = avail > 0 ? avail / (isCmp ? 82 : 84) : 0
+                var cs = Math.max(0.55, Math.min(
+                    Math.min(isCmp ? 2.1 : 1.8, sTest * 2.0, (0.70 * width) / 264),
+                    Math.max(sTest * (isCmp ? 0.85 : 0.76), gapFill)))
+                var bandC = selfTopC - topBottom
+                if (bandC > 0) cs = Math.min(cs, (bandC - 16) / 96)
+                // the upper edge of the pot block (communityCenterY minus its height)
+                var blockTop
+                if (isCmp || spectating) {
+                    blockTop = (topBottom + selfTopC) / 2 - 64 * cs
+                } else {
+                    var halfRow = 132 * cs + oppBaseWidth * sTest / 2
+                    var realBottom = topBottom
+                    for (var kR in pos) {
+                        var pR = pos[kR]
+                        if (pR[1] * height >= dropY) continue
+                        if (Math.abs(pR[0] * width - width / 2) >= halfRow) continue
+                        var bR = pR[1] * height + visualH / 2
+                        if (bR > realBottom) realBottom = bR
+                    }
+                    var cyComm = (realBottom + selfTopC) / 2 + 16 * cs
+                    var loComm = realBottom + 64 * cs
+                    var hiComm = selfTopC - 32 * cs
+                    if (loComm <= hiComm)
+                        cyComm = Math.max(loComm, Math.min(hiComm, cyComm))
+                    blockTop = cyComm - 64 * cs
+                }
+                // Only a chip that is horizontally inside the pot block gets clamped
+                // to it (otherwise it may come down to the card row). The chip
+                // clearance is mirrored from GamePage.betFeltPoint (24/21 half sizes
+                // since the bet is a chip stack with the amount under it, 2026-11-12);
+                // keep both files in sync or the bisection starts lying.
+                if (Math.abs(topSlot[0] - 0.5) * width < 34 * cs + 24 * sTest
+                    && blockTop - topBottom < 42 * sTest + 6)
+                    return false
+            }
+
+            // The bottom pair flanks the self box – it must not cover it. The oval
+            // is derived to keep that clearance (the bottom vertex IS the self box),
+            // this check only catches zones that are too small for it: the bisection
+            // then shrinks the boxes until the plates fit beside the self box.
+            if (!spectating) {
+                var selfHalfW = selfBaseWidth * sTest / 2
+                var selfTopEdge = height - 12 - selfVisualH
+                var selfBotEdge = height - 12
+                for (var keyS in pos) {
+                    var pS = pos[keyS]
+                    var sCy = pS[1] * height
+                    if (sCy + visualH / 2 <= selfTopEdge) continue
+                    if (sCy - visualH / 2 >= selfBotEdge) continue
+                    if (Math.abs(pS[0] * width - width / 2)
+                        >= selfHalfW + visualW / 2 + 4 * sTest)
+                        continue
+                    return false
+                }
             }
 
             // Pair separation: neighbouring ring seats have to have enough distance
@@ -494,47 +571,15 @@ function boxScale(env) {
             return true
         }
 
-        // Heads-up (1 opponent): feasibleAt() has no neighbouring pair to
-        // check. Instead make sure that the community row placed centrally into the
-        // gap between the top centred opponent box (incl. its bet badge pointing
-        // downwards) and the self box fits
-        // in – critical in flat windows. The same logic
-        // as the community check in feasibleAt().
-        function feasibleHeadsUp(sTest) {
-            if (sTest <= 0) return false
-            var visualH = oppBaseHeight * sTest
-            // The upper edge of the lowest box: the self box or – as a
-            // spectator – the lowest ring seat of the same size.
-            var bottomContentTop = spectating
-                ? height - 4 - visualH
-                : height - 12 - selfBaseHeight * sTest
-            var topYband = (Config.Responsive.landscapeCompact ? 0 : 4) + visualH / 2
-            var topOppBottom = topYband + visualH / 2 + sTest * 25
-            return bottomContentTop - topOppBottom
-                   >= 0.72 * sTest * 124 + 28
-        }
-
         // A common limit for the opponent boxes, the self box and the community badges:
         // 1.4 prevents text that is too large and bet overlaps in
         // fullscreen/maximized; compact stays at 1.7 (wider, flatter).
         // fillCap() damps the maximum with few players in addition.
+        // Heads-up has no neighbouring pair to check any more, so feasibleAt() only
+        // applies the community band there – the one thing that actually binds on a
+        // two-player table, which is why there is no separate branch for it.
         var lo = 0.55, hi = fillCap(Config.Responsive.landscapeCompact ? 2.3 : 1.9)
-        if (oppCnt < 2) {
-            // Go up to the (capped) hi as long as the badges do not touch the
-            // community.
-            if (!feasibleHeadsUp(lo)) {
-                s = lo
-            } else if (feasibleHeadsUp(hi)) {
-                s = hi
-            } else {
-                for (var iterH = 0; iterH < 14; iterH++) {
-                    var midH = (lo + hi) / 2
-                    if (feasibleHeadsUp(midH)) lo = midH
-                    else hi = midH
-                }
-                s = lo
-            }
-        } else if (!feasibleAt(lo)) {
+        if (!feasibleAt(lo)) {
             s = lo
         } else {
             for (var iter = 0; iter < 14; iter++) {
@@ -653,3 +698,4 @@ function boxScale(env) {
     // not become arbitrarily small.
     return Math.max(0.55, s)
 }
+

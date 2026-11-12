@@ -51,18 +51,25 @@ SeatBox {
     // (which adds the bet base below the body) does not move a single pixel:
     //   envelope 112×70  =  cards 40 (upper 26 visible) + plate 44 (14 px overlap)
     //   plate    44 high =  two text lines
-    //   avatar   48      =  plate height + 4 (it stands out above and below)
+    //   avatar   46      =  plate height + 2 (it stands out above and below)
     readonly property int _hMargin: 4
     readonly property int _textX: 8
     readonly property int _cardH: Math.round(bodyH * 40 / 70)
     readonly property int _cardW: Math.round(_cardH * 120 / 168)
     readonly property int _plateH: Math.round(bodyH * 44 / 70)
-    readonly property int _avatarD: _plateH + 4
+    // The avatar stands out of the plate only slightly (2 px larger): that keeps
+    // it a round anchor while leaving the name line two characters more room, and
+    // it no longer hangs 2 px below the 112×70 envelope (now 1 px).
+    readonly property int _avatarD: _plateH + 2
     readonly property int _plateY: bodyH - _plateH
-    readonly property int _textW: Math.max(24, Math.round(width) - _avatarD - _textX - 4)
+    // Up to the left edge of the avatar: the name line may use the full room
+    // above the round profile instead of cutting a name like "Player 9" short.
+    readonly property int _textW: Math.max(24, Math.round(width) - _avatarD - _textX)
 
-    readonly property int _nameSize: 13
-    readonly property int _stackSize: 12
+    // Type scale of the table (Theme.tableFont adds 12 % in the usual 1024ish
+    // window), so that the name and the stack/action stay readable.
+    readonly property int _nameSize: Config.Theme.tableFont(13)
+    readonly property int _stackSize: Config.Theme.tableFont(12)
 
     implicitWidth: 112
     implicitHeight: 70
@@ -217,7 +224,13 @@ SeatBox {
                 color: "#eff1f5"
                 font.pixelSize: root._nameSize
                 font.weight: Font.DemiBold
-                font.letterSpacing: 0.2
+                font.letterSpacing: 0
+                // The plate is 112 px wide with a 46 px avatar, so 58 px are left
+                // for the name – at the table type scale (15 px in the usual
+                // 1024ish window) "Player 9" is right at that edge. Fit a name
+                // that still overflows instead of cutting it off.
+                fontSizeMode: Text.HorizontalFit
+                minimumPixelSize: Config.Theme.tableFont(10)
                 elide: Text.ElideRight
                 text: root.seatData && root.seatData.name !== "" ? root.seatData.name : "---"
             }
@@ -269,6 +282,20 @@ SeatBox {
             z: 12
             source: root.avatarSource
             playerActive: root.isActive
+        }
+
+        // A crisp 1 px ring on the avatar's edge: the profile stays a clean round
+        // anchor on the felt (the avatar's own rim is wider and softer).
+        Rectangle {
+            x: avatar.x
+            y: avatar.y
+            width: avatar.width
+            height: avatar.height
+            radius: width / 2
+            color: "transparent"
+            border.width: 1
+            border.color: Qt.rgba(1, 1, 1, 0.30)
+            z: 13
         }
 
         // Winner highlight: a golden frame around the plate + a "WINNER" badge.

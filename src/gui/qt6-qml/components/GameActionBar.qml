@@ -24,23 +24,10 @@ Item {
     implicitHeight: actionBarCol.implicitHeight
                     + (actionBar.wide && !actionBar.compactActions ? 8 : 0)
 
-    // The corner radius of the theme button SVGs, in units of their 168x43 drawing area
-    // (<ActionButtonBorderRadius> in the table style). The state frames (preselection
-    // gold, the primary action) lie as a rectangle ABOVE the SVG; only with the radius
-    // of the style do they end flush instead of gaping at the corners.
-    readonly property real themeButtonRadiusUnits:
-        (typeof StyleProvider !== "undefined" && StyleProvider)
-        ? StyleProvider.actionButtonBorderRadius : 9
-
-    // The button is stretched to its actual size, and so is the radius
-    // – to a different degree in x and y. A Rectangle, however, can only have a
-    // circular radius: we take the smaller of the two, then the
-    // frame stays inside the contour instead of running out of it.
-    function themeButtonRadius(w, h) {
-        return Math.min(w / 2, h / 2,
-                        actionBar.themeButtonRadiusUnits * w / 168,
-                        actionBar.themeButtonRadiusUnits * h / 43)
-    }
+    // Modern action buttons: a uniform 12 px corner radius, whatever the table
+    // style brings. The style SVGs are no longer drawn (see the ActionButton
+    // comment below) – the colour values still come from Config.Theme.
+    readonly property int buttonRadius: 12
 
     // The game mode action: used by the caller (shortcuts) and the mode ComboBox.
     // If it is already my turn: execute the chosen auto mode – but DEFERRED
@@ -232,7 +219,7 @@ Item {
                 actionBar.roundEnded = false        // a new hand → release the round lock
                 actionBar.raiseAmount = 0
                 actionBar.lastHandNumber = GameTable.handNumber
-                // console.log("[ACTDBG] Reset: Neue Hand " + actionBar.lastHandNumber)
+                // console.warn("[ACTDBG] Reset: Neue Hand " + actionBar.lastHandNumber)
             }
         }
         function onBettingRoundEnded() {
@@ -244,7 +231,7 @@ Item {
             actionBar.preSelectEnabled = false
             actionBar.raiseAmount = 0
             actionBar.roundEnded = true
-            // console.log("[ACTDBG] reset (end of round): buttons locked until the next round")
+            // console.warn("[ACTDBG] reset (end of round): buttons locked until the next round")
         }
         function onPhaseTextChanged() {
             if (!GameTable) return
@@ -261,7 +248,7 @@ Item {
                 // through; onBoardDealingChanged releases it afterwards.
                 actionBar.preSelectEnabled = false
             }
-            // console.log("[ACTDBG] Rundenwechsel →", GameTable.phaseText)
+            // console.warn("[ACTDBG] Rundenwechsel →", GameTable.phaseText)
         }
         function onShowdownActiveChanged() {
             // The showdown begins → reset everything, so that no stale
@@ -275,7 +262,7 @@ Item {
                 actionBar.preAction = ""
                 actionBar.preSelectEnabled = false
                 actionBar.raiseAmount = 0
-                // console.log("[ACTDBG] Reset (preAction/preSelect/raiseAmount): Showdown")
+                // console.warn("[ACTDBG] Reset (preAction/preSelect/raiseAmount): Showdown")
             }
         }
     }
@@ -320,9 +307,11 @@ Item {
     // where landscapeCompact applies geometrically as well.
     readonly property bool compactActions:
         Config.Responsive.landscapeCompact && Config.Responsive.isMobile
-    // The heights of the three action bar rows.
-    readonly property int actionRowHeight: compactActions ? 40 : (Config.Theme.compact ? 56 : 54)
-    readonly property int raiseRowHeight:  compactActions ? 22 : 26
+    // The heights of the three action bar rows. The desktop row grew 54 → 58 so
+    // that the two-line captions (word + amount) fit at the larger type scale;
+    // the compact phone row stays tight.
+    readonly property int actionRowHeight: compactActions ? 42 : 58
+    readonly property int raiseRowHeight:  compactActions ? 24 : 28
 
     // During the preselection the fold button shows "Check / Fold" with a free check
     // A preselection with a free check: two lines, so that longer translations
@@ -404,7 +393,7 @@ Item {
         var myTurnNow = GameTable.awaitingMyAction
                         || GameTable.myTurn || GameTable.timeoutSeatId === 0
         var p0btnDbg = GameTable.players.length > 0 ? GameTable.players[0]["button"] : -1
-        // console.log("[ACTDBG] click", which,
+        // console.warn("[ACTDBG] click", which,
                     // "myTurn=", GameTable.myTurn,
                     // "tSeat=", GameTable.timeoutSeatId,
                     // "canAct=", GameTable.canAct,
@@ -522,7 +511,7 @@ Item {
             // every turn of your own (even if m_myTurn was already true)
             // → no swallowed actions any more.
             var p0btnDbg2 = GameTable.players.length > 0 ? GameTable.players[0]["button"] : -1
-            // console.log("[ACTDBG] meInActionTriggered",
+            // console.warn("[ACTDBG] meInActionTriggered",
                         // "pre=", actionBar.preAction,
                         // "preCallAmt=", actionBar.preCallAmount,
                         // "mode=", actionBar.playingMode,
@@ -624,7 +613,7 @@ Item {
             if (actionBar.preAction === "raise"
                 && (!actionBar.raiseAvailable
                     || actionBar.raiseAmount < GameTable.minRaiseAmount)) {
-                // console.log("[ACTDBG] raise preselection discarded: prepared",
+                // console.warn("[ACTDBG] raise preselection discarded: prepared",
                             // actionBar.raiseAmount, "< new minimum",
                             // GameTable.minRaiseAmount, "(an opponent has (re-)raised)")
                 actionBar.preAction = ""
@@ -685,9 +674,22 @@ Item {
         anchors.bottomMargin: actionBar.wide && !actionBar.compactActions ? 8 : 0
         anchors.horizontalCenter: parent.horizontalCenter
         width: actionBar.panelWidth
-        color: Qt.rgba(0, 0, 0, 0.82)
-        // Shrunk (landscape) as a slightly rounded panel.
-        radius: actionBar.wide ? 10 : 0
+        // Matte graphite instead of a translucent black slab; the modern look comes
+        // from the flat surface + one hairline on top (see below).
+        color: Config.Theme.tableBarSurface
+        // Rounded as before only in landscape: in portrait the bar sits flush at the
+        // lower screen edge, where rounded bottom corners would cut into the screen.
+        radius: actionBar.wide ? actionBar.buttonRadius : 0
+    }
+
+    // One hairline along the upper edge (inset so that it follows the rounded
+    // corners) – no plastic frame around the panel.
+    Rectangle {
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.max(0, actionBar.panelWidth - 2 * actionBar.buttonRadius)
+        height: 1
+        color: Config.Theme.tableBarEdge
     }
 
     Column {
@@ -700,28 +702,29 @@ Item {
         Column {
             id: raiseSection
             width: parent.width
-            spacing: 3
-            topPadding: 4
-            bottomPadding: 2
-            leftPadding: 8
-            rightPadding: 8
+            spacing: 4
+            topPadding: 6
+            bottomPadding: 3
+            leftPadding: 10
+            rightPadding: 10
             visible: GameTable !== null
             height: visible ? implicitHeight : 0
             clip: true
 
             // Row 1: the amount input (on the left) + the slider
             RowLayout {
-                width: parent.width - 16
-                spacing: 6
+                width: parent.width - 20
+                spacing: 8
 
-                // The amount input – to the left of the slider
+                // The amount input – to the left of the slider. A little wider and
+                // taller than before, so that the larger digits fit without crowding.
                 Rectangle {
-                    Layout.preferredWidth: 78
+                    Layout.preferredWidth: 88
                     Layout.preferredHeight: actionBar.raiseRowHeight
                     Layout.alignment: Qt.AlignVCenter
-                    radius: 5
-                    color: actionBar.raiseAvailable ? "#1a2a1a" : "#171717"
-                    border.color: actionBar.raiseAvailable ? "#4CAF50" : "#3a3a3a"
+                    radius: 8
+                    color: actionBar.raiseAvailable ? "#142019" : Config.Theme.tablePotSurface
+                    border.color: actionBar.raiseAvailable ? "#4CAF50" : Config.Theme.tableBarEdge
                     border.width: 1
                     TextInput {
                         id: raiseAmountInput
@@ -737,7 +740,9 @@ Item {
                         Component.onCompleted: text = actionBar.raiseAmount.toString()
                         color: enabled ? "#FFFFFF" : "#8a8a8a"
                         font.family: Config.StaticData.loadedFont.font.family
-                        font.pixelSize: 13
+                        // Optical scale: 15 px here (was 13) – the prepared amount is
+                        // read at a glance.
+                        font.pixelSize: Config.Theme.tableFont(13)
                         font.bold: true
                         horizontalAlignment: Qt.AlignHCenter
                         verticalAlignment: Qt.AlignVCenter
@@ -878,31 +883,31 @@ Item {
                         x: raiseSlider.leftPadding
                         y: raiseSlider.topPadding + raiseSlider.availableHeight / 2 - height / 2
                         width: raiseSlider.availableWidth
-                        height: 4
-                        radius: 2
-                        color: "#333333"
+                        height: 6
+                        radius: 3
+                        color: "#2b333d"
                         Rectangle {
                             width: raiseSlider.visualPosition * parent.width
                             height: parent.height
-                            radius: 2
+                            radius: 3
                             color: "#4CAF50"
                         }
                     }
                     handle: Rectangle {
                         x: raiseSlider.leftPadding + raiseSlider.visualPosition * (raiseSlider.availableWidth - width)
                         y: raiseSlider.topPadding + raiseSlider.availableHeight / 2 - height / 2
-                        width: 18; height: 18; radius: 9
-                        color: raiseSlider.pressed ? "#80FF80" : "#4CAF50"
-                        border.color: "#2a7a2a"
-                        border.width: 1
+                        width: 20; height: 20; radius: 10
+                        color: raiseSlider.pressed ? "#C8FFC0" : "#7BDC6A"
+                        border.color: "#1b3b15"
+                        border.width: 2
                     }
                 }
             }
 
             // Row 2: pot % buttons + all-in (flush) + the game mode dropdown (on the right)
             RowLayout {
-                width: parent.width - 16
-                spacing: 4
+                width: parent.width - 20
+                spacing: 5
 
                 // Pot-Prozent-Buttons: 1/3 · 1/2 · Pot
                 Repeater {
@@ -914,18 +919,22 @@ Item {
                     delegate: Rectangle {
                         required property var modelData
                         visible: actionBar.showPotPercentButtons
-                        Layout.preferredWidth: visible ? 38 : 0
+                        Layout.preferredWidth: visible ? 40 : 0
                         Layout.preferredHeight: actionBar.raiseRowHeight
-                        radius: 5
+                        radius: 8
                         enabled: actionBar.raiseAvailable
-                        color: !enabled ? "#202020" : potBtnArea.containsPress ? "#2e7d32" : potBtnArea.containsMouse ? "#388e3c" : "#1b5e20"
-                        border.color: enabled ? "#4CAF50" : "#3a3a3a"
+                        // Neutral matte chips instead of the old saturated green
+                        // gradient buttons: the auxiliary controls stay quiet.
+                        color: !enabled ? "#191d24"
+                             : potBtnArea.containsPress ? "#39424f"
+                             : potBtnArea.containsMouse ? "#2c3642" : "#232a34"
+                        border.color: enabled ? Qt.rgba(1, 1, 1, 0.12) : Config.Theme.tableBarEdge
                         border.width: 1
                         AppText {
                             anchors.centerIn: parent
                             text: modelData.label
-                            color: parent.enabled ? "#FFFFFF" : "#8a8a8a"
-                            font.pixelSize: 11
+                            color: parent.enabled ? "#E8ECF1" : "#6b7684"
+                            font.pixelSize: Config.Theme.tableFont(11)
                             font.bold: true
                         }
                         MouseArea {
@@ -964,61 +973,47 @@ Item {
                     readonly property bool armed: actionBar.actionsArmed
                     // The preselection mark only while the button is clickable as well.
                     readonly property bool preChecked: armed && actionBar.preAction === "allin"
-                    // The theme graphic only in the normal all-in mode (not in the
-                    // "show" mode, which keeps its own green look).
-                    readonly property bool useTheme: !allInBtn.isShowMode
-                                                     && StyleProvider && StyleProvider.allInButton !== ""
-                    Layout.preferredWidth: 52
+                    // Modern flat button with a 12 px radius and a soft top sheen. The
+                    // style SVG background is deliberately not drawn any more: its
+                    // 0→1 gradient plus bright 1.5 px stroke was exactly the "plastic"
+                    // bevel the player disliked; only the colours still come from the
+                    // theme (Config.Theme.colorAllIn*).
+                    Layout.preferredWidth: 54
                     Layout.preferredHeight: actionBar.raiseRowHeight
-                    // With a theme SVG the radius of the style, otherwise the fallback value.
-                    radius: allInBtn.useTheme
-                            ? actionBar.themeButtonRadius(allInBtn.width, allInBtn.height) : 5
+                    radius: actionBar.buttonRadius
                     opacity: (isShowMode || allInBtn.armed) ? 1.0 : 0.4
-                    color: allInBtn.useTheme ? "transparent"
-                         : allInArea.containsPress
+                    color: allInArea.containsPress
                          ? Qt.lighter(isShowMode ? "#2d6e2d" : Config.Theme.colorAllInBottom, 1.35)
                          : allInArea.containsMouse
-                         ? (isShowMode ? "#3a8f3a" : Config.Theme.colorAllInTop)
+                         ? Qt.lighter(isShowMode ? "#2d6e2d" : Config.Theme.colorAllInBottom, 1.18)
                          : (isShowMode ? "#2d6e2d" : Config.Theme.colorAllInBottom)
                     border.color: isShowMode ? "#80FF90"
                                 : allInBtn.preChecked ? "#FFD700"
-                                : Config.Theme.colorAllInEdge
-                    // With a theme SVG the border of its own is dropped (the SVG brings its
-                    // own); only the show/preselection state still draws one.
-                    border.width: (isShowMode || allInBtn.preChecked) ? 2 : (allInBtn.useTheme ? 0 : 1)
+                                : Qt.rgba(1, 1, 1, 0.16)
+                    border.width: (isShowMode || allInBtn.preChecked) ? 2 : 1
                     scale: (allInArea.pressed && (allInBtn.armed || isShowMode)) ? 0.95 : 1.0
                     Behavior on scale { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
 
-                    // The theme SVG background (without text). Inset by border.width,
-                    // so that a possible state frame (gold) stays visible.
-                    Image {
-                        anchors.fill: parent
-                        anchors.margins: allInBtn.border.width
-                        visible: allInBtn.useTheme
-                        source: allInBtn.useTheme ? StyleProvider.allInButton : ""
-                        sourceSize.width: Math.max(1, Math.round(allInBtn.width))
-                        sourceSize.height: Math.max(1, Math.round(allInBtn.height))
-                        fillMode: Image.Stretch
-                        smooth: true
-                    }
-                    // Hover/press feedback above the theme SVG.
+                    // A light top highlight instead of a heavy bevel.
                     Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: allInBtn.border.width
-                        visible: allInBtn.useTheme
-                        radius: actionBar.themeButtonRadius(width, height)
-                        color: "#FFFFFF"
-                        opacity: allInArea.containsPress ? 0.18
-                               : allInArea.containsMouse ? 0.08 : 0.0
+                        anchors { left: parent.left; right: parent.right; top: parent.top }
+                        anchors.leftMargin: 1; anchors.rightMargin: 1; anchors.topMargin: 1
+                        height: parent.height * 0.42
+                        radius: actionBar.buttonRadius - 1
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.22) }
+                            GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.0) }
+                        }
                     }
 
                     AppText {
                         anchors.centerIn: parent
                         text: allInBtn.isShowMode ? qsTr("Show") : actionBar.allInWord
-                        color: (allInBtn.useTheme && StyleProvider.allInButtonTextColor !== "")
-                               ? StyleProvider.allInButtonTextColor : "#FFFFFF"
-                        font.pixelSize: 12
+                        color: "#FFFFFF"
+                        // Bigger caption: 13 px (was 12) at the usual window size.
+                        font.pixelSize: Config.Theme.tableFont(12)
                         font.bold: true
+                        font.letterSpacing: 0.3
                     }
                     MouseArea {
                         id: allInArea
@@ -1027,12 +1022,12 @@ Item {
                         cursorShape: (allInBtn.armed || allInBtn.isShowMode) ? Qt.PointingHandCursor : Qt.ArrowCursor
                         hoverEnabled: true
                         onPressed: function(mouse) {
-                            // console.log("[ACTDBG] AllIn MouseArea press",
+                            // console.warn("[ACTDBG] AllIn MouseArea press",
                                         // "enabled=", allInArea.enabled,
                                         // "myTurn=", GameTable ? GameTable.myTurn : "n/a")
                         }
                         onClicked: {
-                            // console.log("[ACTDBG] AllIn MouseArea click isShow=", allInBtn.isShowMode)
+                            // console.warn("[ACTDBG] AllIn MouseArea click isShow=", allInBtn.isShowMode)
                             if (allInBtn.isShowMode)
                                 GameTable.showMyCards()
                             else
@@ -1046,10 +1041,11 @@ Item {
                 // Spielmodus-Dropdown (rechts): Manuell / Auto Check/Call / Auto Check/Fold
                 ComboBox {
                     id: playingModeCombo
-                    Layout.preferredWidth: 132
+                    Layout.preferredWidth: 142
                     Layout.preferredHeight: actionBar.raiseRowHeight
                     font.family: Config.StaticData.loadedFont.font.family
-                    font.pixelSize: 11
+                    // Readable mode caption: 13 px (was 11).
+                    font.pixelSize: Config.Theme.tableFont(12)
                     model: [ qsTr("Manuell"), qsTr("Auto Check/Call"), qsTr("Auto Check/Fold") ]
                     currentIndex: actionBar.playingMode
                     onActivated: (index) => actionBar.applyPlayingMode(index)
@@ -1076,9 +1072,10 @@ Item {
                         elide: Text.ElideRight
                     }
                     background: Rectangle {
-                        radius: 5
-                        color: actionBar.playingMode === 0 ? "#222222" : "#3a2e10"
-                        border.color: actionBar.playingMode === 0 ? "#3a3a3a" : Config.Theme.colorAccent
+                        radius: 8
+                        color: actionBar.playingMode === 0 ? "#232a34" : "#3a2e10"
+                        border.color: actionBar.playingMode === 0
+                                      ? Qt.rgba(1, 1, 1, 0.12) : Config.Theme.colorAccent
                         border.width: 1
                     }
                 }
@@ -1097,6 +1094,9 @@ Item {
                 id: ab
                 property string actionKey: ""
                 property string label: ""
+                // The button colours from the table theme. topColor is kept for the
+                // call sites, but the modern surface lifts bottomColor itself instead
+                // of blending two far-apart colours (no heavy bevel).
                 property color topColor: "#4080d8"
                 property color bottomColor: "#1a3d8b"
                 property color edgeColor: "#6aa0e8"
@@ -1104,11 +1104,10 @@ Item {
                 // automatically (see StyleProvider). The default for the
                 // fallback gradient button.
                 property color textColor: "#F0F0F0"
-                // The action button graphic of the current table style (only the look/
-                // frame, without text). Empty → a fallback to the hardcoded
-                // gradient button.
+                // The table style's action graphic. Kept in the interface (the call
+                // sites still pass it), but no longer drawn – see the modern
+                // surface below.
                 property url themeSource: ""
-                readonly property bool hasTheme: ab.themeSource != ""
                 property bool armed: false   // clickable: your own turn OR a preselection is possible
                 property bool highlight: false   // highlight the primary action (raise)
                 // The call blocker: only the call button is locked briefly after an amount/
@@ -1130,55 +1129,58 @@ Item {
                 opacity: (!ab.armed || ab.blocked) ? 0.4
                          : ((ab.myTurnNow || ab.preChecked || ab.actionKey === "nexthand") ? 1.0 : 0.72)
 
-                // The theme SVG background (only the look, without baked-in text)
-                Image {
-                    anchors.fill: parent
-                    visible: ab.hasTheme
-                    source: ab.themeSource
-                    sourceSize.width: Math.max(1, Math.round(ab.width))
-                    sourceSize.height: Math.max(1, Math.round(ab.height))
-                    fillMode: Image.Stretch
-                    smooth: true
-                }
-
-                // The fallback gradient button (no theme SVG present)
+                // Modern button surface: a flat themed fill, a 12 px radius, a
+                // hairline edge and a light top sheen. The style SVG beneath is
+                // deliberately not drawn any more: its 0→1 gradient with a bright
+                // 1.5 px stroke was exactly the "plastic" bevel the player disliked.
+                // The colours still come from the table theme (bottomColor/edgeColor,
+                // topColor is lifted from bottomColor) so fold / call / raise keep
+                // their identity.
                 Rectangle {
                     anchors.fill: parent
-                    visible: !ab.hasTheme
-                    radius: 9
-                    border.width: (ab.preChecked || (ab.highlight && ab.armed)) ? 2 : 1
-                    border.color: ab.preChecked ? "#FFD700" : (ab.armed ? ab.edgeColor : "#3a3a3a")
+                    radius: actionBar.buttonRadius
+                    border.width: ab.preChecked ? 2 : 1
+                    border.color: ab.preChecked ? "#FFD700"
+                                : ab.armed ? Qt.rgba(ab.edgeColor.r, ab.edgeColor.g,
+                                                     ab.edgeColor.b, 0.55)
+                                : Qt.rgba(1, 1, 1, 0.08)
+                    // A mild three-stop depth instead of a strong two-stop bevel:
+                    // the top is lifted slightly, the bottom is a touch darker.
                     gradient: Gradient {
-                        GradientStop { position: 0.0; color: ab.armed ? ab.topColor : "#2b2b2b" }
-                        GradientStop { position: 1.0; color: ab.armed ? ab.bottomColor : "#1c1c1c" }
+                        GradientStop {
+                            position: 0.0
+                            color: ab.armed ? Qt.lighter(ab.bottomColor, 1.30) : "#2b2e31"
+                        }
+                        GradientStop {
+                            position: 0.55
+                            color: ab.armed ? ab.bottomColor : "#232628"
+                        }
+                        GradientStop {
+                            position: 1.0
+                            color: ab.armed ? Qt.darker(ab.bottomColor, 1.06) : "#1c1e20"
+                        }
                     }
-                }
 
-                // The state frame ABOVE the theme SVG: highlight the preselection (gold) or
-                // the primary action (raise). With the fallback that
-                // is done by the border of the gradient rectangle above.
-                //
-                // The frame is drawn in the 168x43 drawing area of the button SVG
-                // and stretched with the same (uneven) scaling
-                // as the image. Only that way does it match the contour:
-                // Image.Stretch turns the SVG corner into an ellipse, and a
-                // Rectangle.radius in pixels can only ever be circular –
-                // in portrait the button is considerably more squat than 168x43,
-                // and there the two radii visibly diverged.
-                Rectangle {
-                    visible: ab.hasTheme && (ab.preChecked || (ab.highlight && ab.armed))
-                    width: 168
-                    height: 43
-                    transform: Scale {
-                        xScale: ab.width / 168
-                        yScale: ab.height / 43
+                    // The light top highlight: a narrow sheen fading out downwards.
+                    Rectangle {
+                        anchors { left: parent.left; right: parent.right; top: parent.top }
+                        anchors.leftMargin: 1; anchors.rightMargin: 1; anchors.topMargin: 1
+                        height: parent.height * 0.45
+                        radius: actionBar.buttonRadius - 1
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.16) }
+                            GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.0) }
+                        }
                     }
-                    radius: actionBar.themeButtonRadiusUnits
-                    color: "transparent"
-                    // In drawing area units; the scaling thins them down to
-                    // the usual ~2 px.
-                    border.width: 2.6
-                    border.color: ab.preChecked ? "#FFD700" : ab.edgeColor
+
+                    // Hover feedback: the surface is lifted a touch.
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: actionBar.buttonRadius
+                        color: "#FFFFFF"
+                        opacity: (abMouse.containsMouse && ab.armed && !ab.blocked) ? 0.06 : 0.0
+                        Behavior on opacity { NumberAnimation { duration: 120 } }
+                    }
                 }
 
                 // Press feedback: a brief sinking in when tapping.
@@ -1190,7 +1192,7 @@ Item {
                 layer.effect: MultiEffect {
                     shadowEnabled: true
                     shadowColor: ab.edgeColor
-                    shadowOpacity: 0.55
+                    shadowOpacity: 0.40
                     shadowBlur: 0.8
                     shadowVerticalOffset: 0
                     shadowHorizontalOffset: 0
@@ -1201,17 +1203,19 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                     text: ab.label
                     color: ab.textColor
-                    font.pixelSize: actionBar.compactActions ? 12 : 15
+                    // Large captions: 18 px (was 15) in the usual window; the amount
+                    // sits on the second line at the same size.
+                    font.pixelSize: Config.Theme.tableFont(actionBar.compactActions ? 12 : 16)
                     font.bold: true
-                    font.letterSpacing: 0.5
+                    font.letterSpacing: 0.3
                     lineHeight: 0.95
                 }
 
                 // a small "noted" dot at the top right
                 Rectangle {
                     visible: ab.preChecked
-                    anchors { top: parent.top; right: parent.right; margins: 4 }
-                    width: 8; height: 8; radius: 4
+                    anchors { top: parent.top; right: parent.right; margins: 5 }
+                    width: 10; height: 10; radius: 5
                     color: "#FFD700"
                 }
 

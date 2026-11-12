@@ -44,15 +44,20 @@ SeatBox {
 
     // ── Size of the box ──────────────────────────────────────────────────────
     // Same shape as the opponent plate, only larger: 148×80, cards 46 high,
-    // plate 50, avatar 54 (it stands out above and below the plate).
+    // plate 50, avatar 52 (it stands out above and below; it used to hang 2 px
+    // below the envelope, now 1 px).
     readonly property int _textX: 9
     readonly property int _cardH: Math.round(bodyH * 46 / 80)
     readonly property int _plateH: Math.round(bodyH * 50 / 80)
-    readonly property int _avatarD: _plateH + 4
+    readonly property int _avatarD: _plateH + 2
     readonly property int _plateY: bodyH - _plateH
-    readonly property int _textW: Math.max(24, Math.round(width) - _avatarD - _textX - 4)
-    readonly property int _nameSize: 14
-    readonly property int _stackSize: 13
+    // Up to the left edge of the avatar (no extra 4 px cut): the long own name
+    // ("Human Player") has to fit without an ellipsis in the usual small window.
+    readonly property int _textW: Math.max(24, Math.round(width) - _avatarD - _textX)
+    // Same type scale as the opponent plates (Theme.tableFont adds 12 % at the
+    // usual 1024ish window width).
+    readonly property int _nameSize: Config.Theme.tableFont(13)
+    readonly property int _stackSize: Config.Theme.tableFont(12)
 
     implicitWidth: 148
     implicitHeight: 80
@@ -144,7 +149,12 @@ SeatBox {
                 color: "#eff1f5"
                 font.pixelSize: root._nameSize
                 font.weight: Font.DemiBold
-                font.letterSpacing: 0.3
+                font.letterSpacing: 0
+                // The 148 px plate with the avatar leaves ~87 px for the name. A
+                // long own name ("Human Player") is fitted down to the minimum
+                // pixel size instead of being cut with an ellipsis.
+                fontSizeMode: Text.HorizontalFit
+                minimumPixelSize: Config.Theme.tableFont(10)
                 elide: Text.ElideRight
                 text: root.seatData && root.seatData.name !== "" ? root.seatData.name : qsTr("Du")
             }
@@ -197,6 +207,20 @@ SeatBox {
             networkPingAvg: (typeof GameTable !== "undefined" && GameTable) ? GameTable.pingAvg : -1
             networkPingMin: (typeof GameTable !== "undefined" && GameTable) ? GameTable.pingMin : -1
             networkPingMax: (typeof GameTable !== "undefined" && GameTable) ? GameTable.pingMax : -1
+        }
+
+        // The same crisp 1 px ring as on the opponent plates: the own profile is
+        // the anchor of the box and reads as a clean circle over the felt.
+        Rectangle {
+            x: avatar.x
+            y: avatar.y
+            width: avatar.width
+            height: avatar.height
+            radius: width / 2
+            color: "transparent"
+            border.width: 1
+            border.color: Qt.rgba(1, 1, 1, 0.30)
+            z: 13
         }
 
         // Winner highlight: a golden frame + a "WINNER" badge around the plate.

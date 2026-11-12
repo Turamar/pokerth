@@ -643,8 +643,10 @@ Rectangle {
                     //     pointing downwards (compact 39, otherwise 26 · oppScale).
                     //   – selfTop: the upper edge of the (scaled) self box.
                     // It depends ONLY on boxScale → no circularity. The floor =
-                    // the bisection reserve (compact 1.1, otherwise 0.72 · boxScale) →
-                    // a guaranteed minimum gap, no regression risk.
+                    // the bisection reserve (compact 0.85, otherwise 0.76 · boxScale)
+                    // → a guaranteed minimum gap, no regression risk. The desktop
+                    // floor was raised 0.72 → 0.76 on 2026-11-12: in the usual
+                    // small window (1024×621) the cards read slightly too small.
                     var isCmp     = Config.Responsive.landscapeCompact
                     var topB      = topOpponentBottomY + (isCmp ? 39 : 26) * oppScale
                     var halfAbove = communityDropY - topB - 6
@@ -661,17 +663,19 @@ Rectangle {
                     var cap       = Math.min(isCmp ? 2.1 : 1.8, boxScale * 2.0, capW)
                     // The floor (the minimum size): lowered to 0.85·boxScale in compact (it was
                     // 1.1) – that way the cards stay proportional to the boxes instead of
-                    // towering over them. The desktop is unchanged (0.72).
-                    var floor     = boxScale * (isCmp ? 0.85 : 0.72)
+                    // towering over them. The desktop floor is 0.76 since 2026-11-12
+                    // (was 0.72) – the cards were a touch small in a 1024×621 window.
+                    var floor     = boxScale * (isCmp ? 0.85 : 0.76)
                     var res       = Math.max(0.55, Math.min(cap, Math.max(floor, gapFill)))
-                    // The block (pot + cards) is 92·scale high and has to fit into the
+                    // The block (pot + cards) is 96·scale high (the chip-pot block is
+                    // 64 above the card row centre + 32 below) and has to fit into the
                     // band between the top row and the self box - with air. On a table
                     // with FEW players the boxes are huge and the band is narrow: there
                     // the block shrinks (3 players at 1024x621 otherwise touched the
                     // self box). It only ever makes the cards smaller, so dense tables
                     // (where gapFill is the binding limit anyway) stay unchanged.
                     var band      = selfVisualTopY - topOpponentBottomY
-                    var fitBand   = band > 0 ? (band - 16) / 92 : 0.55
+                    var fitBand   = band > 0 ? (band - 16) / 96 : 0.55
                     return Math.max(0.55, Math.min(res, fitBand))
                 }
                 // Portrait: the community sits vertically BETWEEN the upper (~0.345)
@@ -935,23 +939,29 @@ Rectangle {
                 // was "inside" its own plate by 3–4 px by construction, the test
                 // fired for every side seat and threw the chip to the OUTER side –
                 // exactly the defect the player reported (bet → player → table).
-                var chipHalfX = 20 * s
-                var chipHalfY = 18.5 * s
+                // Since the bet is a chip stack with the amount UNDER it (2026-11-12),
+                // the visual footprint grew to ~52×46 local units in the worst case
+                // (4 columns × 4 chips), so the clearance covers a bit more than before:
+                // 24/21 instead of 20/18.5.
+                var chipHalfX = 24 * s
+                var chipHalfY = 21 * s
                 var gap = 6 * s
                 var right = width / 2 - cx          // > 0: table centre right of the box
                 var down = communityCenterY - cy    // > 0: table centre below the box
                 // The community block: the card row is wide (±132·communityScale), the
-                // pot badge above it is narrow (60 wide). A chip beside the badge may
-                // come down to the cards' upper edge, one above the badge not.
+                // pot chip block above it is narrow (66 wide since the chip pyramid,
+                // it was a 60 px pill). A chip beside the block may come down to the
+                // cards' upper edge, one above the block not.
                 var blockHalfW = 132 * communityScale + 6
-                var potHalfW = 30 * communityScale
+                var potHalfW = 34 * communityScale
 
                 function clampBlock(x, y) {
                     var fromCentre = Math.abs(x - width / 2)
                     if (fromCentre >= blockHalfW + chipHalfX) return y
                     var cardsTop = communityCenterY - 32 * communityScale - 2 - chipHalfY
                     var cardsBottom = communityCenterY + 32 * communityScale + 2 + chipHalfY
-                    var potTop = communityCenterY - 60 * communityScale - 2 - chipHalfY
+                    // 64: half card (32) + pot gap (6) + chip pyramid block (26).
+                    var potTop = communityCenterY - 64 * communityScale - 2 - chipHalfY
                     if (cy < communityCenterY)
                         return Math.min(y, fromCentre < potHalfW + chipHalfX ? potTop : cardsTop)
                     return Math.max(y, cardsBottom)
@@ -1139,12 +1149,12 @@ Rectangle {
                 var cs = communityScale
                 var bandTop = topOpponentRealBottomY
                 var bandBottom = selfVisualTopY
-                // The block reaches 60·cs above and 32·cs below the card row centre
-                // (card half 32 + pot gap 8 + pot 20), so its centre sits 14·cs above
-                // the row centre. Compensate that, then it is really centred.
-                var cy = (bandTop + bandBottom) / 2 + 14 * cs
+                // The block reaches 64·cs above and 32·cs below the card row centre
+                // (card half 32 + pot gap 6 + chip-pot block 26), so its centre sits
+                // 16·cs above the row centre. Compensate that, then it is really centred.
+                var cy = (bandTop + bandBottom) / 2 + 16 * cs
                 // Keep the block inside the band as long as it fits in there at all.
-                var lo = bandTop + 60 * cs
+                var lo = bandTop + 64 * cs
                 var hi = bandBottom - 32 * cs
                 if (lo <= hi && (cy < lo || cy > hi))
                     cy = Math.max(lo, Math.min(hi, cy))
