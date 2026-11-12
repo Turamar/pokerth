@@ -130,7 +130,7 @@ set(QML_FILES
     components/GameReactionFx.qml
     components/GameRoundIconButton.qml
     components/GameSidePanel.qml
-    components/GameStatusBar.qml
+    components/GameTournamentPanel.qml
     components/GlobalNoticePopup.qml
     components/GuideOverlay.qml
     components/GuiSettings.qml

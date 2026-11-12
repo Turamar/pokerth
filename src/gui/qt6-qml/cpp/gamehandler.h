@@ -199,6 +199,18 @@ class GameHandler : public QObject, public LocalTableHost
 	Q_PROPERTY(int blindLevel READ blindLevel NOTIFY handNumberChanged)
 	Q_PROPERTY(int smallBlind READ smallBlind NOTIFY handNumberChanged)
 	Q_PROPERTY(int bigBlind READ bigBlind NOTIFY handNumberChanged)
+	// The live numbers of the tournament info window on the table (PLAN.md,
+	// "top bars, buttons and info windows"): the running level, the hands left
+	// until the next one, the next small blind, how many people are still in,
+	// where the player stands by stack and how many places are paid. They are
+	// booked after every hand (tournamentLiveChanged) – the rank moves between
+	// hands, not inside one. All of them are 0 away from a tournament.
+	Q_PROPERTY(int tournamentLevel READ tournamentLevel NOTIFY tournamentLiveChanged)
+	Q_PROPERTY(int tournamentHandsToLevel READ tournamentHandsToLevel NOTIFY tournamentLiveChanged)
+	Q_PROPERTY(int tournamentNextSmallBlind READ tournamentNextSmallBlind NOTIFY tournamentLiveChanged)
+	Q_PROPERTY(int tournamentAlive READ tournamentAlive NOTIFY tournamentLiveChanged)
+	Q_PROPERTY(int tournamentRank READ tournamentRank NOTIFY tournamentLiveChanged)
+	Q_PROPERTY(int tournamentPaidPlaces READ tournamentPaidPlaces NOTIFY tournamentLiveChanged)
 	// The card odds of your own hand (seat 0) – analogous to the CardsChanceMonitor
 	// of the widgets client. A list with 10 entries, index 0 = high card …
 	// 9 = royal flush; every entry is a map {"prob": int %, "possible": bool}.
@@ -415,6 +427,15 @@ public:
 	int blindLevel() const;
 	int smallBlind() const;
 	int bigBlind() const;
+	// The live numbers of the tournament info window (see the properties above).
+	// Implemented in the .cpp: they ask the controller for the level, the field
+	// that is left and the roster stacks.
+	int tournamentLevel() const;
+	int tournamentHandsToLevel() const;
+	int tournamentNextSmallBlind() const;
+	int tournamentAlive() const;
+	int tournamentRank() const;
+	int tournamentPaidPlaces() const;
 	QVariantList cardsChance() const
 	{
 		return m_cardsChance;
@@ -611,6 +632,9 @@ signals:
 	// are also readable as properties for the popup.
 	void tournamentFinished(int place, int seats, int prizeCents);
 	void tournamentStateChanged();
+	// The live tournament numbers (level, hands left, field, rank, paid places)
+	// were re-read after a hand: the info window of the table refreshes.
+	void tournamentLiveChanged();
 
 protected:
 	// An app-wide filter: real user activity (mouse/keyboard) → a ResetTimeout

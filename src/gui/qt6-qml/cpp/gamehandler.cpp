@@ -2535,6 +2535,8 @@ bool GameHandler::startTournament(const QString &key)
 	m_roster = m_tournament->roster();
 	// Now that there is a hand, the table can be drawn.
 	refreshPlayerData();
+	// The info window starts at level 1 with the whole field in.
+	emit tournamentLiveChanged();
 
 	if (!isLocalGameRunning())
 		return refuse(QStringLiteral("the table did not start"));
@@ -2721,6 +2723,9 @@ void GameHandler::advanceTournament()
 	// when the next hand starts (the hand is what the drawn table is read from),
 	// so the seat map stays as the engine has it until then.
 	m_roster = m_tournament->roster();
+	// The fields of the info window have moved: the level, the hands left, the
+	// people still in and the places by stack.
+	emit tournamentLiveChanged();
 
 	// Out of chips, or the last one standing: the place is decided.
 	if (!m_tournament->hostStillIn() || m_tournament->playersLeft() <= 1) {
@@ -2757,6 +2762,8 @@ void GameHandler::continueTournamentHand()
 	m_roster = m_tournament->roster();
 	m_localSeatIds = m_tournament->localIds();
 	refreshPlayerData();
+	// A rebuilt table can change the stacks and the field: refresh the window.
+	emit tournamentLiveChanged();
 }
 
 // The end of a tournament: a place out of the seats and the prize of that place.
@@ -2824,6 +2831,64 @@ int GameHandler::blindLevel() const
 		++level;
 	}
 	return level;
+}
+
+// ── The live numbers of the tournament info window ───────────────────────────
+// The controller (TournamentRun) owns the level, the field and the roster
+// stacks; the table itself only knows its own seats. These getters read the
+// controller so that the info window can show what the player has to know
+// between hands: the next blind, how soon it comes, how many are left and where
+// he stands by stack. Away from a tournament they are 0.
+int GameHandler::tournamentLevel() const
+{
+	if (!m_tournamentMode || !m_tournament)
+		return 0;
+	return m_tournament->level() + 1;
+}
+
+int GameHandler::tournamentHandsToLevel() const
+{
+	if (!m_tournamentMode || !m_tournament || m_tournamentEvent.levelHands <= 0)
+		return 0;
+	const int played = m_tournament->handsPlayed();
+	return m_tournamentEvent.levelHands - (played % m_tournamentEvent.levelHands);
+}
+
+int GameHandler::tournamentNextSmallBlind() const
+{
+	return m_tournament ? m_tournament->nextBlind() : 0;
+}
+
+int GameHandler::tournamentAlive() const
+{
+	return m_tournament ? m_tournament->playersLeft() : 0;
+}
+
+// 1 + the number of people still in with more chips than the player: the place
+// by stack, which is what "where am I" means in a tournament before the places
+// are decided. Seat 0 of the roster is the human (startTournament adds him
+// first), so he is skipped here and his own stack comes from the table (it is
+// already updated when the hand is over and this is asked).
+int GameHandler::tournamentRank() const
+{
+	if (!m_tournamentMode || !m_tournament)
+		return 0;
+	const int mine = myStack();
+	int better = 0;
+	const PlayerState::Roster &people = m_tournament->roster();
+	for (int id = 0; id < people.count(); ++id) {
+		const PlayerState::RosterEntry *who = people.entry(id);
+		if (!who || id == 0 || who->stack <= 0)
+			continue;
+		if (who->stack > mine)
+			++better;
+	}
+	return better + 1;
+}
+
+int GameHandler::tournamentPaidPlaces() const
+{
+	return m_tournamentMode ? m_tournamentEvent.payoutCount : 0;
 }
 
 // The unit of the felt: a cash table counts cents (what the wallet holds), a

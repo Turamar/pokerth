@@ -63,38 +63,63 @@ Rectangle {
     // an opponent box (its long press menu).
     readonly property real resizeGrabOverhang: resizeGrabHeight - 10
 
+    // The magnifier button (Android compact). The rows at the lower right edge have
+    // to move up above it, so the condition lives here once instead of being
+    // duplicated in the bindings (zoomToggle.visible uses it as well).
+    readonly property bool zoomToggleShown:
+        Qt.platform.os === "android" && Config.Responsive.compact
+        && Config.Parameters.tableZoomEnabled
+
+    // ── The saved state of the two info windows ───────────────────────────────
+    // Both live in the config file (config.xml) as 0/1 values and survive a
+    // restart. They are read via SettingsManager instead of a QML Settings object:
+    // the config revision makes the bindings re-evaluate immediately on every
+    // write, without a restart.
+    readonly property bool tableInfoOpen:
+        (typeof SettingsManager !== "undefined" && SettingsManager
+         && SettingsManager.configRevision >= 0)
+        ? SettingsManager.readConfigInt("TableInfoOpen") !== 0 : false
+    function setTableInfoOpen(open) {
+        if (typeof SettingsManager !== "undefined" && SettingsManager)
+            SettingsManager.writeConfigInt("TableInfoOpen", open ? 1 : 0)
+    }
+    readonly property bool tableTournamentOpen:
+        (typeof SettingsManager !== "undefined" && SettingsManager
+         && SettingsManager.configRevision >= 0)
+        ? SettingsManager.readConfigInt("TableTournamentOpen") !== 0 : false
+    function setTableTournamentOpen(open) {
+        if (typeof SettingsManager !== "undefined" && SettingsManager)
+            SettingsManager.writeConfigInt("TableTournamentOpen", open ? 1 : 0)
+    }
+
     // ── The info panel (history/odds/hand) ────────────────────────────────────
     // Desktop: permanently docked at the bottom RIGHT (mirrored to the chat at the bottom left),
     // floating ABOVE the table (it reserves no room). If the width is not enough
-    // (or on mobile), it stays the floating overlay with a toggle. The toggle
-    // folds the docked panel in/out (dockedInfoCollapsed).
+    // (or on mobile), it stays the floating overlay with a toggle. Both modes share
+    // the one saved state (TableInfoOpen): the toggle folds the docked panel in/out
+    // in the desktop layout and opens/closes the overlay in portrait.
     readonly property bool infoDocked: tableZone ? tableZone.dockedInfoFits : false
-    // The visibility/active state of the toggle depending on the mode.
-    readonly property bool infoPanelOpen:
-        infoDocked ? !tableZone.dockedInfoCollapsed
-                   : (tableZone ? tableZone.showInfo : false)
+    // The visibility/active state of the toggle – the same key in both modes.
+    readonly property bool infoPanelOpen: gamePage.tableInfoOpen
 
     // Open the panel or select a tab (shortcuts).
     function showInfoTab(idx) {
+        if (!gamePage.tableInfoOpen)
+            gamePage.setTableInfoOpen(true)
         if (gamePage.infoDocked) {
-            tableZone.dockedInfoCollapsed = false
             infoPanelDock.currentIndex = idx
         } else {
-            tableZone.showInfo = true
             infoPanelOverlay.currentIndex = idx
-            if (!tableZone.wide)
+            if (tableZone && !tableZone.wide)
                 tableZone.showChat = false
         }
     }
 
     // The combined toggle: show/hide the panel (docked: fold it in).
     function toggleInfoOverlay() {
-        if (gamePage.infoDocked) {
-            tableZone.dockedInfoCollapsed = !tableZone.dockedInfoCollapsed
-            return
-        }
-        tableZone.showInfo = !tableZone.showInfo
-        if (tableZone.showInfo && !tableZone.wide)
+        var open = !gamePage.tableInfoOpen
+        gamePage.setTableInfoOpen(open)
+        if (open && !gamePage.infoDocked && tableZone && !tableZone.wide)
             tableZone.showChat = false
     }
 
@@ -103,14 +128,14 @@ Rectangle {
     // panel again – docked (desktop) just as much as as an overlay.
     function toggleLogOverlay() {
         if (gamePage.infoDocked) {
-            if (!tableZone.dockedInfoCollapsed && infoPanelDock.currentIndex === 0)
-                tableZone.dockedInfoCollapsed = true
+            if (gamePage.infoPanelOpen && infoPanelDock.currentIndex === 0)
+                gamePage.setTableInfoOpen(false)
             else
                 showInfoTab(0)
             return
         }
-        if (tableZone.showInfo && infoPanelOverlay.currentIndex === 0)
-            tableZone.showInfo = false
+        if (gamePage.infoPanelOpen && infoPanelOverlay.currentIndex === 0)
+            gamePage.setTableInfoOpen(false)
         else
             showInfoTab(0)
     }
@@ -131,7 +156,7 @@ Rectangle {
         }
         tableZone.showChat = !tableZone.showChat
         if (tableZone.showChat && !tableZone.wide)
-            tableZone.showInfo = false
+            gamePage.setTableInfoOpen(false)
     }
 
     // ── Emoji reactions (a port from the web client) ─────────────────────────
@@ -389,7 +414,11 @@ Rectangle {
 
     // ── The table layout (portrait & landscape) ───────────────────────────────
     // A uniform structure for all window sizes:
-    //   the status bar → the large table (all players overlaid) → the action bar.
+    //   the large table (all players overlaid) → the action bar.
+    // There is deliberately NO app/status bar at the table any more: the pot and the
+    // bets are on the felt, and the hand number/level live in the info window. The
+    // table therefore gets the whole room at the top (its own floating buttons – menu,
+    // balance, settings, Ace's Help, info windows – lie above it with a z order).
     // The player slots rearrange themselves automatically depending on the table aspect
     // ratio (tall/wide) – no separate desktop layout any more.
     ColumnLayout {
@@ -397,20 +426,7 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
 
-        // 1. The status bar: the game phase | the pot | the hand number
-        // Tighter in landscapeCompact (28 instead of 40) — it creates ~12 px more
-        // tableZone height for the necklace ellipse.
-        // z above the tableZone (the next ColumnLayout element, which would otherwise be
-        // drawn above it): the top centre player box (the TC slot) sticks into the
-        // strip of the bar and would otherwise intercept the click on the
-        // (clickable) table name with its MouseArea.
-        GameStatusBar {
-            z: 1
-            Layout.fillWidth: true
-            Layout.preferredHeight: Config.Responsive.landscapeCompact ? 28 : 40
-        }
-
-        // 2. The table zone: the green table graphic fills the whole room, all players overlaid
+        // 1. The table zone: the green table graphic fills the whole room, all players overlaid
         Item {
             id: tableZone
             Layout.fillWidth: true
@@ -494,6 +510,80 @@ Rectangle {
                     // → the table lies in the centre of the image = the centre of the ellipse.
                     x: centerMode ? Math.round(tableZone.width / 2 - width / 2) : 0
                     y: centerMode ? Math.round(ellipseCenterY - height / 2) : 0
+                }
+            }
+
+            // ── The spectator pill at the top centre ──────────────────────────
+            // The status bar used to carry this hint; without it a spectator mode
+            // would be indistinguishable from a normal game (the action bar is
+            // missing, but that alone is not a clear sign). Left: "Spectating" for
+            // a spectator of our own; right: the eye with the number of spectators.
+            // The names of the spectators are in the tooltip.
+            Rectangle {
+                id: spectatorPill
+                z: 200
+                readonly property bool showSpectating:
+                    (typeof GameTable !== "undefined" && GameTable) ? GameTable.spectating : false
+                readonly property bool showCount:
+                    (typeof GameTable !== "undefined" && GameTable) ? GameTable.spectatorCount > 0 : false
+                visible: showSpectating || showCount
+                anchors.top: parent.top
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.topMargin: 8
+                implicitWidth: spectatorPillRow.implicitWidth + 16
+                implicitHeight: spectatorPillRow.implicitHeight + 8
+                radius: height / 2
+                // The colours of an accent badge on the dark felt.
+                color: Config.Theme.withAlpha(Config.Theme.colorAccent, 0.18)
+                border.color: Config.Theme.colorAccent
+                border.width: 1
+
+                Row {
+                    id: spectatorPillRow
+                    anchors.centerIn: parent
+                    spacing: 5
+
+                    AppText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: spectatorPill.showSpectating
+                        text: qsTr("Spectating")
+                        color: Config.Theme.colorAccent
+                        font.pixelSize: Config.Theme.tableFont(
+                                            Config.Responsive.landscapeCompact ? 9 : 12)
+                        font.bold: true
+                    }
+
+                    SvgIcon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: spectatorPill.showCount
+                        width: Config.Responsive.landscapeCompact ? 14 : 18
+                        height: width
+                        source: "../resources/eye.svg"
+                        layer.enabled: true
+                        layer.effect: MultiEffect {
+                            colorization: 1.0
+                            colorizationColor: Config.Theme.colorAccent
+                        }
+                    }
+
+                    AppText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: spectatorPill.showCount
+                        text: (typeof GameTable !== "undefined" && GameTable)
+                              ? GameTable.spectatorCount : 0
+                        color: Config.Theme.colorAccent
+                        font.pixelSize: Config.Theme.tableFont(
+                                            Config.Responsive.landscapeCompact ? 10 : 14)
+                        font.bold: true
+                    }
+                }
+
+                HoverHandler { id: spectatorPillHover }
+                ToolTip {
+                    visible: spectatorPillHover.hovered && text.length > 0
+                             && !Config.Responsive.isMobile && Config.Parameters.showTooltips
+                    text: (typeof GameTable !== "undefined" && GameTable)
+                          ? GameTable.spectatorNames.join("\n") : ""
                 }
             }
 
@@ -1557,9 +1647,6 @@ Rectangle {
 
             // ── Spielverlauf (Log) + Chat – Umschalt-Icons + Overlays ──────────
             property bool showChat: false
-            // The info panel overlay (history/odds/hand) – only in the NOT docked
-            // mode (portrait/mobile). In desktop landscape it is docked.
-            property bool showInfo: false
             // The emoji reaction picker (a panel below the toggle next to the chat icon)
             property bool showReactions: false
 
@@ -1690,10 +1777,9 @@ Rectangle {
                 return Math.min(280, (width - actionBar.panelWidth) / 2 - 24)
             }
             readonly property bool dockedInfoFits: dockedInfoW >= 170
-            // If the panel is docked, the overlay is superfluous.
-            onDockedInfoFitsChanged: if (dockedInfoFits) showInfo = false
-            // Folded in (hidden via the toggle)? The default: folded in (the toggle off).
-            property bool dockedInfoCollapsed: true
+            // The docked/overlay visibility is no longer decided here: both modes
+            // read the same saved key (gamePage.tableInfoOpen), so the panel stays
+            // open when the window is rotated/resized between the two layouts.
 
             readonly property real dockedInfoMinH: actionBar.height - 8
             // The maximum height: up to the lower edge of the lowest opponent box that
@@ -1792,16 +1878,16 @@ Rectangle {
             // ── The info panel overlay (history/odds/hand) ────────────────────
             // Only in the NOT docked mode (portrait/mobile). In desktop
             // landscape the panel lies docked permanently on the right (infoDock,
-            // a direct child of gamePage).
+            // a direct child of gamePage). The open state is the saved config key.
             GameSidePanel {
                 id: infoOverlay
                 z: 150
                 edge: Qt.RightEdge
                 wide: tableZone.wide
                 // No heading – the tab bar (history/odds) is enough;
-                // it is closed via the toggle button at the top right.
+                // it is closed via the toggle button at the bottom right.
                 showHeader: false
-                visible: tableZone.showInfo && !gamePage.infoDocked
+                visible: gamePage.tableInfoOpen && !gamePage.infoDocked
                 onCloseRequested: gamePage.toggleInfoOverlay()
 
                 GameInfoPanel {
@@ -1809,25 +1895,6 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                 }
-            }
-
-            // The combined toggle (history/odds/hand). As a child of the tableZone
-            // it sits at its right edge automatically: docked to the left of
-            // the panel, otherwise at the right screen edge. In desktop landscape
-            // it folds the docked panel in/out, otherwise the overlay.
-            GameRoundIconButton {
-                id: infoToggle
-                z: 200
-                // A spectator: no history/odds panel (the odds presuppose a
-                // hand of your own, which does not exist here).
-                visible: !tableZone.spectating
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.margins: 8
-                iconSource: "../resources/gameLog.svg"
-                active: gamePage.infoPanelOpen
-                tooltipText: qsTr("Verlauf & Chancen")
-                onClicked: gamePage.toggleInfoOverlay()
             }
 
             // ── The chat overlay (only with human fellow players) ────────────────
@@ -1878,6 +1945,8 @@ Rectangle {
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.margins: 8
+                // One row lower: the menu floats in the upper left corner now.
+                anchors.topMargin: 48
                 iconSource: "../resources/gameChat.svg"
                 active: gamePage.chatPanelOpen
                 unread: tableZone.chatUnread
@@ -1895,7 +1964,7 @@ Rectangle {
                 anchors.top: parent.top
                 anchors.left: chatToggle.visible ? chatToggle.right : parent.left
                 anchors.leftMargin: chatToggle.visible ? 6 : 8
-                anchors.topMargin: 8
+                anchors.topMargin: 48
                 iconSource: "../resources/addReaction.svg"
                 active: tableZone.showReactions
                 tooltipText: qsTr("Emoji-Reaktionen")
@@ -2052,12 +2121,17 @@ Rectangle {
     // the action bar. It floats ABOVE the table.
     Rectangle {
         id: infoDock
-        visible: tableZone.dockedInfoFits && !tableZone.dockedInfoCollapsed
+        visible: gamePage.tableInfoOpen && tableZone.dockedInfoFits
         z: 20
         anchors.right: parent.right
         anchors.rightMargin: 8
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 8
+        // Above the row of buttons at the lower right edge (Ace's Help + history):
+        // 34 px button height + 6 px gap. In portrait it also moves above the action
+        // bar, and above the magnifier when that is shown – like zoomToggle.
+        anchors.bottomMargin: (tableZone.wide ? 8 : actionBar.height + 8)
+                            + (gamePage.zoomToggleShown ? 8 + 36 + 6 : 0)
+                            + 34 + 6
         width: tableZone.dockedInfoW
         height: {
             // Initially = the height of the action button box (like the docked chat),
@@ -2136,7 +2210,7 @@ Rectangle {
     // between nested MultiEffects, which breaks the icon colourising.
     Rectangle {
         id: zoomToggle
-        visible: Qt.platform.os === "android" && Config.Responsive.compact && Config.Parameters.tableZoomEnabled
+        visible: gamePage.zoomToggleShown
         z: 200
         anchors.right: parent.right
         anchors.rightMargin: 8
@@ -2176,6 +2250,118 @@ Rectangle {
                     tableZone._zoomPanY = 0
                 }
             }
+        }
+    }
+
+    // ── The lower left edge: the toggle of the info window ────────────────────
+    // The window itself (GameTournamentPanel) sits directly above it. A direct child
+    // of gamePage like the info panel, so that it sits at the real screen edge in
+    // landscape (next to the action box). In portrait it moves above the action bar.
+    GameRoundIconButton {
+        id: tournamentToggle
+        z: 200
+        // The spectator has no info window (dockedInfoFits is false then) – a
+        // toggle that opens nothing would be misleading.
+        visible: !tableZone.spectating
+        anchors.left: parent.left
+        anchors.leftMargin: 8
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: tableZone.wide ? 8 : actionBar.height + 8
+        // A trophy in a tournament, a stack of chips at a cash table.
+        iconSource: (typeof GameTable !== "undefined" && GameTable && GameTable.tournamentMode)
+                    ? "../resources/trophy.svg" : "../resources/chipStack.svg"
+        active: gamePage.tableTournamentOpen
+        tooltipText: qsTr("Tisch-Info")
+        onClicked: gamePage.setTableTournamentOpen(!gamePage.tableTournamentOpen)
+    }
+
+    // ── The info window above the toggle (hand number, blinds, level, …) ─────
+    // Its height follows the content – no resize handle; the width is the same as
+    // the docked history/odds panel.
+    GameTournamentPanel {
+        id: tournamentDock
+        z: 20
+        visible: gamePage.tableTournamentOpen && !tableZone.spectating
+                 && tableZone.dockedInfoFits
+        anchors.left: parent.left
+        anchors.leftMargin: 8
+        anchors.bottom: tournamentToggle.top
+        anchors.bottomMargin: 6
+        width: tableZone.dockedInfoW
+        height: implicitHeight
+    }
+
+    // ── The lower right edge: the info toggle (history/odds) ─────────────────
+    // A direct child of gamePage (like the infoDock), so that it sits at the real
+    // screen edge in landscape as well – next to the action box, not above it.
+    // In portrait it moves up above the action bar, and above the magnifier when
+    // that is shown (as zoomToggle does).
+    GameRoundIconButton {
+        id: infoToggle
+        z: 200
+        // A spectator: no history/odds panel (the odds presuppose a
+        // hand of your own, which does not exist here).
+        visible: !tableZone.spectating
+        anchors.right: parent.right
+        anchors.rightMargin: 8
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: (tableZone.wide ? 8 : actionBar.height + 8)
+                            + (gamePage.zoomToggleShown ? 8 + 36 + 6 : 0)
+        iconSource: "../resources/gameLog.svg"
+        active: gamePage.infoPanelOpen
+        tooltipText: qsTr("Verlauf & Chancen")
+        onClicked: gamePage.toggleInfoOverlay()
+    }
+
+    // Ace's Help next to it, to the left (6 px gap). The A♠ button opens its
+    // menu/tips; the red dot = a tip put off with « Later » that applies here (as
+    // on the old top bar button). A plain Rectangle instead of GameRoundIconButton:
+    // square with a hairline frame and an accent state of its own.
+    Rectangle {
+        id: guideToggle
+        z: 200
+        anchors.right: infoToggle.visible ? infoToggle.left : parent.right
+        anchors.rightMargin: infoToggle.visible ? 6 : 8
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: (tableZone.wide ? 8 : actionBar.height + 8)
+                            + (gamePage.zoomToggleShown ? 8 + 36 + 6 : 0)
+        width: 34; height: 34; radius: 8
+        color: Qt.rgba(0, 0, 0, 0.45)
+        border.width: 1.5
+        border.color: mainWindow.guideActive ? Config.Theme.colorAccent : "#FFFFFF"
+
+        AppText {
+            anchors.centerIn: parent
+            text: "A♠"
+            color: mainWindow.guideActive ? Config.Theme.colorAccent : "#FFFFFF"
+            font.pixelSize: 13
+            font.bold: true
+        }
+
+        // The red dot of a deferred tip.
+        Rectangle {
+            visible: mainWindow.guideBadge
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.topMargin: -3
+            anchors.rightMargin: -3
+            width: 10; height: 10; radius: 5
+            color: Config.Theme.colorDanger
+            border.color: Config.Theme.colorBox
+            border.width: 1.5
+        }
+
+        ToolTip.visible: guideMouse.containsMouse && !Config.Responsive.isMobile
+                         && Config.Parameters.showTooltips
+        ToolTip.delay: 600
+        ToolTip.text: qsTr("Ace’s Help")
+
+        MouseArea {
+            id: guideMouse
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            hoverEnabled: true
+            onClicked: mainWindow.toggleGuide()
         }
     }
 

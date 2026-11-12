@@ -67,6 +67,24 @@ int TournamentRun::blind() const
 	return small;
 }
 
+int TournamentRun::nextBlind() const
+{
+	// One level further, by the same rule as blind(): the starting blind is
+	// doubled once per level, and the ceiling is half of the chips in play. At
+	// the ceiling the next level costs the same as the running one.
+	if(m_event.levelHands <= 0) return blind();
+	const long long allChips = static_cast<long long>(m_event.startStack) * m_event.seats;
+	int ceiling = static_cast<int>(allChips / 2);
+	if(ceiling < m_event.smallBlind) ceiling = m_event.smallBlind;
+	int small = m_event.smallBlind;
+	const int nextLevel = level() + 1;
+	for(int i = 0; i < nextLevel && small < ceiling; ++i) {
+		small *= 2;
+	}
+	if(small > ceiling) small = ceiling;
+	return small;
+}
+
 int TournamentRun::tableCapacity() const
 {
 	// Nine-handed, the size of the smaller events: the engine has ten seats but

@@ -894,6 +894,18 @@
         <source>Der Platz konnte nicht gekauft werden.</source>
         <translation>Не удалось купить место.</translation>
     </message>
+    <message>
+        <source>Spectating</source>
+        <translation>Наблюдение</translation>
+    </message>
+    <message>
+        <source>Tisch-Info</source>
+        <translation>Информация о столе</translation>
+    </message>
+    <message>
+        <source>Ace’s Help</source>
+        <translation>Помощь туза</translation>
+    </message>
 </context>
 <context>
     <name>GamePlayerBox</name>
@@ -1002,6 +1014,33 @@
     <message>
         <source>Level %1 · %2/%3</source>
         <translation>Уровень %1 · %2/%3</translation>
+    </message>
+</context>
+<context>
+    <name>GameTournamentPanel</name>
+    <message>
+        <source>Blinds: %1 / %2</source>
+        <translation>Блайнды: %1 / %2</translation>
+    </message>
+    <message>
+        <source>Next: %1 / %2 · in %3 hands</source>
+        <translation>Следующие: %1 / %2 · через %3 разд.</translation>
+    </message>
+    <message>
+        <source>Level: %1</source>
+        <translation>Уровень: %1</translation>
+    </message>
+    <message>
+        <source>Place: %1 of %2 left · %3 total</source>
+        <translation>Место: %1 из %2 живых · всего %3</translation>
+    </message>
+    <message>
+        <source>Paid: %1 of %2</source>
+        <translation>Платят: %1 из %2</translation>
+    </message>
+    <message>
+        <source>Hand: %1</source>
+        <translation>Раздача: %1</translation>
     </message>
 </context>
 <context>

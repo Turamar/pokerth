@@ -139,6 +139,9 @@ public:
 	// blind doubled that many times.
 	int level() const;
 	int blind() const;
+	// The small blind of the level after the running one: the same doubling and
+	// the same ceiling as blind(). Equal to blind() once the level cannot rise.
+	int nextBlind() const;
 	int playersLeft() const;
 
 	// Is the host's player still in chips?
@@ -158,6 +161,12 @@ public:
 	// The people at any table, in seat order; empty for a table number the
 	// tournament does not have.
 	std::vector<int> idsAt(int table) const;
+	// Hands played so far: one step = one hand at every table (PLAN.md, the info
+	// window counts the hands left until the next blind level).
+	int handsPlayed() const
+	{
+		return m_handsPlayed;
+	}
 
 private:
 	struct Table

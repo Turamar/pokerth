@@ -25,6 +25,14 @@ ApplicationWindow {
         mainStackView.currentItem
         && mainStackView.currentItem.objectName !== "preLoaderPage"
 
+    // The game table lies on top of the stack. On the table the common header is
+    // hidden (the table needs the vertical room and has a status bar of its own);
+    // the header controls float above the page instead (see the floating
+    // buttons below mainLayout).
+    readonly property bool gamePageActive:
+        mainStackView.currentItem
+        && mainStackView.currentItem.objectName === "gamePage"
+
     // ── Private messages (the inbox) ───────────────────────────────────────
     // The counter and the number of conversations for the letter symbol of the header.
     // privateMessagesRevision is the reactive dependency of the history.
@@ -49,6 +57,41 @@ ApplicationWindow {
         if (current && current.objectName === "walletPage")
             return
         mainStackView.push("pages/WalletPage.qml")
+    }
+
+    // Ace's Help for the game page: its header button is hidden on the table, so
+    // the page calls the same toggle itself (guideBadge = the red dot, guideActive
+    // = the bubble is up and the page is at rest).
+    function toggleGuide() {
+        guideOverlay.chipTapped()
+    }
+    readonly property bool guideBadge: guideOverlay.badge
+    readonly property bool guideActive:
+        guideOverlay.bubbleText !== "" && guideOverlay.settled
+
+    // The menu/back/door button, shared by the header and the floating button on
+    // the table: back out of the page first (the door asks before leaving a
+    // game), otherwise toggle the side menu.
+    function toggleSideMenu() {
+        if (!navigateBackFromTopBar()) {
+            topBarMenuIcon.source = !sideMenu.visible
+                ? "resources/caretLeft.svg" : "resources/threeLines.svg"
+            sideMenu.visible = !sideMenu.visible
+        }
+    }
+
+    // The tooltip of that button – the floating button on the table shows the
+    // same text as the header.
+    function menuButtonTooltip() {
+        var src = String(topBarMenuIcon.source)
+        if (src.indexOf("doorExit") !== -1) {
+            return (mainStackView.currentItem
+                    && mainStackView.currentItem.objectName === "lobbyPage")
+                ? qsTr("Leave Lobby") : qsTr("Leave Game")
+        }
+        if (src.indexOf("caretLeft") !== -1)
+            return qsTr("Back")
+        return qsTr("Menu")
     }
 
     // True between the beginning of an automatic reconnect and its
@@ -479,6 +522,10 @@ ApplicationWindow {
             Layout.preferredWidth: parent.width
             // A compact app header on short landscape phones (it saves vertical
             // room for the table -> less opponent box overlap).
+            // On the game table the header is hidden and its controls float
+            // above the page instead (the table gains the vertical room;
+            // an invisible layout item takes no height in a ColumnLayout).
+            visible: !mainWindow.gamePageActive
             Layout.preferredHeight: Config.Responsive.landscapeCompact ? 30 : 38
             Layout.alignment: Qt.AlignTop
             color: Config.Theme.colorBox
@@ -500,17 +547,7 @@ ApplicationWindow {
                     ToolTip.visible: menuArea.containsMouse
                                      && !Config.Responsive.isMobile && Config.Parameters.showTooltips
                     ToolTip.delay: 600
-                    ToolTip.text: {
-                        var src = String(source)
-                        if (src.indexOf("doorExit") !== -1) {
-                            return (mainStackView.currentItem
-                                    && mainStackView.currentItem.objectName === "lobbyPage")
-                                ? qsTr("Leave Lobby") : qsTr("Leave Game")
-                        }
-                        if (src.indexOf("caretLeft") !== -1)
-                            return qsTr("Back")
-                        return qsTr("Menu")
-                    }
+                    ToolTip.text: mainWindow.menuButtonTooltip()
                     layer.enabled: true
                     layer.effect: MultiEffect {
                         colorization: 1.0
@@ -525,12 +562,7 @@ ApplicationWindow {
                         cursorShape: Qt.PointingHandCursor
                         hoverEnabled: true
 
-                        onClicked: {
-                            if (!navigateBackFromTopBar()) {
-                                topBarMenuIcon.source = !sideMenu.visible ? "resources/caretLeft.svg" : "resources/threeLines.svg";
-                                sideMenu.visible = !sideMenu.visible;
-                            }
-                        }
+                        onClicked: mainWindow.toggleSideMenu()
                     }
                 }
 
@@ -748,6 +780,151 @@ ApplicationWindow {
             visible: mainWindow.inLobbySession
                      && !(mainStackView.currentItem
                           && mainStackView.currentItem.objectName === "gamePage")
+        }
+    }
+
+    // ── The floating table controls ──────────────────────────────────────────
+    // The common header is hidden on the game page (gamePageActive) – this
+    // table needs the vertical room and has a status bar of its own. Its
+    // controls stay reachable as separate buttons above the page, WITHOUT a
+    // common background bar. On every other page they are invisible and the
+    // header is unchanged.
+    Rectangle {
+        id: tableMenuButton
+        z: 900
+        x: mainWindow.safeAreaLeft + 8
+        y: mainWindow.safeAreaTop + 8
+        width: 34
+        height: 34
+        radius: 17
+        color: Qt.rgba(0, 0, 0, 0.45)
+        visible: mainWindow.gamePageActive && mainWindow.topBarIconsVisible
+
+        // The icon source (three lines / caret / door) is kept up to date on the
+        // header icon by mainStackView.onCurrentItemChanged (door on the table).
+        ToolTip.visible: tableMenuArea.containsMouse
+                         && !Config.Responsive.isMobile && Config.Parameters.showTooltips
+        ToolTip.delay: 600
+        ToolTip.text: mainWindow.menuButtonTooltip()
+
+        SvgIcon {
+            anchors.centerIn: parent
+            width: 20
+            height: 20
+            source: topBarMenuIcon.source
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                colorization: 1.0
+                colorizationColor: tableMenuArea.containsMouse
+                    ? Config.Theme.colorAccent
+                    : "white"
+            }
+        }
+
+        MouseArea {
+            id: tableMenuArea
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            hoverEnabled: true
+            onClicked: mainWindow.toggleSideMenu()
+        }
+    }
+
+    Rectangle {
+        id: tableSettingsButton
+        z: 900
+        anchors.right: parent.right
+        anchors.rightMargin: mainWindow.safeAreaRight + 8
+        anchors.top: parent.top
+        anchors.topMargin: mainWindow.safeAreaTop + 8
+        width: 34
+        height: 34
+        radius: 17
+        color: Qt.rgba(0, 0, 0, 0.45)
+        visible: mainWindow.gamePageActive && mainWindow.topBarIconsVisible
+
+        ToolTip.visible: tableSettingsArea.containsMouse
+                         && !Config.Responsive.isMobile && Config.Parameters.showTooltips
+        ToolTip.delay: 600
+        ToolTip.text: qsTr("Settings")
+
+        SvgIcon {
+            anchors.centerIn: parent
+            width: 20
+            height: 20
+            source: "resources/settings.svg"
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                colorization: 1.0
+                colorizationColor: mainWindow.settingsSectionActive
+                    ? Config.Theme.colorAccent
+                    : "white"
+            }
+        }
+
+        MouseArea {
+            id: tableSettingsArea
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            hoverEnabled: true
+            onClicked: mainWindow.toggleTopBarSection(
+                "pages/SettingsPage.qml", mainWindow.settingsSectionPages)
+        }
+    }
+
+    // The balance as a pill left of the settings gear: the one number that
+    // always matters; a click opens the wallet, as in the header.
+    Rectangle {
+        id: tableWalletPill
+        z: 900
+        anchors.right: tableSettingsButton.left
+        anchors.rightMargin: 6
+        anchors.verticalCenter: tableSettingsButton.verticalCenter
+        width: tableWalletRow.implicitWidth + 20
+        height: 28
+        radius: 14
+        color: Qt.rgba(0, 0, 0, 0.45)
+        visible: mainWindow.gamePageActive && mainWindow.topBarIconsVisible
+
+        ToolTip.visible: tableWalletArea.containsMouse
+                         && !Config.Responsive.isMobile && Config.Parameters.showTooltips
+        ToolTip.delay: 600
+        ToolTip.text: qsTr("Wallet")
+
+        Row {
+            id: tableWalletRow
+            anchors.centerIn: parent
+            spacing: 4
+
+            SvgIcon {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 16
+                height: 16
+                source: "resources/chip.svg"
+                layer.enabled: true
+                layer.effect: MultiEffect {
+                    colorization: 1.0
+                    colorizationColor: "white"
+                }
+            }
+            AppText {
+                anchors.verticalCenter: parent.verticalCenter
+                // Wallet is a context property that does not exist yet in the
+                // splash – never touch it blindly.
+                text: (typeof Wallet !== "undefined" && Wallet)
+                      ? Wallet.money(Wallet.balance) : ""
+                color: "white"
+                font.pixelSize: 13
+                font.bold: true
+            }
+        }
+
+        MouseArea {
+            id: tableWalletArea
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            hoverEnabled: true
+            onClicked: mainWindow.openWallet()
         }
     }
 

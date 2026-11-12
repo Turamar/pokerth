@@ -65,7 +65,6 @@
         <file>components/SafeAreaInsets.qml</file>
         <file>components/BrandHeader.qml</file>
         <file>components/CardImage.qml</file>
-        <file>components/GameStatusBar.qml</file>
         <file>components/ConfirmPopup.qml</file>
         <file>components/GlobalNoticePopup.qml</file>
         <file>components/GuideOverlay.qml</file>
@@ -75,6 +74,7 @@
         <file>components/CommunityCards.qml</file>
         <file>components/WinningHandBadge.qml</file>
         <file>components/GameSidePanel.qml</file>
+        <file>components/GameTournamentPanel.qml</file>
         <file>components/GameInfoPanel.qml</file>
         <file>components/GameRoundIconButton.qml</file>
         <file>components/ReactionPicker.qml</file>

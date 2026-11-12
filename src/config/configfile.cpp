@@ -90,7 +90,9 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	// 112: QmlCardDeckStyle defaults to nobus_4c_classic, configs that still
 	//      carry the old default ("default") are switched over (see the
 	//      version hack section in updateConfig).
-	configRev = 112;
+	// 113: TableInfoOpen / TableTournamentOpen were added (the two info windows
+	//      of the game table, both closed by default).
+	configRev = 113;
 
 	// standard defaults
 	logOnOffDefault = "1";
@@ -311,6 +313,11 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	// switched off globally for weak/passively cooled systems or software rendering.
 	// 0 = effects on (default), 1 = reduced. See config/Theme.qml.
 	configList.push_back(ConfigInfo("QmlReduceEffects", CONFIG_TYPE_INT, "0"));
+	// The two info windows of the game table (pages/GamePage.qml): 0 = closed,
+	// 1 = open. They are toggled by the round buttons in the lower corners; the
+	// key makes the state survive a restart. Revision 113.
+	configList.push_back(ConfigInfo("TableInfoOpen", CONFIG_TYPE_INT, "0"));
+	configList.push_back(ConfigInfo("TableTournamentOpen", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("PlaySoundEffects", CONFIG_TYPE_INT, "1"));
 	// Sound volume in per cent (1..100), see SoundSettings.qml and
 	// QtAudioPlayer, which divides by 100.0f.
@@ -786,7 +793,7 @@ void ConfigFile::updateConfig(ConfigState myConfigState)
 			// A config that still names the old built-in default has never
 			// chosen a deck, so it follows the new one; an explicit choice
 			// (lemming, star_trek, ...) is left alone.
-			if (configRev == 112) {
+			if (configRev >= 112) {
 				QDomElement deckElement = config.firstChildElement("QmlCardDeckStyle");
 				if (!deckElement.isNull() && deckElement.attribute("value") == "default")
 					setElementValue("QmlCardDeckStyle", "nobus_4c_classic");
