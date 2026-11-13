@@ -5,6 +5,7 @@ import QtQuick.Effects
 import QtQuick.Window
 
 import "../components"
+import "../components/chipflight.js" as ChipFlight
 import "../config" as Config
 import "seatlayout.js" as SL
 
@@ -50,6 +51,11 @@ Rectangle {
     // have to be off as well – otherwise Alt+C/Alt+L/Alt+I would open an overlay whose
     // close button (the toggle) is not there at all any more.
     readonly property bool spectating: tableZone ? tableZone.spectating : false
+
+    // Test hook (tools/tablecheck.ps1): true while the chips of a collected betting
+    // round are on their way into the pot. A 0.4 s animation is almost never hit by a
+    // fixed time mark, so the stand grabs a frame on this flag.
+    readonly property bool chipsFlying: tableZone ? tableZone._potCollecting : false
 
     // Docked chat/info panels: desktop, and on mobile only tablets (shorter screen
     // side >= 600 dp, the Android "sw600dp" criterion). Based on the screen, not the
@@ -642,6 +648,119 @@ Rectangle {
             // distributed evenly over the ellipse.
             readonly property bool spectating:
                 (typeof GameTable !== "undefined" && GameTable) ? GameTable.spectating : false
+
+            // ── The chips flying into the pot ────────────────────────────────────
+            // When a betting round is collected the engine raises `GameTable.pot`
+            // BEFORE it clears the seats' bets (GameHandler::onRefreshPot refreshes the
+            // pot first, then the players) — that is the moment to take the picture of
+            // the bets and let chips fly from every seat into the pot (see ChipFly).
+            // The sum under the pot is held back while they fly (`potShown`) and grows
+            // when they land: the number never runs ahead of the chips.
+            //
+            // `_potFlights` is a plain list of flight entries for the Repeater in the
+            // zoom layer below; `potFlightTimer` empties it after the last chip.
+            property var _potFlights: []
+            property bool _potCollecting: false
+            property int potShown: 0
+
+            Timer {
+                id: potFlightTimer
+                repeat: false
+                onTriggered: {
+                    tableZone._potFlights = []
+                    tableZone._potCollecting = false
+                    tableZone.potShown = (typeof GameTable !== "undefined" && GameTable)
+                        ? GameTable.pot : 0
+                }
+            }
+
+            // The seat's bet pile in table (zoomContent) coordinates. Landscape: the
+            // felt pile, whose centre the seat delegate already computes (`feltBet`).
+            // Portrait: the compact pile next to the plate, approximated by the box
+            // centre. Your own seat: the bet strip above the own plate.
+            function _seatBetCentre(seatIndex) {
+                if (seatIndex === 0 && !spectating)
+                    return selfBox.mapToItem(zoomContent, selfBox.width / 2, -12)
+                for (var d = 0; d < seatRepeater.count; ++d) {
+                    var it = seatRepeater.itemAt(d)
+                    if (!it || !it.visible || it.index !== seatIndex)
+                        continue
+                    if (wide)
+                        return it.feltBet
+                    return it.mapToItem(zoomContent, it.width / 2, it.height / 2)
+                }
+                return null
+            }
+
+            // A few chips from every seat that still shows a bet. The values come from
+            // the pot pile's own split, so a flying chip carries a denomination of the
+            // bet it comes from (chipflight.js, at most three per seat).
+            function _potFlightEntries() {
+                var out = []
+                if (typeof GameTable === "undefined" || !GameTable)
+                    return out
+                var players = GameTable.players
+                var aim = communityArea.mapToItem(zoomContent,
+                                communityArea.potCentre.x, communityArea.potCentre.y)
+                for (var i = 0; i < players.length; ++i) {
+                    var bet = players[i] ? players[i].bet : 0
+                    if (!bet || bet <= 0)
+                        continue
+                    var src = _seatBetCentre(i)
+                    if (!src)
+                        continue
+                    var vals = ChipFlight.take(communityArea.chipValues(bet), 3)
+                    for (var k = 0; k < vals.length; ++k) {
+                        out.push({
+                            "from": Qt.point(src.x + Math.random() * 14 - 7,
+                                             src.y + Math.random() * 8 - 4),
+                            "to": Qt.point(aim.x + Math.random() * 10 - 5,
+                                           aim.y + Math.random() * 8 - 4),
+                            "value": vals[k],
+                            "arc": 26 + Math.random() * 26,
+                            "spin": Math.random() * 180 - 90,
+                            "delay": Math.random() * 70,
+                            "duration": 300 + Math.random() * 90
+                        })
+                    }
+                }
+                return out
+            }
+
+            Connections {
+                target: (typeof GameTable !== "undefined" && GameTable) ? GameTable : null
+                function onPotChanged() {
+                    if (typeof GameTable === "undefined" || !GameTable)
+                        return
+                    var np = GameTable.pot
+                    // The pot was reset (the hand is over / a new hand starts) or
+                    // shrank: nothing to collect, show the engine value at once.
+                    if (np <= tableZone.potShown) {
+                        tableZone._potFlights = []
+                        tableZone._potCollecting = false
+                        potFlightTimer.stop()
+                        tableZone.potShown = np
+                        return
+                    }
+                    var flights = tableZone._potFlightEntries()
+                    if (flights.length === 0) {
+                        // No bets to animate (blinds collected at hand start, a
+                        // refresh): the sum is the truth right away.
+                        tableZone.potShown = np
+                        return
+                    }
+                    tableZone._potFlights = flights
+                    tableZone._potCollecting = true
+                    var end = 0
+                    for (var f = 0; f < flights.length; ++f)
+                        end = Math.max(end, flights[f].delay + flights[f].duration)
+                    potFlightTimer.interval = end + 30
+                    potFlightTimer.restart()
+                }
+            }
+
+            Component.onCompleted: tableZone.potShown =
+                (typeof GameTable !== "undefined" && GameTable) ? GameTable.pot : 0
 
             // The opponent and the self box grow together in landscape. The reference is
             // not only the absolute width but how much additional width
@@ -1363,6 +1482,10 @@ Rectangle {
                 chipRenderScale: tableZone.communityScale * tableZone.zoomRenderMul
                 chipCash: (typeof GameTable !== "undefined" && GameTable
                            && GameTable.tournamentMode !== true)
+                // The sum the pot shows is the page's own (`potShown`): the collect
+                // animation holds it back until the chips from the bets have landed
+                // (see the pot-flight block above).
+                potAmount: tableZone.potShown
             }
 
             // The winning hand (e.g. "full house") – only during the showdown.
@@ -1378,6 +1501,7 @@ Rectangle {
             // Seat 0 (the human) sits at the bottom in the middle; the other occupied seats
             // are distributed left/right in a balanced way according to slotSeq.
             Repeater {
+                id: seatRepeater
                 model: 10
                 delegate: Item {
                     id: seatSlot
@@ -1568,6 +1692,34 @@ Rectangle {
                 scale: tableZone.boxScale
                 // Rasterize the cards in the real screen size (boxScale × zoom).
                 cardRenderScale: tableZone.boxScale * tableZone.zoomRenderMul
+            }
+
+            // ── The chips in flight into the pot ───────────────────────────────────
+            // Between the boxes (z 1) and the emoji reactions (z 60): a bet belongs
+            // to a seat — a chip on its way to the pot belongs to neither. The chips
+            // are drawn at the seat's scale, exactly like the bets they leave from.
+            Item {
+                id: potFlightLayer
+                anchors.fill: parent
+                z: 50
+                Repeater {
+                    model: tableZone._potFlights
+                    delegate: ChipFly {
+                        required property var modelData
+                        from: modelData.from
+                        to: modelData.to
+                        value: modelData.value
+                        arc: modelData.arc
+                        spin: modelData.spin
+                        delay: modelData.delay
+                        duration: modelData.duration
+                        chipSize: 22
+                        scale: tableZone.oppScale
+                        cash: (typeof GameTable !== "undefined" && GameTable
+                               && GameTable.tournamentMode !== true)
+                        renderScale: tableZone.oppScale * tableZone.zoomRenderMul
+                    }
+                }
             }
 
             // The emoji reaction animations – in the zoom layer, so that they scale

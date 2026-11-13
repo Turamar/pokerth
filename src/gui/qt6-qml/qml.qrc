@@ -6,6 +6,8 @@
         <file>components/AppLabel.qml</file>
         <file>components/BetChip.qml</file>
         <file>components/BetRows.qml</file>
+        <file>components/ChipFly.qml</file>
+        <file>components/chipflight.js</file>
         <file>components/ChipImage.qml</file>
         <file>components/BlindButtonImage.qml</file>
         <file>components/PlayerActionBadge.qml</file>

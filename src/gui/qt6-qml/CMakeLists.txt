@@ -102,6 +102,7 @@ set(QML_FILES
     components/SafeAreaInsets.qml
     components/BetChip.qml
     components/BetRows.qml
+    components/ChipFly.qml
     components/ChipImage.qml
     components/BlindButtonImage.qml
     components/BrandHeader.qml

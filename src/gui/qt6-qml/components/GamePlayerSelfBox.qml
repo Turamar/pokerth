@@ -1,6 +1,7 @@
 import QtQuick
 
 import "../config" as Config
+import "chipflight.js" as ChipFlight
 
 // Your own seat – the same plate as the opponent boxes (cards behind the plate,
 // round avatar on its right end, stack on the second line), with the one
@@ -37,6 +38,14 @@ SeatBox {
     // Player in the game? Whoever has no money left for the next hand is inactive.
     // A default of its own (true) as opposed to the opponent box.
     readonly property bool playerActive: seatData && seatData.active !== undefined ? seatData.active : true
+
+    // ── The chip flight of a new bet ─────────────────────────────────────────
+    // Same as on the opponent boxes (see GamePlayerBox): on an increase up to three
+    // chips fly from the own avatar to the bet strip above the plate; the FIRST bet
+    // holds the strip back until they land. A raise keeps the old row visible.
+    property var _betFlights: []
+    property bool _betArriving: false
+    property int _lastBet: 0
 
     // Bet base (betInset/betStripH) and unfolding the base: see SeatBox.
     readonly property int hMargin: 4
@@ -272,7 +281,9 @@ SeatBox {
         // pill needs ~52 and would eat the table.
         BetRows {
             id: betRow
-            visible: root.bet > 0 && !root.betInset
+            // `_betArriving`: the chips of the first bet are still on their way, the
+            // row appears when they land (see _flyBet below).
+            visible: root.bet > 0 && !root.betInset && !root._betArriving
             amount: root.bet
             chipSize: 22
             fontSize: 12
@@ -285,6 +296,98 @@ SeatBox {
             anchors.rightMargin: 2
         }
     }
+
+    // ── The chips in flight of a new bet ─────────────────────────────────────
+    // Same pattern as in GamePlayerBox: a plain Repeater over the list, the timer
+    // empties it when the last chip has landed (see ChipFly).
+    Item {
+        id: betFlightLayer
+        z: 27
+        anchors.fill: parent
+        Repeater {
+            model: root._betFlights
+            delegate: ChipFly {
+                required property var modelData
+                from: modelData.from
+                to: modelData.to
+                value: modelData.value
+                arc: modelData.arc
+                spin: modelData.spin
+                delay: modelData.delay
+                duration: modelData.duration
+                // Short fade at the very end: the chips land exactly when the row
+                // pops in, so they must not disappear 100 ms early.
+                fadeOut: 70
+                chipSize: 22
+                cash: root.chipCash
+                renderScale: root.cardRenderScale
+            }
+        }
+    }
+
+    Timer {
+        id: betFlightTimer
+        repeat: false
+        onTriggered: {
+            root._betFlights = []
+            root._betArriving = false
+        }
+    }
+
+    // The take-off point is the avatar's edge, the landing point is the middle of
+    // the bet strip above the plate (the row is right-aligned in it, so for a raise
+    // the landing point can be a few px off the final centre — the chips only have
+    // to land on the row, the number is the truth).
+    function _flyBet(holdPile) {
+        var vals = ChipFlight.take(betRow.columnsOf(root.bet), 3)
+        if (vals.length === 0)
+            return
+        var sx0 = body.x + avatar.x + avatar.width / 2
+        var sy0 = body.y + avatar.y + avatar.height / 2
+        var dst = Qt.point(topStrip.x + betRow.x + betRow.width / 2,
+                           topStrip.y + betRow.y + betRow.height / 2)
+        var dx = dst.x - sx0, dy = dst.y - sy0
+        var len = Math.max(1, Math.sqrt(dx * dx + dy * dy))
+        var src = Qt.point(sx0 + dx / len * (avatar.width / 2 - 2),
+                           sy0 + dy / len * (avatar.height / 2 - 2))
+        var flights = []
+        for (var i = 0; i < vals.length; ++i) {
+            flights.push({
+                "from": Qt.point(src.x + (Math.random() * 10 - 5),
+                                 src.y + (Math.random() * 8 - 4)),
+                "to": Qt.point(dst.x + (Math.random() * 6 - 3),
+                               dst.y + (Math.random() * 5 - 2.5)),
+                "value": vals[i],
+                "arc": 16 + Math.random() * 14,
+                "spin": Math.random() * 100 - 50,
+                "delay": i * 45,
+                "duration": 250 + Math.random() * 60
+            })
+        }
+        if (holdPile)
+            root._betArriving = true
+        root._betFlights = flights
+        var end = 0
+        for (var k = 0; k < flights.length; ++k)
+            end = Math.max(end, flights[k].delay + flights[k].duration)
+        betFlightTimer.interval = end + 30
+        betFlightTimer.restart()
+    }
+
+    onBetChanged: {
+        var prev = root._lastBet
+        root._lastBet = root.bet
+        if (root.bet <= 0) {
+            root._betArriving = false
+            root._betFlights = []
+            betFlightTimer.stop()
+            return
+        }
+        if (root.bet <= prev || !root.visible || root.betInset)
+            return
+        root._flyBet(prev <= 0)
+    }
+    Component.onCompleted: root._lastBet = root.bet
 
     // Dealer button: the same "crown" badge on the avatar's upper edge as on the
     // opponent plates. It used to stand to the right of the box on the felt, where

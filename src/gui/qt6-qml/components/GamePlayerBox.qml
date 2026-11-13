@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 
 import "../config" as Config
+import "chipflight.js" as ChipFlight
 
 // The plate of an opponent seat.
 //
@@ -45,6 +46,18 @@ SeatBox {
     property bool betOnFelt: false
     property point betAt: Qt.point(0, 0)
     readonly property bool betOnFeltShown: betOnFelt && bet > 0 && !betInset
+
+    // ── The chip flight of a new bet ─────────────────────────────────────────
+    // A bet does not just switch on: the chips come from the player's plate. On an
+    // increase up to three chips fly from the avatar to the pile (see ChipFly). For
+    // the FIRST bet (0 → something) the pile is held back and appears when they land
+    // — BetChip's own pop then fires from its onVisibleChanged. A raise keeps the old
+    // pile visible: the pill is the truth, only the extra chips fly in.
+    // `_betFlights` is a plain list of flight entries for the Repeater below;
+    // `betFlightTimer` empties it when the last chip has landed.
+    property var _betFlights: []
+    property bool _betArriving: false
+    property int _lastBet: 0
 
     // ── Size of the box ──────────────────────────────────────────────────────
     // Everything is derived from the body height, so that the seat style "inset"
@@ -349,7 +362,9 @@ SeatBox {
     // Sides (betSide left/right): vertically centred next to the box.
     Item {
         id: betGroup
-        visible: betGroup.chipHere
+        // `_betArriving`: the first chips of a bet are still on their way — the pile
+        // appears only when they land (see _flyBet).
+        visible: betGroup.chipHere && !root._betArriving
         z: 25
 
         readonly property bool split: root.betSplit
@@ -400,7 +415,7 @@ SeatBox {
     // that block, so the point returned there is its CENTRE.
     BetChip {
         id: feltBet
-        visible: root.betOnFeltShown
+        visible: root.betOnFeltShown && !root._betArriving
         amount: root.bet
         chipSize: 22
         fontSize: 10
@@ -411,6 +426,123 @@ SeatBox {
         x: root.betAt.x - width / 2
         y: root.betAt.y - height / 2
     }
+
+    // ── The chips in flight of a new bet ─────────────────────────────────────
+    // A plain Repeater over `_betFlights`: the chips are decoration with no state of
+    // their own, the list is the whole story (see ChipFly). Drawn above the pile.
+    Item {
+        id: betFlightLayer
+        z: 27
+        anchors.fill: parent
+        Repeater {
+            model: root._betFlights
+            delegate: ChipFly {
+                required property var modelData
+                from: modelData.from
+                to: modelData.to
+                value: modelData.value
+                arc: modelData.arc
+                spin: modelData.spin
+                delay: modelData.delay
+                duration: modelData.duration
+                // Short fade at the very end: the chips land exactly when the pile
+                // pops in, so they must not disappear 100 ms early.
+                fadeOut: 70
+                chipSize: 22
+                cash: root.chipCash
+                renderScale: root.cardRenderScale
+            }
+        }
+    }
+
+    // ── The flight: from the avatar to the pile ──────────────────────────────
+    // Every entry is a plain object; the Repeater builds the chips and this timer
+    // destroys them again. Nothing has to be signalled per chip.
+    Timer {
+        id: betFlightTimer
+        repeat: false
+        onTriggered: {
+            root._betFlights = []
+            root._betArriving = false
+        }
+    }
+
+    // The take-off point: the avatar's edge towards the pile (a chip out of the
+    // middle of the face would read as a glitch), the landing point: the centre of
+    // the pile that is about to appear.
+    function _betFlightSource(dirX, dirY) {
+        // Portrait: the compact pile stands right next to the avatar, there is
+        // nothing in between — the chips come out of the plate itself instead.
+        if (!root.betOnFelt && !root.betOnFeltShown)
+            return Qt.point(body.width * 0.45,
+                            body.y + root._plateY + root._plateH / 2)
+        var cx = body.x + avatar.x + avatar.width / 2
+        var cy = body.y + avatar.y + avatar.height / 2
+        return Qt.point(cx + dirX * (avatar.width / 2 - 2),
+                        cy + dirY * (avatar.height / 2 - 2))
+    }
+    function _betFlightTarget() {
+        // On the felt the pile's centre is the point GamePage computes (betAt).
+        if (root.betOnFelt || root.betOnFeltShown)
+            return root.betAt
+        // Portrait: the compact pile next to / in the plate.
+        return Qt.point(betGroup.x + betGroup.width / 2,
+                        betGroup.y + betGroup.height / 2)
+    }
+    function _flyBet(holdPile) {
+        var vals = ChipFlight.take(feltBet.splitOf(root.bet), 3)
+        if (vals.length === 0)
+            return
+        var dst = _betFlightTarget()
+        var sx0 = body.x + avatar.x + avatar.width / 2
+        var sy0 = body.y + avatar.y + avatar.height / 2
+        var dx = dst.x - sx0, dy = dst.y - sy0
+        var len = Math.max(1, Math.sqrt(dx * dx + dy * dy))
+        var src = _betFlightSource(dx / len, dy / len)
+        var flights = []
+        for (var i = 0; i < vals.length; ++i) {
+            flights.push({
+                "from": Qt.point(src.x + (Math.random() * 10 - 5),
+                                 src.y + (Math.random() * 8 - 4)),
+                "to": Qt.point(dst.x + (Math.random() * 6 - 3),
+                               dst.y + (Math.random() * 5 - 2.5)),
+                "value": vals[i],
+                "arc": 16 + Math.random() * 14,
+                "spin": Math.random() * 100 - 50,
+                "delay": i * 45,
+                "duration": 250 + Math.random() * 60
+            })
+        }
+        if (holdPile)
+            root._betArriving = true
+        root._betFlights = flights
+        var end = 0
+        for (var k = 0; k < flights.length; ++k)
+            end = Math.max(end, flights[k].delay + flights[k].duration)
+        betFlightTimer.interval = end + 30
+        betFlightTimer.restart()
+    }
+
+    onBetChanged: {
+        var prev = root._lastBet
+        root._lastBet = root.bet
+        // The round was collected (or the hand is over): stop the show, the flying
+        // chips belong to the previous amount.
+        if (root.bet <= 0) {
+            root._betArriving = false
+            root._betFlights = []
+            betFlightTimer.stop()
+            return
+        }
+        // Only a real increase flies; a refresh or a resize keeps the picture. The
+        // box's own `visible` is deliberately not tested: on the very first refresh
+        // it is still stale (the blinds' bet arrives with the seat data), and a
+        // flight of an invisible box costs nothing.
+        if (root.bet <= prev || root.betInset)
+            return
+        root._flyBet(prev <= 0)
+    }
+    Component.onCompleted: root._lastBet = root.bet
 
     // ── Right click context menu (desktop only) ──────────────────────────────
     // It only intercepts the right mouse button; left clicks/hover fall through to the

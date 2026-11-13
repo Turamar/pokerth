@@ -21,6 +21,27 @@ Item {
     // Cash table: money ladder with the 1¢ rung and money labels (see ChipImage).
     property bool chipCash: false
 
+    // The pot value the table SHOWS. -1 = live from the engine (the default, e.g.
+    // on an asset test page). GamePage overrides it during the collect animation:
+    // the bets fly into the pot first and the sum grows when they land (see
+    // GamePage.potShown / ChipFly), so the number never jumps ahead of the chips.
+    property int potAmount: -1
+    readonly property int shownPot: potAmount >= 0 ? potAmount
+        : ((typeof GameTable !== "undefined" && GameTable) ? GameTable.pot : 0)
+
+    // Centre of the pot pile in this item's own coordinates — the aim point of the
+    // chips GamePage sends over from the seats' bets (a decoration point, so the
+    // old value is good enough while the sum is still held back).
+    readonly property point potCentre:
+        Qt.point(potBadge.x + potBadge.width / 2,
+                 potBadge.y + potBadge.height / 2)
+
+    // The chip values of an amount, split exactly like the pot pile itself
+    // (`BetChip.splitOf`). The collect animation takes a few per seat's bet.
+    function chipValues(amount) {
+        return potChip.splitOf(amount)
+    }
+
     // True while any board slot is currently revealing new cards
     // (stagger/backside/flip). The action bar locks the buttons on it –
     // during reveal animations no action is possible.
@@ -192,7 +213,7 @@ Item {
         anchors.bottom: cardRow.top
         // Fixed by the vertical budget above: 6 both in landscape and portrait.
         anchors.bottomMargin: 6
-        visible: (typeof GameTable !== "undefined" && GameTable) ? GameTable.pot > 0 : false
+        visible: root.shownPot > 0
         width: potChip.width
         height: potChip.height
         transformOrigin: Item.Center
@@ -201,7 +222,7 @@ Item {
             id: potChip
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
-            amount: (typeof GameTable !== "undefined" && GameTable) ? GameTable.pot : 0
+            amount: root.shownPot
             // Same chip size as a player's bet, flat row of three stacks: the value
             // is the readable part (`ChipImage` prints it from 22 screen px), the
             // pill below is the truth.
@@ -222,11 +243,10 @@ Item {
             NumberAnimation { target: potBadge; property: "scale"; from: 1.0; to: 1.15; duration: 110; easing.type: Easing.OutQuad }
             NumberAnimation { target: potBadge; property: "scale"; to: 1.0; duration: 170; easing.type: Easing.OutBack }
         }
-        Connections {
-            target: (typeof GameTable !== "undefined") ? GameTable : null
-            function onPotChanged() {
-                if (GameTable && GameTable.pot > 0) potPop.restart()
-            }
-        }
     }
+
+    // The pop follows the SHOWN sum: GamePage holds it back while the chips fly
+    // over, so the pot bumps exactly when they land (not when the engine collects).
+    // In live mode (`potAmount` -1) that is the engine's potChanged.
+    onShownPotChanged: if (shownPot > 0) potPop.restart()
 }
