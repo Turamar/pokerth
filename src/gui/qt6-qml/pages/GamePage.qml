@@ -675,12 +675,15 @@ Rectangle {
             }
 
             // The seat's bet pile in table (zoomContent) coordinates. Landscape: the
-            // felt pile, whose centre the seat delegate already computes (`feltBet`).
-            // Portrait: the compact pile next to the plate, approximated by the box
-            // centre. Your own seat: the bet strip above the own plate.
+            // felt pile, whose centre the seat delegate maps out of its box
+            // (`feltBet` — the pile sits beside the avatar). Portrait: the compact
+            // pile next to the plate, approximated by the box centre. Your own seat:
+            // the bet row above the own plate (an exception: your pile lies above
+            // your avatar, every opponent pile beside its avatar).
             function _seatBetCentre(seatIndex) {
                 if (seatIndex === 0 && !spectating)
-                    return selfBox.mapToItem(zoomContent, selfBox.width / 2, -12)
+                    return selfBox.mapToItem(zoomContent,
+                                             selfBox.betCentre.x, selfBox.betCentre.y)
                 for (var d = 0; d < seatRepeater.count; ++d) {
                     var it = seatRepeater.itemAt(d)
                     if (!it || !it.visible || it.index !== seatIndex)
@@ -1112,191 +1115,13 @@ Rectangle {
                 return { x: pos[0], y: pos[1], nudge: nudge, nudgeX: nudgeX }
             }
 
-            // ── The bet ON the felt ─────────────────────────────────────────────
-            // Where the chip with the bet lies: in FRONT of the seat – between the
-            // player and the table, never beside it. The direction comes from the
-            // ray to the community block: a seat of the upper row puts the chip
-            // below and inwards, a side seat sideways and inwards, a lower seat
-            // above and inwards. The band rule ("top row strictly below its plate")
-            // put the chip of a side seat into the corridor between two plates: at
-            // seat 3 it read as the bet of seat 2 (player report 2026-11-10, with a
-            // marked-up screenshot: chips of 3 and 7 belong lower and further
-            // towards the middle of the table).
-            //
-            // The offset is DIAGONAL – one gap outside both the side and the lower
-            // (or upper) edge of the plate – because on this ellipse the ray of a
-            // top-row seat is shallow: a chip pushed only along the ray would hug
-            // the plate's side, a chip pushed only downwards would sit in the
-            // corridor between the plates. An axis the seat is barely offset along
-            // (top centre, own seat) takes no part in the offset, otherwise the
-            // chip would slide sideways for no reason.
-            //
-            // The chip also has to get past the community block (pot + cards) and must
-            // not land on another seat's plate. If the place in front is taken, the
-            // chip tries: straight in front (down/up), then sideways, then further
-            // along the same diagonal – that is where the free felt is left.
-            //
-            // Returns table coordinates (already scaled); the seat delegate turns
-            // them into its own item coordinates.
-            //
-            // cx/cy       – centre of the box in table coordinates
-            // halfW/halfH – half of the VISUAL box size
-            // seatIndex   – own seat, so that the test against the other plates skips it
-            function betFeltPoint(cx, cy, halfW, halfH, seatIndex) {
-                var s = oppScale
-                // One pair of half sizes for the offset AND for every clearance test.
-                // With a second, larger pair (24/20) in the overlap test the chip
-                // was "inside" its own plate by 3–4 px by construction, the test
-                // fired for every side seat and threw the chip to the OUTER side –
-                // exactly the defect the player reported (bet → player → table).
-                // Since 2026-11-12 the bet is a PYRAMID of lying 22 px chips with
-                // the sum in a pill under it (BetChip): the block is 47 wide and
-                // 52.13 high in base px (the top chip stands a whole chip height
-                // above the base line + the pill 13; the split puts a stack of 2+
-                // chips only on a base slot, so nothing grows above the top chip).
-                // The clearance is 23.5/26.07 half size and the point returned
-                // here is the CENTRE of that block.
-                var chipHalfX = 23.5 * s
-                var chipHalfY = 26.07 * s
-                var gap = 6 * s
-                var right = width / 2 - cx          // > 0: table centre right of the box
-                var down = communityCenterY - cy    // > 0: table centre below the box
-                // The community block: the card row is wide (±132·communityScale), the
-                // pot block above it is narrow (a flat row of three 22 px stacks,
-                // 72 wide, plus the pill). A chip beside the block may come down to
-                // the cards' upper edge, one above the block not.
-                var blockHalfW = 132 * communityScale + 6
-                var potHalfW = 36 * communityScale
-
-                function clampBlock(x, y) {
-                    var fromCentre = Math.abs(x - width / 2)
-                    if (fromCentre >= blockHalfW + chipHalfX) return y
-                    var cardsTop = communityCenterY - 32 * communityScale - 2 - chipHalfY
-                    var cardsBottom = communityCenterY + 32 * communityScale + 2 + chipHalfY
-                    // 72.7: half card (32) + pot gap (6) + the pot block with its
-                    // pill (at most 34.7 — see CommunityCards).
-                    var potTop = communityCenterY - 72.7 * communityScale - 2 - chipHalfY
-                    if (cy < communityCenterY)
-                        return Math.min(y, fromCentre < potHalfW + chipHalfX ? potTop : cardsTop)
-                    return Math.max(y, cardsBottom)
-                }
-                // ── Tolerated overlap (player's rule, 2026-11-12) ────────────────
-                // A chip may cut a few pixels into a plate or an avatar: a chip that
-                // sits close to its player reads better than a chip pushed far away
-                // into the felt. These are overlap DEPTHS in local px (the sweep
-                // model in tools/table-preview mirrors the same numbers).
-                var tolOwn = 11 * s      // the seat's own plate / avatar
-                var tolOther = 6 * s     // the neighbouring plates
-                var tolSelf = 8 * s      // the human's own box (for the bottom seats)
-
-                // Overlap depth of the chip block with a rect: > 0 only when the
-                // block overlaps in BOTH axes, which is the metric the sweep uses.
-                function overlapDepth(x, y, l, r, t, bm) {
-                    var oX = Math.min(x + chipHalfX, r) - Math.max(x - chipHalfX, l)
-                    var oY = Math.min(y + chipHalfY, bm) - Math.max(y - chipHalfY, t)
-                    return (oX > 0 && oY > 0) ? Math.min(oX, oY) : 0
-                }
-                // On the plate? Deliberately without the gap: the gap is already part
-                // of the offset, and the block clamp may eat a part of it – that is no
-                // reason to move the chip away.
-                function onPlate(x, y) {
-                    return overlapDepth(x, y, cx - halfW, cx + halfW,
-                                        cy - halfH, cy + halfH) > tolOwn
-                }
-                function onOtherPlate(x, y) {
-                    var players = (typeof GameTable !== "undefined" && GameTable)
-                                  ? GameTable.players : null
-                    if (!players) return false
-                    for (var i = spectating ? 0 : 1; i < players.length; ++i) {
-                        if (i === seatIndex) continue
-                        var info = slotForSeat(i)
-                        if (!info) continue
-                        var ox = width * info.x + info.nudgeX
-                        var oy = height * info.y + info.nudge
-                        if (overlapDepth(x, y, ox - halfW, ox + halfW,
-                                         oy - halfH, oy + halfH) > tolOther) return true
-                    }
-                    return false
-                }
-
-                // The self box is an obstacle too. It used to be skipped: the loop
-                // above starts at seat 1 and the QML placement never saw the own
-                // box, so with the bigger 22 px chips a bottom-row bet landed on it
-                // (the 216-layout sweep of 2026-11-12 found 17 such overlaps).
-                // Its visual rect: selfBaseWidth × selfBaseHeight × boxScale,
-                // horizontally centred, the lower edge 12 (wide) / 4 px above the
-                // bottom of the zone.
-                var selfW = selfBaseWidth * boxScale
-                var selfH = selfBaseHeight * boxScale
-                var selfL = width / 2 - selfW / 2
-                var selfR = width / 2 + selfW / 2
-                var selfT = height - (wide ? 12 : 4) - selfH
-                var selfB = selfT + selfH
-                function onSelfBox(x, y) {
-                    if (spectating) return false
-                    return overlapDepth(x, y, selfL, selfR, selfT, selfB) > tolSelf
-                }
-
-                function clear(x, y) {
-                    return !onPlate(x, y) && !onOtherPlate(x, y) && !onSelfBox(x, y)
-                }
-
-                // Offset up to the plate's edge plus the gap, MINUS the tolerated
-                // overlap: that is the player's "closer to the player" – the chip's
-                // rim may just touch its own plate instead of floating away.
-                var stepX = halfW + chipHalfX + gap - tolOwn
-                var stepY = halfH + chipHalfY + gap - tolOwn
-                // How far the seat is offset from the centre along this axis: the top
-                // centre and the own seat have no horizontal one, and their chip must
-                // not slide sideways.
-                var shareX = Math.min(1, Math.abs(right) / (2 * stepX))
-                var shareY = Math.min(1, Math.abs(down) / (2 * stepY))
-                // One axis has to reach the full gap, otherwise the chip lies on its own
-                // plate: with both axes "under-filled" (short table, big plates) it
-                // stayed inside the plate along both. The push is scaled by the larger
-                // share.
-                var full = 1 / Math.max(shareX, shareY, 1e-6)
-                var dirX = (right >= 0 ? 1 : -1) * shareX * full
-                var dirY = (down >= 0 ? 1 : -1) * shareY * full
-                // Where to go when the place in front is taken:
-                //  1) diagonally off the plate's corner (the usual rule);
-                //  2) straight in front (down/up) – the diagonal is blocked by the pot
-                //     badge (short table: a few pixels between the plate and the badge,
-                //     while two neighbouring chips sideways meet in the middle);
-                //  3) sideways at the plate's height;
-                //  4) a little further along the same diagonal – the chip landed on a
-                //     neighbour's plate. Deliberately only 1.25/1.5: the player does
-                //     not want a chip far from its seat (2026-11-12).
-                var tries = [[cx + dirX * stepX, cy + dirY * stepY],
-                             [cx, cy + (down >= 0 ? 1 : -1) * stepY]]
-                if (shareX > 0.15)
-                    tries.push([cx + (right >= 0 ? 1 : -1) * stepX, cy])
-                if (shareX > 0.05 && shareY > 0.05) {
-                    var ks = [1.25, 1.5]
-                    for (var k = 0; k < ks.length; ++k)
-                        tries.push([cx + dirX * stepX * ks[k], cy + dirY * stepY * ks[k]])
-                }
-                var px = cx, py = cy
-                var placed = false
-                for (var t = 0; t < tries.length; ++t) {
-                    px = tries[t][0]
-                    py = clampBlock(px, tries[t][1])
-                    if (clear(px, py)) { placed = true; break }
-                }
-                // No free spot at all: the closest place in front beats a chip far
-                // away from its player – the tolerated overlap covers a small
-                // leftover (player's rule, 2026-11-12).
-                if (!placed) {
-                    px = tries[0][0]
-                    py = clampBlock(px, tries[0][1])
-                }
-                // Never beyond the edge of the table.
-                var mx = 8 + chipHalfX
-                var my = 8 + chipHalfY
-                px = Math.max(mx, Math.min(width - mx, px))
-                py = Math.max(my, Math.min(height - my, py))
-                return Qt.point(px, py)
-            }
+            // ── The bet ON the felt ──────────────────────────────────────────────
+            // The pile is rigidly attached to the avatar: GamePlayerBox.betAt
+            // places it beside the avatar (chips centred on it, the sum pill under
+            // them, ~10 base px overlapping), so there is no per-seat placement
+            // maths on this page any more (decision 2026-11-13: «plate + chips are
+            // one unit»). What is left here is only the pile centre for the chips
+            // that fly into the pot — see eltBet in the seat delegate.
 
             readonly property real topOpponentBottomY: {
                 var seq = slotSeq[ringCount] || []
@@ -1629,19 +1454,15 @@ Rectangle {
                     x: tableZone.width * slot[0] - width / 2 + seatNudgeX
                     y: tableZone.height * slot[1] - height / 2 + seatNudge
 
-                    // Centre of the box in table coordinates – the seat of the bet
-                    // is computed from it (betFeltPoint) towards the table centre.
-                    readonly property real boxCenterX: tableZone.width * slot[0] + seatNudgeX
-                    readonly property real boxCenterY: tableZone.height * slot[1] + seatNudge
-                    // Where the bet chip lies: on the felt, tight against the box,
-                    // towards the centre of the table (GamePlayerBox.betAt).
-                    readonly property point feltBet: tableZone.betFeltPoint(
-                        boxCenterX, boxCenterY,
-                        tableZone.oppBaseWidth * tableZone.oppScale / 2,
-                        tableZone.oppBaseHeight * tableZone.oppScale / 2,
-                        seatSlot.index)
+                    // Centre of the seat's bet pile in TABLE coordinates, for the
+                    // chips that fly into the pot at the end of a round. The pile is
+                    // rigidly attached to the avatar now (GamePlayerBox.betAt), so
+                    // the point is just mapped out of the box — no bet maths here.
+                    readonly property point feltBet:
+                        playerBox.mapToItem(tableZone, playerBox.betAt.x, playerBox.betAt.y)
 
                     GamePlayerBox {
+                        id: playerBox
                         anchors.fill: parent
                         seatIndex: seatSlot.index
                         // Rasterize the cards in the real screen size (oppScale × zoom).
@@ -1655,16 +1476,12 @@ Rectangle {
                         // spectator): seatlayout.js computes their x as 0.5 ± 1e-10
                         // (cos(π/2) is not exactly zero), and they must not flip.
                         mirrored: seatSlot.slot[0] > 0.5 + 0.02
-                        // The bet lies on the FELT between the box and the centre of
-                        // the table (landscape). In portrait the boxes stand in rows
-                        // around a free middle band – there the bet keeps sitting
+                        // The bet lies beside the avatar on the FELT (landscape), as
+                        // part of the seat itself — GamePlayerBox computes the point
+                        // from its own mirrored avatar. In portrait the boxes stand in
+                        // rows around a free middle band: there the bet keeps sitting
                         // next to the box, otherwise it would end up on the cards.
                         betOnFelt: tableZone.wide
-                        betAt: Qt.point(
-                            (seatSlot.feltBet.x - seatSlot.boxCenterX) / tableZone.oppScale
-                                + width / 2,
-                            (seatSlot.feltBet.y - seatSlot.boxCenterY) / tableZone.oppScale
-                                + height / 2)
                         // Only the topmost box (player 5, the TC slot) shows the
                         // winner badge below it in portrait – everywhere else above.
                         winnerBelow: !tableZone.wide && seatSlot.slotName === "TC"

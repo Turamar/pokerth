@@ -47,16 +47,32 @@ SeatBox {
     // It overrides betSide.
     property bool betSplit: false
 
-    // Where the bet chip lies when it is NOT shown next to the box but on the
-    // felt (seat style "classic"): the centre of the chip in this item's own
-    // coordinates, put on the line from the box towards the centre of the
-    // table by GamePage (betFeltPoint).
-    // `betOnFelt` says whether it is used at all. The coordinates must NOT
-    // double as the flag: the chip lies OUTSIDE the plate, so to the left of a
-    // right-hand seat its x is negative (that was the bug on 2026-11-10 – the
-    // right seats kept their old chip on the outer contour).
+    // ── The bet on the felt: rigidly attached to the avatar (2026-11-13) ─────
+    // The plate, the avatar and the pile of the bet are ONE unit: the pile always
+    // stands beside the avatar, on the side facing the centre of the table, and cuts
+    // ~10 base px into it. There is no per-seat placement maths any more — the side
+    // comes from the mirrored plate, so every seat gets exactly the same offset
+    // (decision of the player: "plate + chips = one thing").
+    // `betOnFelt` says whether the pile lies on the felt at all: landscape yes, in
+    // portrait it keeps sitting in the group next to the box.
     property bool betOnFelt: false
-    property point betAt: Qt.point(0, 0)
+    // The pile's block: a pyramid of lying 22 px chips (47 × 39.13) with the sum pill
+    // (13 high) under them — 47 × 52.13 base px, the same at every seat and every bet.
+    readonly property real _betW: 47
+    readonly property real _betH: 52.13
+    readonly property real _betChipsH: 39.13     // chips without the sum pill
+    readonly property real _betOverlap: 10       // how deep the pile cuts into the avatar
+    readonly property real _avatarCx: root._avatarX + root._avatarD / 2
+    readonly property real _avatarCy: root._plateY + root._plateH / 2
+    // Mirroring decides the side: the avatar faces the table centre, the pile grows
+    // inwards from it (never towards the wall).
+    readonly property int _betDir: root.mirrored ? -1 : 1
+    // Centre of the pile block in this item's own (unscaled) coordinates: the chips
+    // are centred on the avatar, the sum pill hangs below them, and the near edge
+    // cuts into the avatar by `_betOverlap`. This is the whole placement rule.
+    readonly property point betAt: Qt.point(
+        root._avatarCx + root._betDir * (root._avatarD / 2 + root._betW / 2 - root._betOverlap),
+        root._avatarCy + (root._betH - root._betChipsH) / 2)
     readonly property bool betOnFeltShown: betOnFelt && bet > 0 && !betInset
 
     // ── The chip flight of a new bet ─────────────────────────────────────────
@@ -444,11 +460,9 @@ SeatBox {
     }
 
     // ── The bet ON THE FELT ──────────────────────────────────────────────────
-    // The bet is part of the table, not of the player's plate: it lies on the
-    // felt between the box and the pot as a pyramid of lying chips with the sum
-    // in a dark pill under it (2026-11-12). The footprint and the anchor come
-    // from GamePage (betFeltPoint): chipHalfX/chipHalfY are the half sizes of
-    // that block, so the point returned there is its CENTRE.
+    // The bet is part of the unit "player + plate + bet": a pyramid of lying chips
+    // with the sum in a dark pill under it (2026-11-12), placed beside the avatar by
+    // `betAt` above — no table maths, the avatar is the anchor (2026-11-13).
     BetChip {
         id: feltBet
         visible: root.betOnFeltShown && !root._betArriving
@@ -520,7 +534,7 @@ SeatBox {
                         cy + dirY * (avatar.height / 2 - 2))
     }
     function _betFlightTarget() {
-        // On the felt the pile's centre is the point GamePage computes (betAt).
+        // On the felt the pile's centre is the rigid avatar offset (betAt).
         if (root.betOnFelt || root.betOnFeltShown)
             return root.betAt
         // Portrait: the compact pile next to / in the plate.

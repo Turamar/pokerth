@@ -275,10 +275,12 @@ SeatBox {
         x: 0
         y: -height - 5
 
-        // Right-aligned at the box edge (your own bet, next to your own plate).
-        // A row of lying 22 px chips: the strip above the box is 28 px high, a
-        // stack of four chips is 24 px and still fits, while a pyramid with its
-        // pill needs ~52 and would eat the table.
+        // Above the AVATAR, not above the middle of the box (decision 2026-11-13):
+        // every opponent pile stands beside its avatar, and your own seat is the one
+        // exception — the table centre is above it, so its pile hangs above the
+        // avatar. It is placed above the avatar (not overlapping it, unlike the
+        // opponents): the dealer crown sits on your avatar and the sum pill would
+        // run into it.
         BetRows {
             id: betRow
             // `_betArriving`: the chips of the first bet are still on their way, the
@@ -292,10 +294,15 @@ SeatBox {
             cash: root.chipCash
             renderScale: root.cardRenderScale
             anchors.verticalCenter: parent.verticalCenter
-            anchors.right: parent.right
-            anchors.rightMargin: 2
+            x: avatar.x + avatar.width / 2 - width / 2
         }
     }
+
+    // Centre of the bet row above the plate in this item's coordinates: the landing
+    // point of the flying chips, the take-off point when the round is collected.
+    readonly property point betCentre:
+        Qt.point(topStrip.x + betRow.x + betRow.width / 2,
+                 topStrip.y + betRow.y + betRow.height / 2)
 
     // ── The chips in flight of a new bet ─────────────────────────────────────
     // Same pattern as in GamePlayerBox: a plain Repeater over the list, the timer
@@ -335,17 +342,15 @@ SeatBox {
     }
 
     // The take-off point is the avatar's edge, the landing point is the middle of
-    // the bet strip above the plate (the row is right-aligned in it, so for a raise
-    // the landing point can be a few px off the final centre — the chips only have
-    // to land on the row, the number is the truth).
+    // the bet row above the plate. The row is centred on the avatar, so a raise
+    // lands on the row's centre.
     function _flyBet(holdPile) {
         var vals = ChipFlight.take(betRow.columnsOf(root.bet), 3)
         if (vals.length === 0)
             return
         var sx0 = body.x + avatar.x + avatar.width / 2
         var sy0 = body.y + avatar.y + avatar.height / 2
-        var dst = Qt.point(topStrip.x + betRow.x + betRow.width / 2,
-                           topStrip.y + betRow.y + betRow.height / 2)
+        var dst = root.betCentre
         var dx = dst.x - sx0, dy = dst.y - sy0
         var len = Math.max(1, Math.sqrt(dx * dx + dy * dy))
         var src = Qt.point(sx0 + dx / len * (avatar.width / 2 - 2),
