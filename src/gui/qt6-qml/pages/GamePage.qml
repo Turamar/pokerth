@@ -649,37 +649,98 @@ Rectangle {
             readonly property bool spectating:
                 (typeof GameTable !== "undefined" && GameTable) ? GameTable.spectating : false
 
-            // ── The chips flying into the pot ────────────────────────────────────
-            // When a betting round is collected the engine raises `GameTable.pot`
-            // BEFORE it clears the seats' bets (GameHandler::onRefreshPot refreshes the
-            // pot first, then the players) — that is the moment to take the picture of
-            // the bets and let chips fly from every seat into the pot (see ChipFly).
-            // The sum under the pot is held back while they fly (`potShown`) and grows
-            // when they land: the number never runs ahead of the chips.
+            // ── The chips on the felt: collecting a round and paying out the pot ──
+            // Two moments put chips in motion (ChipFly, the layer below):
+            //
+            //  1. COLLECT — when a betting round is collected the engine raises
+            //     `GameTable.pot` BEFORE it clears the seats' bets
+            //     (GameHandler::onRefreshPot refreshes the pot first, then the
+            //     players). That is the moment to take the picture of the bets and
+            //     slide a few chips from EVERY betting seat into the pot. The sum
+            //     under the pot is held back while they move (`potShown`) and grows
+            //     when they land: the number never runs ahead of the chips.
+            //
+            //  2. PAYOUT — when the hand ends, `GameHandler::onShowdown` reports the
+            //     real payout as `GameTable.potAwards` (seat + amount, main AND side
+            //     pots) and the chips slide from the pot to every seat that won
+            //     money. When the last chip has landed the pot empties: the chips
+            //     have left it (the winner is marked by the badge, not by the pot).
+            //
+            // The chips stay ON the felt: a straight slide, no arc and no spin
+            // (player decision 2026-11-13: "перемещение в банк по столу, не полёт").
+            // Only the bet fly-in from the plate keeps its arc — that one is a throw
+            // and the player likes it.
             //
             // `_potFlights` is a plain list of flight entries for the Repeater in the
             // zoom layer below; `potFlightTimer` empties it after the last chip.
+            // `_potFlightKind` tells the timer what the flight was doing ("collect"
+            // or "award") — the two end differently.
             property var _potFlights: []
             property bool _potCollecting: false
             property int potShown: 0
+            property string _potFlightKind: ""
 
             Timer {
                 id: potFlightTimer
                 repeat: false
-                onTriggered: {
-                    tableZone._potFlights = []
-                    tableZone._potCollecting = false
-                    tableZone.potShown = (typeof GameTable !== "undefined" && GameTable)
-                        ? GameTable.pot : 0
+                onTriggered: tableZone._potFlightDone()
+            }
+
+            function _potFlightDone() {
+                tableZone._potFlights = []
+                tableZone._potCollecting = false
+                var kind = tableZone._potFlightKind
+                tableZone._potFlightKind = ""
+                if (kind === "award") {
+                    // Paid out: the chips went to the winners, the pot is empty.
+                    tableZone.potShown = 0
+                } else if (typeof GameTable !== "undefined" && GameTable) {
+                    tableZone.potShown = GameTable.pot
                 }
             }
 
-            // The seat's bet pile in table (zoomContent) coordinates. Landscape: the
-            // felt pile, whose centre the seat delegate maps out of its box
-            // (`feltBet` — the pile sits beside the avatar). Portrait: the compact
-            // pile next to the plate, approximated by the box centre. Your own seat:
-            // the bet row above the own plate (an exception: your pile lies above
-            // your avatar, every opponent pile beside its avatar).
+            // One chip pushed over the felt: the distance gives the time, the path is
+            // a straight line (arc 0, no spin) and the chip fades as it arrives.
+            function _slideEntry(from, to, value, delay) {
+                var dx = to.x - from.x
+                var dy = to.y - from.y
+                var dist = Math.sqrt(dx * dx + dy * dy)
+                return {
+                    "from": from,
+                    "to": to,
+                    "value": value,
+                    "arc": 0,
+                    "spin": 0,
+                    "delay": delay,
+                    "duration": Math.round(200 + dist * 0.62),
+                    "fadeOut": 80
+                }
+            }
+
+            function _potFlightsStart(flights, kind) {
+                tableZone._potFlights = flights
+                tableZone._potCollecting = true
+                tableZone._potFlightKind = kind
+                var end = 0
+                for (var f = 0; f < flights.length; ++f)
+                    end = Math.max(end, flights[f].delay + flights[f].duration)
+                potFlightTimer.interval = end + 40
+                potFlightTimer.restart()
+            }
+
+            // The centre of a seat's bet pile in zoom-layer coordinates — where its
+            // chips leave from (collect) and land (payout). Landscape: the felt pile
+            // beside the avatar. Portrait: the compact pile in the group next to the
+            // plate, approximated by the box centre. Your own seat: the bet row above
+            // your plate (an exception: your pile lies above your avatar, every
+            // opponent pile beside its avatar).
+            //
+            // Deliberately a CALL and not a property binding: Item.mapToItem() is not
+            // reactive (QML tracks properties, not the item's x/y/slot), so the old
+            // `readonly property point feltBet: playerBox.mapToItem(...)` froze the
+            // value it happened to have at creation — for EVERY seat the same one.
+            // All five players' chips then flew into the pot from one point (the bug
+            // the player saw 2026-11-13).
             function _seatBetCentre(seatIndex) {
                 if (seatIndex === 0 && !spectating)
                     return selfBox.mapToItem(zoomContent,
@@ -688,16 +749,14 @@ Rectangle {
                     var it = seatRepeater.itemAt(d)
                     if (!it || !it.visible || it.index !== seatIndex)
                         continue
-                    if (wide)
-                        return it.feltBet
-                    return it.mapToItem(zoomContent, it.width / 2, it.height / 2)
+                    return it.betPile()
                 }
                 return null
             }
 
             // A few chips from every seat that still shows a bet. The values come from
-            // the pot pile's own split, so a flying chip carries a denomination of the
-            // bet it comes from (chipflight.js, at most three per seat).
+            // the pot pile's own split, so a sliding chip carries a denomination of
+            // the bet it comes from (chipflight.js, at most three per seat).
             function _potFlightEntries() {
                 var out = []
                 if (typeof GameTable === "undefined" || !GameTable)
@@ -714,20 +773,93 @@ Rectangle {
                         continue
                     var vals = ChipFlight.take(communityArea.chipValues(bet), 3)
                     for (var k = 0; k < vals.length; ++k) {
-                        out.push({
-                            "from": Qt.point(src.x + Math.random() * 14 - 7,
-                                             src.y + Math.random() * 8 - 4),
-                            "to": Qt.point(aim.x + Math.random() * 10 - 5,
-                                           aim.y + Math.random() * 8 - 4),
-                            "value": vals[k],
-                            "arc": 26 + Math.random() * 26,
-                            "spin": Math.random() * 180 - 90,
-                            "delay": Math.random() * 70,
-                            "duration": 300 + Math.random() * 90
-                        })
+                        var from = Qt.point(src.x + Math.random() * 8 - 4,
+                                            src.y + Math.random() * 6 - 3)
+                        var to = Qt.point(aim.x + Math.random() * 8 - 4,
+                                          aim.y + Math.random() * 6 - 3)
+                        out.push(_slideEntry(from, to, vals[k], 6 * k + Math.random() * 18))
                     }
                 }
                 return out
+            }
+
+            // Chips from the pot to the winners. The payout comes from the engine
+            // (`potAwards`: seat + amount, main and side pots); without it (a network
+            // table that does not report it) fall back to the main-pot winners with
+            // equal shares. The chips of the pot are shared out in proportion to the
+            // amounts, so a split pot sends chips to both winners.
+            function _potAwardEntries() {
+                var out = []
+                if (typeof GameTable === "undefined" || !GameTable)
+                    return out
+                var awards = GameTable.potAwards
+                if (!awards || awards.length === 0) {
+                    var ids = GameTable.winnerSeatIds
+                    if (!ids || ids.length === 0)
+                        return out
+                    awards = []
+                    for (var w = 0; w < ids.length; ++w)
+                        awards.push({"seat": ids[w], "amount": 1})
+                }
+                var total = 0
+                for (var a = 0; a < awards.length; ++a)
+                    total += awards[a].amount
+                if (total <= 0)
+                    return out
+                var potValue = tableZone.potShown
+                if (potValue <= 0)
+                    potValue = GameTable.pot
+                // The pot pile's own split (piles of value + count) flattened into a
+                // list of chip values — the same helper the collect animation uses.
+                var vals = ChipFlight.take(communityArea.chipValues(potValue), 6)
+                if (!vals || vals.length === 0)
+                    return out
+                var aim = communityArea.mapToItem(zoomContent,
+                                communityArea.potCentre.x, communityArea.potCentre.y)
+                var vi = 0
+                for (var i = 0; i < awards.length; ++i) {
+                    var dst = _seatBetCentre(awards[i].seat)
+                    if (!dst)
+                        continue
+                    var n = Math.max(1, Math.round(vals.length * awards[i].amount / total))
+                    for (var k = 0; k < n; ++k) {
+                        var from = Qt.point(aim.x + Math.random() * 8 - 4,
+                                            aim.y + Math.random() * 6 - 3)
+                        var to = Qt.point(dst.x + Math.random() * 8 - 4,
+                                          dst.y + Math.random() * 6 - 3)
+                        out.push(_slideEntry(from, to, vals[vi % vals.length],
+                                             20 + k * 35 + Math.random() * 15))
+                        vi++
+                    }
+                }
+                return out
+            }
+
+            function _startPotPayout() {
+                if (typeof GameTable === "undefined" || !GameTable)
+                    return
+                if (tableZone._potFlightKind === "award")
+                    return
+                var awards = GameTable.potAwards
+                var winners = GameTable.winnerSeatIds
+                var hasAwards = awards !== undefined && awards !== null && awards.length > 0
+                var hasWinners = winners !== undefined && winners !== null && winners.length > 0
+                if (!hasAwards && !hasWinners) {
+                    // Nothing to pay out (a reset, the next hand): drop the chips.
+                    if (tableZone._potFlightKind === "collect") {
+                        tableZone._potFlights = []
+                        tableZone._potCollecting = false
+                        tableZone._potFlightKind = ""
+                        tableZone.potShown = 0
+                    }
+                    return
+                }
+                var flights = tableZone._potAwardEntries()
+                if (flights.length === 0) {
+                    tableZone.potShown = 0
+                    return
+                }
+                tableZone._potFlightsStart(flights, "award")
             }
 
             Connections {
@@ -741,6 +873,7 @@ Rectangle {
                     if (np <= tableZone.potShown) {
                         tableZone._potFlights = []
                         tableZone._potCollecting = false
+                        tableZone._potFlightKind = ""
                         potFlightTimer.stop()
                         tableZone.potShown = np
                         return
@@ -752,13 +885,17 @@ Rectangle {
                         tableZone.potShown = np
                         return
                     }
-                    tableZone._potFlights = flights
-                    tableZone._potCollecting = true
-                    var end = 0
-                    for (var f = 0; f < flights.length; ++f)
-                        end = Math.max(end, flights[f].delay + flights[f].duration)
-                    potFlightTimer.interval = end + 30
-                    potFlightTimer.restart()
+                    tableZone._potFlightsStart(flights, "collect")
+                }
+                // The payout: `potAwards` is the exact answer (amounts, side pots);
+                // `winnerSeatIds` is the fallback trigger for an engine that does not
+                // report the awards (both fire in the same onShowdown, the awards
+                // first — `_startPotPayout` ignores the second call).
+                function onPotAwardsChanged() {
+                    tableZone._startPotPayout()
+                }
+                function onWinnerSeatIdsChanged() {
+                    tableZone._startPotPayout()
                 }
             }
 
@@ -1454,12 +1591,22 @@ Rectangle {
                     x: tableZone.width * slot[0] - width / 2 + seatNudgeX
                     y: tableZone.height * slot[1] - height / 2 + seatNudge
 
-                    // Centre of the seat's bet pile in TABLE coordinates, for the
-                    // chips that fly into the pot at the end of a round. The pile is
-                    // rigidly attached to the avatar now (GamePlayerBox.betAt), so
-                    // the point is just mapped out of the box — no bet maths here.
-                    readonly property point feltBet:
-                        playerBox.mapToItem(tableZone, playerBox.betAt.x, playerBox.betAt.y)
+                    // Centre of this seat's bet pile in ZOOM-LAYER coordinates — the
+                    // point the chips leave from (collect) and land on (payout). A
+                    // CALL, not a property binding: Item.mapToItem() is not reactive
+                    // (QML tracks properties, not x/y/slot), so a
+                    // `readonly property point feltBet: playerBox.mapToItem(...)`
+                    // froze the first value for every seat and all chips flew into the
+                    // pot from one point (bug the player saw 2026-11-13). See
+                    // tableZone._seatBetCentre, its only caller.
+                    function betPile() {
+                        // Portrait: the bet sits in the group NEXT to the plate, not
+                        // beside the avatar, so the box centre is the honest point.
+                        if (!tableZone.wide)
+                            return mapToItem(zoomContent, width / 2, height / 2)
+                        return playerBox.mapToItem(zoomContent,
+                                                   playerBox.betAt.x, playerBox.betAt.y)
+                    }
 
                     GamePlayerBox {
                         id: playerBox

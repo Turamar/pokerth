@@ -3,16 +3,21 @@ import QtQuick
 // One chip of a chip flight — the small animation that makes the table read as a
 // table instead of a diagram (2026-11-13):
 //   • a new bet comes from the player: `GamePlayerBox` / `GamePlayerSelfBox` fly up
-//     to three chips from the avatar to the pile;
-//   • a betting round is collected: `GamePage` flies a few chips from every seat's
-//     bet into the pot and holds the pot sum back until they land.
+//     to three chips from the avatar to the pile (an arc — a chip is thrown);
+//   • a betting round is collected: `GamePage` slides a few chips from EVERY
+//     seat's bet into the pot and holds the pot sum back until they land;
+//   • the pot is paid out: `GamePage` slides chips from the pot to every winner
+//     and empties the pot when the last one has landed.
+// The chips that go to/from the pot stay ON the felt: arc 0 and no spin, distance
+// gives the time (player decision 2026-11-13: "по столу, не полёт").
 //
 // The chip is one `ChipImage` (the lying tier — the same asset as the piles) that
 // travels from `from` to `to` — the CENTRES of the chip in the PARENT's coordinates
-// — along a shallow arc, turns a little on the way and fades out as it lands. In the
-// player boxes the parent is the unscaled seat box (the box scale does the table
-// scaling); in the pot layer GamePage sets `scale: oppScale` and the matching
-// `renderScale` (see ChipImage for the raster rules).
+// — along a shallow arc (arc 0 = straight slide), turns a little on the way and
+// fades out as it lands. In the player boxes the parent is the unscaled seat box
+// (the box scale does the table scaling); in the pot layer GamePage sets
+// `scale: oppScale` and the matching `renderScale` (see ChipImage for the raster
+// rules).
 //
 // Nothing here owns time or lifetime: the owner keeps a plain list of flights as a
 // Repeater model and drops the entries once `delay + duration` has passed. That

@@ -314,6 +314,7 @@ void GameHandler::setGame(boost::shared_ptr<Game> game)
 	m_boardCardCount = 0;
 	m_boardCards = QVariantList{-1, -1, -1, -1, -1};
 	m_winnerSeatIds.clear();
+	m_potAwards.clear();
 	m_winningHandText.clear();
 	m_holeFade0.clear();
 	m_holeFade1.clear();
@@ -342,6 +343,7 @@ void GameHandler::setGame(boost::shared_ptr<Game> game)
 	emit boardCardCountChanged();
 	emit boardCardsChanged();
 	emit winnerSeatIdsChanged();
+	emit potAwardsChanged();
 	emit winningHandTextChanged();
 	emit boardCardFadeChanged();
 }
@@ -2013,6 +2015,12 @@ void GameHandler::onNextRoundCleanGui()
 	m_boardCards = QVariantList{-1, -1, -1, -1, -1};
 	emit boardCardCountChanged();
 	emit boardCardsChanged();
+	// Clear the payout FIRST: GamePage reacts to the first of the two changes, and a
+	// payout with the winners already cleared must not start at the new hand.
+	if (!m_potAwards.isEmpty()) {
+		m_potAwards.clear();
+		emit potAwardsChanged();
+	}
 	if (!m_winnerSeatIds.isEmpty()) {
 		m_winnerSeatIds.clear();
 		emit winnerSeatIdsChanged();
@@ -3170,6 +3178,33 @@ void GameHandler::onShowdown()
 			return false; // Side-Pot-Gewinner
 		return true;
 	};
+
+	// The real payout, for the pot animation on the table (GamePage): every seat
+	// that actually won money, main pot AND side pots, with the amount. The order of
+	// the list is the seat order, so the chips of a split pot are spread evenly.
+	// Deliberately independent of the winner badge below: a side pot winner gets no
+	// badge (their hand is not the best one) but does get the chips.
+	//
+	// It is emitted BEFORE winnerSeatIds on purpose: GamePage starts the payout
+	// animation on the first of the two changes and ignores the second, so the exact
+	// amounts (main/side pot, split pot) must already be there when it starts.
+	QVariantList newAwards;
+	if (activeList) {
+		for (auto it = activeList->begin(); it != activeList->end(); ++it) {
+			const int won = (*it)->getLastMoneyWon();
+			if (won <= 0) continue;
+			const int seatId = (*it)->getMyID();
+			if (seatId < 0 || seatId >= 10) continue;
+			QVariantMap award;
+			award["seat"] = seatId;
+			award["amount"] = won;
+			newAwards.append(award);
+		}
+	}
+	if (newAwards != m_potAwards) {
+		m_potAwards = newAwards;
+		emit potAwardsChanged();
+	}
 
 	// The winner badge: every MAIN POT winner who has not folded (several with a split
 	// pot). Side pot winners get NO badge – as in the widgets client, which

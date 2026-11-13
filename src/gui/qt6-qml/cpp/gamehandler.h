@@ -152,6 +152,14 @@ class GameHandler : public QObject, public LocalTableHost
 	// client shows the winner label on every player who has not folded and who has won
 	// the main pot – side pot winners get NO badge.
 	Q_PROPERTY(QVariantList winnerSeatIds READ winnerSeatIds NOTIFY winnerSeatIdsChanged)
+	// The real payout of the finished hand: a list of {"seat": <seat id>, "amount":
+	// <money won>} for EVERY winner — main pot and side pots, one entry per seat that
+	// actually won money. GamePage uses it for the pot payout animation (the chips
+	// travel from the pot to the winners, each chip carrying a denomination). The
+	// winner BADGE stays main-pot only (`winnerSeatIds`) — that is a different
+	// question: a side pot winner won money but does not have the best hand.
+	// Cleared with the next hand.
+	Q_PROPERTY(QVariantList potAwards READ potAwards NOTIFY potAwardsChanged)
 	Q_PROPERTY(QString winningHandText READ winningHandText NOTIFY winningHandTextChanged)
 	// Showdown spotlight: 5 bool values (one per board card). true = this board card
 	// does NOT belong to the best hand of the winner and is dimmed at the
@@ -359,6 +367,10 @@ public:
 	QVariantList winnerSeatIds() const
 	{
 		return m_winnerSeatIds;
+	}
+	QVariantList potAwards() const
+	{
+		return m_potAwards;
 	}
 	QString winningHandText() const
 	{
@@ -604,6 +616,7 @@ signals:
 	void boardCardCountChanged();
 	void boardCardsChanged();
 	void winnerSeatIdsChanged();
+	void potAwardsChanged();
 	void winningHandTextChanged();
 	void boardCardFadeChanged();
 	void timeoutChanged();
@@ -769,6 +782,7 @@ private:
 	int m_boardCardCount = 0;
 	QVariantList m_boardCards;  // 5 slots: card index (0-51) or -1 if not dealt
 	QVariantList m_winnerSeatIds;
+	QVariantList m_potAwards;   // {"seat", "amount"} per winner (main + side pots)
 	QString m_winningHandText;  // The name of the winning hand (only during the showdown)
 	// The showdown spotlight (see the boardCardFade property). m_boardCardFade has 5
 	// bool entries; m_holeFade0/1 contain the seats whose hole card 0/1
