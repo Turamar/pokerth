@@ -11,6 +11,12 @@ import "chipflight.js" as ChipFlight
 // name on the first line and the stack on the second, and the round avatar sits
 // on the right end of the plate, a little larger than the plate is high.
 //
+// Mirroring (decision 2026-11-12): on the RIGHT half of the table the whole plate
+// is mirrored – the avatar sits on the LEFT end with its picture flipped, so the
+// face looks towards the centre of the table, and the cards, the dealer crown and
+// the text block move with it. Badges, glyphs and the crown itself are NOT
+// mirrored, only their position. Your own box (GamePlayerSelfBox) is untouched.
+//
 // The second line is the stack – except for two seconds after the player acted:
 // then it shows the action (fold/check/call/bet/raise/all-in) and returns to the
 // stack afterwards. A folded player's cards disappear (the muck); the plate
@@ -25,6 +31,12 @@ SeatBox {
     // Show the winner badge below instead of above the box – only sensible for the
     // topmost box (player 5) in portrait, otherwise it would bump into the top.
     property bool winnerBelow: false
+    // Mirror the plate by the side of the table (decision 2026-11-12):
+    // true for the RIGHT half of the table – the avatar hangs on the LEFT end of
+    // the plate and its picture is flipped, so the face looks towards the centre of
+    // the table. On the left half (and on the central seats) everything stays as
+    // before: avatar on the right end. Set by GamePage from the slot's x.
+    property bool mirrored: false
     // The side on which the dealer/blind button is shown (and, in the seat style
     // "inset", the bet base): "top" | "bottom" | "left" | "right". The bet itself
     // lies on the FELT in the style "classic" – see betAt below.
@@ -66,7 +78,10 @@ SeatBox {
     //   plate    44 high =  two text lines
     //   avatar   46      =  plate height + 2 (it stands out above and below)
     readonly property int _hMargin: 4
-    readonly property int _textX: 8
+    // Distance of the text block from the OUTER edge of the plate (the end away
+    // from the avatar). The same 8 px on both sides – that makes a mirrored plate
+    // an exact mirror image of a normal one.
+    readonly property int _padX: 8
     readonly property int _cardH: Math.round(bodyH * 40 / 70)
     readonly property int _cardW: Math.round(_cardH * 120 / 168)
     readonly property int _plateH: Math.round(bodyH * 44 / 70)
@@ -75,9 +90,19 @@ SeatBox {
     // it no longer hangs 2 px below the 112×70 envelope (now 1 px).
     readonly property int _avatarD: _plateH + 2
     readonly property int _plateY: bodyH - _plateH
-    // Up to the left edge of the avatar: the name line may use the full room
-    // above the round profile instead of cutting a name like "Player 9" short.
-    readonly property int _textW: Math.max(24, Math.round(width) - _avatarD - _textX)
+    // The avatar hangs on the right end of the plate; on a mirrored plate it hangs
+    // on the left end instead. Everything that belongs to the avatar (ring, crown,
+    // cards, take-off point of the chip flight) is derived from this, so the plate
+    // keeps mirroring itself as one piece.
+    readonly property int _avatarX: mirrored ? 0 : Math.round(width) - _avatarD
+    // Up to the edge of the avatar: the name line may use the full room above the
+    // round profile instead of cutting a name like "Player 9" short.
+    readonly property int _textW: Math.max(24, Math.round(width) - _avatarD - _padX)
+    // The text block occupies the part of the plate the avatar leaves free: on the
+    // left of the avatar normally, on its right when the plate is mirrored. The
+    // name and the stack are CENTRED in that part (decision 2026-11-12: not a hard
+    // "left/right", but centred with a shift away from the avatar).
+    readonly property int _textX: mirrored ? Math.round(width) - _textW - _padX : _padX
 
     // Type scale of the table (Theme.tableFont adds 12 % in the usual 1024ish
     // window), so that the name and the stack/action stay readable.
@@ -195,10 +220,12 @@ SeatBox {
         //    part is visible. As soon as the player folds, they are gone.
         HoleCards {
             id: cards
-            // 12 px left of the plate's centre: the room above the avatar belongs to
-            // the dealer badge (see platePuck below), otherwise it would sit on the
-            // right card's corner. The cards stay centred on the plate's visible part.
-            x: Math.round((body.width - width) / 2) - 12
+            // 12 px away from the avatar side of the plate's centre: the room above
+            // the avatar belongs to the dealer badge (see platePuck below), otherwise
+            // it would sit on the card's corner. The cards stay centred on the
+            // plate's visible part; on a mirrored plate they move to the other side
+            // WITH the avatar, so the crown always keeps the felt above the avatar.
+            x: Math.round((body.width - width) / 2) + (root.mirrored ? 12 : -12)
             y: 0
             z: 1
             cardH: root._cardH
@@ -233,7 +260,10 @@ SeatBox {
                 width: root._textW
                 height: 16
                 verticalAlignment: Text.AlignVCenter
-                horizontalAlignment: Text.AlignLeft
+                // Centred in the free part of the plate (see _textX): with the
+                // mirrored plate this keeps the name at the same distance from the
+                // avatar on both sides, no matter whether the seat is left or right.
+                horizontalAlignment: Text.AlignHCenter
                 color: "#eff1f5"
                 font.pixelSize: root._nameSize
                 font.weight: Font.DemiBold
@@ -255,7 +285,7 @@ SeatBox {
                 width: root._textW
                 height: 15
                 verticalAlignment: Text.AlignVCenter
-                horizontalAlignment: Text.AlignLeft
+                horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
                 text: root._showAction
                       ? root.actionText
@@ -270,7 +300,8 @@ SeatBox {
             }
 
             // Action timeout: a slim progress bar inside the plate, at its lower
-            // edge – it belongs to the seat, not to the cards.
+            // edge – it belongs to the seat, not to the cards. It follows the text
+            // block (see _textX), so it is mirrored together with it.
             PlayerTimeoutBar {
                 id: timeoutBar
                 readonly property bool atTurn: (typeof GameTable !== "undefined" && GameTable)
@@ -285,16 +316,20 @@ SeatBox {
             }
         }
 
-        // 3. The round avatar on the right end of the plate.
+        // 3. The round avatar on the right end of the plate – on the LEFT end when
+        //    the plate is mirrored (right half of the table, face to the centre).
         PlayerAvatar {
             id: avatar
-            x: body.width - root._avatarD
+            x: root._avatarX
             y: root._plateY + Math.round((root._plateH - root._avatarD) / 2)
             width: root._avatarD
             height: root._avatarD
             z: 12
             source: root.avatarSource
             playerActive: root.isActive
+            // Only the PICTURE is flipped; the network dot and the tooltip stay in
+            // the lower right corner as before.
+            mirrored: root.mirrored
         }
 
         // A crisp 1 px ring on the avatar's edge: the profile stays a clean round
@@ -340,11 +375,12 @@ SeatBox {
 
     // ── The dealer button: a small badge like a crown on the avatar ──────────
     // It sits on the avatar's upper edge, centred on the avatar. The hole cards
-    // are drawn 12 px left of the plate's centre (see the cards above), so the
-    // crown has clear felt above the avatar and cannot cover a card. Beats every
-    // other arrangement by construction: next to the plate the puck shares the gap
-    // with the neighbouring seat's bet chip, and lower on the avatar it was barely
-    // visible (player report 2026-11-10).
+    // are drawn 12 px away from the avatar side of the plate's centre (see the
+    // cards above), so the crown has clear felt above the avatar and cannot cover
+    // a card. Beats every other arrangement by construction: next to the plate the
+    // puck shares the gap with the neighbouring seat's bet chip, and lower on the
+    // avatar it was barely visible (player report 2026-11-10). The puck itself is
+    // NOT mirrored, only its position follows the avatar.
     BlindButtonImage {
         id: platePuck
         visible: root.buttonVisible
@@ -352,7 +388,7 @@ SeatBox {
         width: Math.round(root._plateH * 0.5)
         height: width
         z: 14
-        x: Math.round(body.width - root._avatarD / 2 - width / 2)
+        x: Math.round(root._avatarX + root._avatarD / 2 - width / 2)
         y: Math.round(root._plateY + (root._plateH - root._avatarD) / 2
                       - height + Math.round(height * 0.35))
     }
@@ -471,10 +507,12 @@ SeatBox {
     // middle of the face would read as a glitch), the landing point: the centre of
     // the pile that is about to appear.
     function _betFlightSource(dirX, dirY) {
-        // Portrait: the compact pile stands right next to the avatar, there is
+        // Portrait: the compact pile stands right next to the box, there is
         // nothing in between — the chips come out of the plate itself instead.
+        // Mirrored plate: the plate's middle shifts to the other side together with
+        // the avatar, so the take-off point is mirrored as well.
         if (!root.betOnFelt && !root.betOnFeltShown)
-            return Qt.point(body.width * 0.45,
+            return Qt.point(body.width * (root.mirrored ? 0.55 : 0.45),
                             body.y + root._plateY + root._plateH / 2)
         var cx = body.x + avatar.x + avatar.width / 2
         var cy = body.y + avatar.y + avatar.height / 2

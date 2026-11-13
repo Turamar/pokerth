@@ -1646,6 +1646,15 @@ Rectangle {
                         seatIndex: seatSlot.index
                         // Rasterize the cards in the real screen size (oppScale × zoom).
                         cardRenderScale: tableZone.oppScale * tableZone.zoomRenderMul
+                        // The plate is mirrored by the side of the table (decision
+                        // 2026-11-12): on the RIGHT half the avatar moves to the left
+                        // end of the plate and its picture is flipped, so the face
+                        // looks towards the centre of the table. The central seats
+                        // stay unmirrored. The dead zone of 0.02 around 0.5 is for
+                        // the top centre (TC) and the bottom centre (BC/opp0 of the
+                        // spectator): seatlayout.js computes their x as 0.5 ± 1e-10
+                        // (cos(π/2) is not exactly zero), and they must not flip.
+                        mirrored: seatSlot.slot[0] > 0.5 + 0.02
                         // The bet lies on the FELT between the box and the centre of
                         // the table (landscape). In portrait the boxes stand in rows
                         // around a free middle band – there the bet keeps sitting

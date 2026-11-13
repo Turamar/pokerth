@@ -8,12 +8,19 @@ import "../config" as Config
 // is a little larger than the plate is high, so that it stands out of it – the
 // profile is the anchor of the box, the cards hide behind the plate.
 //
+// On the right half of the table the plate is mirrored (decision 2026-11-12) and
+// the avatar then hangs on its LEFT end; the picture itself is flipped as well
+// (`mirrored`), so the face looks towards the centre of the table. Only the
+// picture is mirrored – the network dot and its tooltip keep their corner.
+//
 // The network status dot (self box, setting ShowPingStateInAvatar) and the
 // mouseover overlay with the server response times live here as before.
 Item {
     id: root
 
     property string source: ""
+    // Flip the picture horizontally (mirrored plate, see GamePlayerBox.mirrored).
+    property bool mirrored: false
     // Out of the game → desaturate the avatar.
     property bool playerActive: true
     property bool showNetworkStatus: false
@@ -44,6 +51,8 @@ Item {
             source: root.source !== "" ? root.source : "qrc:resources/pokerth.svg"
             asynchronous: true
             cache: true
+            // Mirrored plate: the face looks towards the centre of the table.
+            mirror: root.mirrored
             layer.enabled: !root.playerActive
             layer.effect: MultiEffect { saturation: -1.0 }
         }
