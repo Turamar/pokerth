@@ -15,6 +15,7 @@
 #include <boardinterface.h>
 #include <berointerface.h>
 #include <cardsvalue.h>
+#include <handevaluator.h>
 #include <botprofile.h>
 #include <playerdata.h>
 #include <game_defs.h>
@@ -1959,6 +1960,11 @@ void GameHandler::refreshChanceAndHand()
 		}
 	}
 
+	// The same cards also feed the player's own current hand (the pill of the
+	// setting ShowCurrentHandName). Before the input-signature early return below,
+	// because the showdown/fold can change the pill without changing the cards.
+	updateCurrentHand();
+
 	// The input signature: only recompute when the cards/board/fold have changed.
 	std::vector<int> inputs;
 	inputs.reserve(9);
@@ -1997,6 +2003,70 @@ void GameHandler::refreshChanceAndHand()
 		m_cardsChanceFolded = folded;
 		emit cardsChanceChanged();
 	}
+}
+
+// The player's own current hand category for the pill of the setting
+// "ShowCurrentHandName" (PLAN.md §6, 2026-11-10). Only the flop, turn and river
+// have a five card hand to name, so preflop (fewer than three board cards) and an
+// empty table show nothing. The ranking is the engine's own evaluator
+// (HandEvaluator, the AI engine's 5..7 card board evaluator) - no second hand
+// ranking in the client. Its return value packs the hand class into the top bits:
+// 0 = high card … 8 = straight flush, exactly the order of handDefs in
+// GameInfoPanel; a straight flush with the ace high is a ROYAL flush (9), the one
+// class CardsValue has and the evaluator does not.
+void GameHandler::updateCurrentHand()
+{
+	int category = -1;
+
+	// The whole calculation is only for the setting: with it off nothing is
+	// evaluated (the player asked for the pill to be optional).
+	const bool enabled = m_config && m_config->readConfigInt("ShowCurrentHandName") != 0;
+	if (enabled && m_game && !m_spectating && !m_showdownActive && m_boardCardCount >= 3) {
+		boost::shared_ptr<PlayerInterface> human;
+		PlayerList seats = m_game->getSeatsList();
+		if (seats) {
+			for (auto it = seats->begin(); it != seats->end(); ++it) {
+				if ((*it)->getMyID() == 0) {
+					human = *it;
+					break;
+				}
+			}
+		}
+		// In the hand and not folded. At the end of the hand the showdown flag
+		// (set for every hand end, also when everybody folds) hides the pill: the
+		// golden WinningHandBadge then shows the winning hand in the same place.
+		if (human && human->getMyActiveStatus()
+				&& human->getMyAction() != PLAYER_ACTION_FOLD) {
+			int hole[2] = {-1, -1};
+			human->getMyCards(hole);
+			auto hand = m_game->getCurrentHand();
+			int board[5] = {-1, -1, -1, -1, -1};
+			if (hand && hand->getBoard())
+				hand->getBoard()->getMyCards(board);
+			if (hole[0] >= 0 && hole[1] >= 0 && board[0] >= 0) {
+				int cards[7] = {hole[0], hole[1], -1, -1, -1, -1, -1};
+				int count = 2;
+				for (int i = 0; i < m_boardCardCount && i < 5 && board[i] >= 0; ++i)
+					cards[count++] = board[i];
+				if (count >= 5) {
+					const unsigned value = HandEvaluator::value(cards, count);
+					category = static_cast<int>(value >> 20);
+					if (category == 8 && ((value >> 16) & 0xFu) == 12u)
+						category = 9;   // royal flush
+				}
+			}
+		}
+	}
+
+	if (category != m_currentHandCategory) {
+		m_currentHandCategory = category;
+		emit currentHandCategoryChanged();
+	}
+}
+
+void GameHandler::refreshCurrentHand()
+{
+	updateCurrentHand();
 }
 
 void GameHandler::onNextRoundCleanGui()

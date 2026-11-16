@@ -161,6 +161,13 @@ class GameHandler : public QObject, public LocalTableHost
 	// Cleared with the next hand.
 	Q_PROPERTY(QVariantList potAwards READ potAwards NOTIFY potAwardsChanged)
 	Q_PROPERTY(QString winningHandText READ winningHandText NOTIFY winningHandTextChanged)
+	// The category of the player's OWN current hand on the flop/turn/river:
+	// 0 = high card … 9 = royal flush (the order of handDefs in GameInfoPanel),
+	// −1 = show nothing (preflop, folded, spectator, hand over, or the setting
+	// ShowCurrentHandName is off). Only the INDEX crosses to QML: the name is a
+	// qsTr() string in components/CurrentHandBadge.qml, so it is translated like
+	// every other interface text (PLAN.md §6, 2026-11-10).
+	Q_PROPERTY(int currentHandCategory READ currentHandCategory NOTIFY currentHandCategoryChanged)
 	// Showdown spotlight: 5 bool values (one per board card). true = this board card
 	// does NOT belong to the best hand of the winner and is dimmed at the
 	// showdown (the setting "fade out animation for loser cards",
@@ -376,6 +383,10 @@ public:
 	{
 		return m_winningHandText;
 	}
+	int currentHandCategory() const
+	{
+		return m_currentHandCategory;
+	}
 	QVariantList boardCardFade() const
 	{
 		return m_boardCardFade;
@@ -578,6 +589,12 @@ public:
 	Q_INVOKABLE void showMyCards();
 	// Local game: start the next hand after a pause between hands.
 	Q_INVOKABLE void continueToNextHand();
+	// Recompute the category of the player's own current hand at once. Called
+	// from QML when the setting "ShowCurrentHandName" is toggled (through
+	// SettingsManager.configRevision): without it the pill would only appear /
+	// disappear with the next street, because the category is normally updated
+	// with the cards. Cheap and silent when nothing changes.
+	Q_INVOKABLE void refreshCurrentHand();
 
 signals:
 	void playersChanged();
@@ -618,6 +635,7 @@ signals:
 	void winnerSeatIdsChanged();
 	void potAwardsChanged();
 	void winningHandTextChanged();
+	void currentHandCategoryChanged();
 	void boardCardFadeChanged();
 	void timeoutChanged();
 	void chatLogChanged();
@@ -672,6 +690,12 @@ private:
 	// Recompute the odds (CardsValue::calcCardsChance) + the currently best hand of your own
 	// player and – only on a change – notify the QML side.
 	void refreshChanceAndHand();
+	// The own current hand category for the pill (the property
+	// currentHandCategory). Runs only with the setting ShowCurrentHandName on and
+	// only for the flop/turn/river; it reuses the 5..7 card evaluator of the AI
+	// engine (HandEvaluator) instead of a second hand ranking of its own. Fires
+	// currentHandCategoryChanged only when the category really changes.
+	void updateCurrentHand();
 	void refreshPotData();
 	void computeCallAndRaiseAmounts();
 	// Local game: remove players with 0 coins from the display after 10 seconds
@@ -784,6 +808,9 @@ private:
 	QVariantList m_winnerSeatIds;
 	QVariantList m_potAwards;   // {"seat", "amount"} per winner (main + side pots)
 	QString m_winningHandText;  // The name of the winning hand (only during the showdown)
+	// The category of the player's own current hand (0..9, see the
+	// currentHandCategory property); −1 = nothing to show.
+	int m_currentHandCategory = -1;
 	// The showdown spotlight (see the boardCardFade property). m_boardCardFade has 5
 	// bool entries; m_holeFade0/1 contain the seats whose hole card 0/1
 	// is dimmed. They are reset at the beginning of every hand.

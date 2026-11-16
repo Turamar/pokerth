@@ -1508,6 +1508,11 @@
     </message>
     <message>
         <location line="+7"/>
+        <source>Immer die aktuelle Hand anzeigen</source>
+        <translation>Всегда показывать текущую комбинацию</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Startbildschirm beim Startvorgang deaktivieren</source>
         <translation>Не показывать заставку при запуске</translation>
     </message>
@@ -5765,6 +5770,49 @@ and disconnect from the server?</source>
     <message>
         <source>Interrupted cash table session: $%1 of the $%2 buy-in went back into your balance.</source>
         <translation>Прерванная сессия за кэш-столом: $%1 из бай-ина $%2 вернулись в баланс.</translation>
+    </message>
+</context>
+<context>
+    <name>CurrentHandBadge</name>
+    <message>
+        <source>Höchste Karte</source>
+        <translation>Старшая карта</translation>
+    </message>
+    <message>
+        <source>Paar</source>
+        <translation>Пара</translation>
+    </message>
+    <message>
+        <source>Zwei Paare</source>
+        <translation>Две пары</translation>
+    </message>
+    <message>
+        <source>Drilling</source>
+        <translation>Тройка</translation>
+    </message>
+    <message>
+        <source>Straße</source>
+        <translation>Стрит</translation>
+    </message>
+    <message>
+        <source>Flush</source>
+        <translation>Флеш</translation>
+    </message>
+    <message>
+        <source>Full House</source>
+        <translation>Фулл-хаус</translation>
+    </message>
+    <message>
+        <source>Vierling</source>
+        <translation>Каре</translation>
+    </message>
+    <message>
+        <source>Straight Flush</source>
+        <translation>Стрит-флеш</translation>
+    </message>
+    <message>
+        <source>Royal Flush</source>
+        <translation>Роял-флеш</translation>
     </message>
 </context>
 </TS>

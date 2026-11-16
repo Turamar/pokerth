@@ -179,6 +179,7 @@ set(QML_FILES
     components/SvgIconImage.qml
     components/SvgIconVector.qml
     components/WinningHandBadge.qml
+    components/CurrentHandBadge.qml
     pages/AboutPage.qml
     pages/BbcRankingPage.qml
     pages/CommunityRankingPage.qml

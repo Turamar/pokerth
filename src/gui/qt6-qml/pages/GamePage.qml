@@ -265,6 +265,18 @@ Rectangle {
         }
     }
 
+    // The setting "always show the current hand" (ShowCurrentHandName) is read in
+    // C++ (GameHandler::updateCurrentHand). A toggle in the settings must reach the
+    // running table at once, not only with the next street – so every config write
+    // re-asks for the category. The call is silent when nothing changed.
+    Connections {
+        target: (typeof SettingsManager !== "undefined") ? SettingsManager : null
+        function onConfigRevisionChanged() {
+            if (typeof GameTable !== "undefined" && GameTable)
+                GameTable.refreshCurrentHand()
+        }
+    }
+
     // ── The F key assignment of the game table actions (1:1 from the Qt widgets client) ──
     // F1–F4 trigger fold/call-check/bet-raise/all-in; the order reverses
     // with AlternateFKeysUserActionMode (the setting "reverse the F keys"):
@@ -1454,6 +1466,15 @@ Rectangle {
             // Deliberately standalone (NOT inside the community cards), so that it
             // always lies ABOVE the player boxes independently of their z/scale.
             WinningHandBadge {
+                community: communityArea
+                wide: tableZone.wide
+                communityScale: tableZone.communityScale
+            }
+
+            // Your own current hand on the flop/turn/river (the setting
+            // ShowCurrentHandName) – a calm dark pill in the same place; the
+            // winning badge above only appears when this one has already gone.
+            CurrentHandBadge {
                 community: communityArea
                 wide: tableZone.wide
                 communityScale: tableZone.communityScale

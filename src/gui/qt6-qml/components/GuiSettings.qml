@@ -205,6 +205,15 @@ Rectangle {
                         defaultChecked: false
                     }
 
+                    // The current hand of the player on the table (flop/turn/river)
+                    // as a calm dark pill – off by default (PLAN.md §6, 2026-11-10).
+                    ConfigCheckBox {
+                        objectName: "showCurrentHandNameCheckbox"
+                        text: qsTr("Immer die aktuelle Hand anzeigen")
+                        configKey: "ShowCurrentHandName"
+                        defaultChecked: false
+                    }
+
                     AppCheckBox {
                         objectName: "disableSplashScreenOnStartupCheckbox"
                         text: qsTr("Startbildschirm beim Startvorgang deaktivieren")

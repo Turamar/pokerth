@@ -77,6 +77,7 @@
         <file>components/ExampleAvatarPicker.qml</file>
         <file>components/CommunityCards.qml</file>
         <file>components/WinningHandBadge.qml</file>
+        <file>components/CurrentHandBadge.qml</file>
         <file>components/GameSidePanel.qml</file>
         <file>components/GameTournamentPanel.qml</file>
         <file>components/GameInfoPanel.qml</file>

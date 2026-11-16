@@ -53,8 +53,14 @@ public:
 	// decision.
 	static void init();
 
-	// Evaluates exactly seven cards. A larger return value = a stronger hand.
-	static unsigned value(const int* cards);
+	// Evaluates the given number of cards (5..7; seven by default). A larger
+	// return value = a stronger hand.
+	//
+	// Fewer than seven cards are the flop (5) and the turn (6): the QML client
+	// derives the player's own current hand category from them for the
+	// "always show the current hand" pill (GameHandler::updateCurrentHand). The
+	// ranking is the same for any count, so no second evaluator is needed.
+	static unsigned value(const int* cards, int count = 7);
 };
 
 #endif

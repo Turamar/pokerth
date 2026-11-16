@@ -92,7 +92,9 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	//      version hack section in updateConfig).
 	// 113: TableInfoOpen / TableTournamentOpen were added (the two info windows
 	//      of the game table, both closed by default).
-	configRev = 113;
+	// 114: ShowCurrentHandName was added (the QML table shows the player's own
+	//      current hand on the flop/turn/river; off by default, PLAN.md §6).
+	configRev = 114;
 
 	// standard defaults
 	logOnOffDefault = "1";
@@ -251,6 +253,12 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	configList.push_back(ConfigInfo("ShowBlindButtons", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("ShowPotPercentButtons", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("ShowCardsChanceMonitor", CONFIG_TYPE_INT, "1"));
+	// QML table: always show the player's own current hand ("Paar", "Straße", …)
+	// on the flop/turn/river as a calm dark pill. Off by default: it is a hint,
+	// not a part of the table, and the player asked for a switch (PLAN.md §6,
+	// 2026-11-10). The category is computed in GameHandler::updateCurrentHand()
+	// only while this is on.
+	configList.push_back(ConfigInfo("ShowCurrentHandName", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("DontTranslateInternationalPokerStringsFromStyle", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("DisableSplashScreenOnStartup", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("AccidentallyCallBlocker", CONFIG_TYPE_INT, "1"));

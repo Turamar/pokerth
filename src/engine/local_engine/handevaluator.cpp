@@ -105,7 +105,7 @@ void HandEvaluator::init()
 	straightTable();
 }
 
-unsigned HandEvaluator::value(const int* cards)
+unsigned HandEvaluator::value(const int* cards, int count)
 {
 	const StraightTable& straights = straightTable();
 
@@ -113,7 +113,7 @@ unsigned HandEvaluator::value(const int* cards)
 	unsigned suitMask[4] = { 0, 0, 0, 0 };
 	int rankCount[13] = { 0 };
 
-	for(int i = 0; i < 7; ++i) {
+	for(int i = 0; i < count; ++i) {
 		const int suit = cards[i] / 13;
 		const int rank = cards[i] % 13;
 		rankMask |= 1u << rank;
@@ -121,8 +121,8 @@ unsigned HandEvaluator::value(const int* cards)
 		++rankCount[rank];
 	}
 
-	// Flush and straight flush. With seven cards at most one suit can occur
-	// five times, and next to a flush neither quads nor a full house is
+	// Flush and straight flush. With five to seven cards at most one suit can
+	// occur five times, and next to a flush neither quads nor a full house is
 	// possible -- which is why we may return directly here.
 	for(int suit = 0; suit < 4; ++suit) {
 		if(std::popcount(suitMask[suit]) >= 5) {
