@@ -13,11 +13,14 @@ import QtQuick
 //
 // The chip is one `ChipImage` (the lying tier — the same asset as the piles) that
 // travels from `from` to `to` — the CENTRES of the chip in the PARENT's coordinates
-// — along a shallow arc (arc 0 = straight slide), turns a little on the way and
-// fades out as it lands. In the player boxes the parent is the unscaled seat box
-// (the box scale does the table scaling); in the pot layer GamePage sets
-// `scale: oppScale` and the matching `renderScale` (see ChipImage for the raster
-// rules).
+// — along a shallow arc (arc 0 = straight slide) and fades out as it lands. It is
+// NOT turned on the way (2026-11-17): a chip on the felt can only turn about the
+// vertical axis, and a turn is a frame of the whole asset (face + rim together),
+// not a rotation of the picture — and the toss no longer spins at all (the player
+// kept the turns on the table, where they give the piles life, and dropped them in
+// flight). In the player boxes the parent is the unscaled seat box (the box scale
+// does the table scaling); in the pot layer GamePage sets `scale: oppScale` and
+// the matching `renderScale` (see ChipImage for the raster rules).
 //
 // Nothing here owns time or lifetime: the owner keeps a plain list of flights as a
 // Repeater model and drops the entries once `delay + duration` has passed. That
@@ -37,8 +40,6 @@ Item {
     property bool cash: false
     // Effective screen scale of the parents — see ChipImage.renderScale.
     property real renderScale: 1
-    // Total turn over the flight (degrees); the sign picks the direction.
-    property real spin: 0
     // Flight time and the pause before it starts.
     property int duration: 340
     property int delay: 0
@@ -86,16 +87,7 @@ Item {
                     }
                 }
             }
-            // A slow turn: a chip is a disc, so it reads as tossed rather than
-            // pushed; the faces never line up exactly with the pile below.
-            NumberAnimation {
-                target: fly
-                property: "rotation"
-                from: 0
-                to: fly.spin
-                duration: fly.duration
-                easing.type: Easing.InOutQuad
-            }
+            // Fade-out: the chip does not stop dead, it sinks into the pile.
             SequentialAnimation {
                 PauseAnimation { duration: Math.max(0, fly.duration - fly.fadeOut) }
                 NumberAnimation {

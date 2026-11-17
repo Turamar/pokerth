@@ -76,25 +76,32 @@ Item {
         return out
     }
     readonly property var _columns: columnsOf(amount)
-    // Rotation of the lower chips of every stack (the top chip stays upright so
-    // its value is readable). ±8°: the rim stripes still never line up, but a
-    // rotated band does not stick out into the neighbouring column (a ±15° turn
-    // reached 2.2 px sideways). Rolled when the amount changes and stored: a
-    // repaint or a resize keeps the picture.
-    property var _rots: []
-    function _rollRots() {
+    // Turn of the chips of every column, degrees (2026-11-17): a chip lying on
+    // the felt can only be turned about the vertical axis, and the turn is a
+    // frame of the WHOLE chip in the asset (face and side band turn together, the
+    // light stays put — see ChipImage.yaw). `rotation` must not be used: it turns
+    // the projection with the picture and the chip reads as standing on its edge.
+    // The top chip turns less — its value stays readable.
+    property real yawSpread: 30
+    property real topYawSpread: 10
+    property var _yaws: []
+    function _rollYaws() {
         var cols = columnsOf(row.amount)
         var out = []
         for (var c = 0; c < cols.length; ++c) {
             var arr = []
             for (var k = 0; k < cols[c].count; ++k)
-                arr.push(k === cols[c].count - 1 ? 0 : (Math.random() * 16 - 8))
+                arr.push(k === cols[c].count - 1
+                         ? (Math.random() * 2 - 1) * row.topYawSpread
+                         : (Math.random() * 2 - 1) * row.yawSpread)
             out.push(arr)
         }
-        row._rots = out
+        row._yaws = out
     }
-    onAmountChanged: _rollRots()
-    Component.onCompleted: _rollRots()
+    onAmountChanged: _rollYaws()
+    onYawSpreadChanged: _rollYaws()
+    onTopYawSpreadChanged: _rollYaws()
+    Component.onCompleted: _rollYaws()
     readonly property real _rowW: _columns.length > 0
         ? _d + (_columns.length - 1) * _colStep : 0
     readonly property real _rowH: _columns.length > 0
@@ -115,7 +122,7 @@ Item {
             required property var modelData
             required property int index
             property var entry: modelData
-            property var rots: (row._rots.length > index) ? row._rots[index] : []
+            property var yaws: (row._yaws.length > index) ? row._yaws[index] : []
             width: row._d
             height: row._faceH + (entry.count - 1) * row._band
             x: index * row._colStep
@@ -130,7 +137,8 @@ Item {
                     value: entry.value
                     cash: row.cash
                     renderScale: row.renderScale
-                    rotation: (index < rots.length) ? rots[index] : 0
+                    // A turn is a frame of the whole chip, never `rotation`.
+                    yaw: (index < yaws.length) ? yaws[index] : 0
                     x: (row._d - width) / 2
                     y: (entry.count - 1 - index) * row._band
                 }

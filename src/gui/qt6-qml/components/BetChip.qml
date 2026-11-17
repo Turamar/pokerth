@@ -30,9 +30,15 @@ import "../config" as Config
 // the block would no longer fit between the plates and the board (see _slotDY).
 // Single chips share the free slots at random, so the top chip is a different
 // denomination every time (player's rule of 2026-11-12, kept where it costs
-// nothing). Lower chips of a stack are turned a little (±8°), each differently,
-// so the rim stripes never line up and the stack does not read as one thick chip.
-// The top chip stays upright for its value.
+// nothing).
+//
+// Chips are TURNED, and only in the honest way (2026-11-17): a chip lying on the
+// felt can turn about the vertical axis only, so the whole chip is an asset frame
+// (face and side band turn together, the light stays put — see ChipImage.yaw).
+// Rotating the picture instead tilts the projection and the chip reads as standing
+// on its edge; on a real chip the face cannot turn without its rim. Lower chips of
+// a stack show only their band, so they turn more; the top chip shows its value, so
+// it turns less (yawSpread / topYawSpread).
 //
 // The randomness is rolled when the amount changes and stored: a repaint, a
 // resize or a QML re-evaluation keeps the same picture.
@@ -60,6 +66,11 @@ Item {
     property int maxPerStack: 4
     // Pyramid (a bet) vs a flat row of stacks (the pot) — see the header.
     property bool pyramid: true
+    // Yaw of the chips on the felt, degrees (2026-11-17, see the header): lower
+    // chips of a stack (their faces are covered — only the band and its rim
+    // stripes show) and the top chip (its value is the only thing turned here).
+    property real yawSpread: 30
+    property real topYawSpread: 10
 
     // The ladder (top rung first, the last one is the smallest chip):
     //   • tournament — chip counts 5 … 50000, eight rungs (the smallest is 5, so
@@ -225,11 +236,13 @@ Item {
                     "value": pile.value,
                     "slot": entries[e].slot,
                     "level": k,
-                    // ±8° (was ±15°): the rim stripes still never line up, but a
-                    // rotated lower chip no longer sticks out into the neighbour
-                    // stack (with a 15° turn its band reached 2.2 px sideways and
-                    // the piles touched).
-                    "rot": (k === count - 1) ? 0 : (Math.random() * 16 - 8),
+                    // Yaw about the vertical axis (2026-11-17): a frame of the
+                    // whole chip in the asset, never a rotation of the picture
+                    // (see ChipImage.yaw). The top chip turns less — its value
+                    // must stay readable; the covered ones turn freely.
+                    "yaw": (k === count - 1)
+                           ? (Math.random() * 2 - 1) * bet.topYawSpread
+                           : (Math.random() * 2 - 1) * bet.yawSpread,
                     // No horizontal jitter — it closed the seam between the base
                     // stacks of the pyramid.
                     "jx": 0,
@@ -250,7 +263,8 @@ Item {
             value: modelData.value
             cash: bet.cash
             renderScale: bet.renderScale
-            rotation: modelData.rot
+            // A turn is a frame of the whole chip, never `rotation` (see ChipImage).
+            yaw: modelData.yaw
             x: bet.width / 2 + bet.slotCentre(modelData.slot) - width / 2
                + modelData.jx
             y: (bet.pyramid && modelData.slot === 2 ? bet._baseY - bet._slotDY
@@ -292,6 +306,9 @@ Item {
         _roll()
         if (visible) betPop.restart()
     }
+    // The yaw spreads are a look-and-feel knob (the asset test page tunes them).
+    onYawSpreadChanged: _roll()
+    onTopYawSpreadChanged: _roll()
     Component.onCompleted: _roll()
 
     // A short pop when the bet appears or grows — it is placed, not switched on.

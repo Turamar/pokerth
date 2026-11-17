@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
 """Checks the generated chip assets and builds the contact sheet.
 
-For the 55 SVG files in src/gui/qt6-qml/resources/chips:
+For the 157 SVG files in src/gui/qt6-qml/resources/chips (55 chips + 102 yaw
+frames of the lying numbered chips) and chipyaw.js:
   * every file is well-formed XML, 1024x1024 viewBox, no <filter>/<mask>/<clipPath>
     (QtSvg cannot render those), and no filter/mask/clip-path reference;
   * every file renders through resvg at 24/28/35/48/96 px;
+  * every frame listed in chipyaw.js exists for every numbered lying chip and
+    renders at 28 px (a missing frame would show a BLANK chip on the table, not a
+    build error); the client asks for frames by name (ChipImage.yaw);
   * sm/lg/num output is byte-identical to the original player's generator
     (E:\\Projects\\poker\\pokerth-chips\\chipgen.py), so the tier split did not
     disturb the existing look;
@@ -13,6 +17,7 @@ For the 55 SVG files in src/gui/qt6-qml/resources/chips:
       - "tnum 1:1": all 8 values at 24 / 28 / 35 px,
       - "лежачие 1:1": all 8 values lying (obln) at 28 px and the same chips
         without a value (obl) at 24 px,
+      - "поворот (йоу) 1:1": the yaw frames of 100 and 25¢ at 28 px,
       - "кэш 1:1": the nine cash labels lying (obln) at 22 / 28 px,
       - "sm/lg 1:1": all 10 chips at 16 (sm) and 22 (lg) px,
       - "x3": 5 / 100 / 2.5K / 10K at 96 px.
@@ -21,6 +26,7 @@ For the 55 SVG files in src/gui/qt6-qml/resources/chips:
 """
 import importlib.util
 import os
+import re
 import sys
 import xml.etree.ElementTree as ET
 
@@ -32,6 +38,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     "..", "..", ".."))
 ASSETS = os.path.join(ROOT, "pokerth-src", "src", "gui", "qt6-qml",
                       "resources", "chips")
+YAWS_JS = os.path.join(ASSETS, "chipyaw.js")
 ORIG = os.path.join(ROOT, "pokerth-chips", "chipgen.py")
 SHOTS = os.path.join(ROOT, "dist", "shots", "chips", "gen")
 PNG_DIR = os.path.join(SHOTS, "png")
@@ -109,6 +116,53 @@ def check_original_compat():
                 problems.append("%s/%s differs from the original generator"
                                 % (name, tier))
     return (not problems), problems, checked
+
+
+# ─────────────────────────── yaw frames ─────────────────────────────────────
+def yaw_frames():
+    """The frame list the client uses (written by chipgen.py --oblique-yaws)."""
+    with open(YAWS_JS, "r", encoding="utf-8") as f:
+        txt = f.read()
+    m = re.search(r"var steps = \[([^\]]*)\]", txt)
+    if not m:
+        return []
+    return [float(v) for v in m.group(1).split(",") if v.strip()]
+
+
+def yaw_tag(deg):
+    return "_y" + ("p" if deg > 0 else "m") + ("%g" % abs(deg))
+
+
+def check_yaw_frames():
+    """Every frame the client may ask for exists and renders: a missing frame is a
+    BLANK chip on the table, not a build error."""
+    frames = [v for v in yaw_frames() if v]
+    names = [n for n, spec in chipgen.CHIPS if spec.get("label")] \
+        + [n for n, _ in CASH_CHIPS]
+    problems = []
+    rendered = 0
+    if not frames:
+        return False, ["chipyaw.js: empty frame list"], 0
+    os.makedirs(PNG_DIR, exist_ok=True)
+    for name in names:
+        for deg in frames:
+            fn = "chip_%s_obln%s.svg" % (name, yaw_tag(deg))
+            path = os.path.join(ASSETS, fn)
+            if not os.path.exists(path):
+                problems.append("missing frame: " + fn)
+                continue
+            with open(path, "r", encoding="utf-8") as f:
+                svg = f.read()
+            try:
+                data = chipgen.render(svg, 28)
+            except Exception as e:  # noqa: BLE001
+                problems.append("%s: render failed: %s" % (fn, e))
+                continue
+            with open(os.path.join(PNG_DIR, "chip_%s_obln%s_28.png"
+                                   % (name, yaw_tag(deg))), "wb") as f:
+                f.write(data)
+            rendered += 1
+    return (not problems), problems, rendered
 
 
 def render_all():
@@ -216,9 +270,9 @@ def build_sheet():
     y = 26
     d.text((40, y), "PokerTH — фишки на столе: контрольный лист (tnum + лежачие)", font=f_title, fill=WHITE)
     y += 34
-    d.text((40, y), "55 SVG в src/gui/qt6-qml/resources/chips (8 номиналов × sm/lg/tnum/obln/obl, "
-                    "2 запасных × sm/lg/obl, 9 кэш-вариантов × obln), "
-                    "рендер resvg 1:1", font=f_sub, fill=DIM)
+    d.text((40, y), "157 SVG в src/gui/qt6-qml/resources/chips (55 фишек: 8 номиналов × sm/lg/tnum/obln/obl, "
+                    "2 запасных × sm/lg/obl, 9 кэш-вариантов × obln; плюс 102 кадра поворота) "
+                    "и chipyaw.js, рендер resvg 1:1", font=f_sub, fill=DIM)
     y += 20
     d.text((40, y), "tnum: борт как у lg — инлей 0.70 R, вставки от 0.745 R, шаг 0.034, без пина; "
                     "цифра до 0.88 инлея / 1.70 ширины (проверка 0.90)", font=f_sub, fill=DIM)
@@ -286,7 +340,32 @@ def build_sheet():
     d.line([40, y, W - 40, y], fill=RULE, width=1)
     y += 18
 
-    # ── block 4: the cash labels ──────────────────────────────────────────
+    # ── block 4: the yaw frames ───────────────────────────────────────────
+    d.text((40, y), "поворот (йоу) 1:1 — кадры ассета, 28 px: −30°…+30° через 10°",
+           font=f_block, fill=WHITE)
+    d.text((40, y + 26), "поворачиваются вставки и цифра, боковина — вместе с ободом (полоски едут за ним), "
+                         "блик и тени стоят на месте: кадр — ЦЕЛАЯ фишка, а не повёрнутая картинка",
+           font=f_sub, fill=DIM)
+    y += 46
+    frames = [-30, -20, -10, 0, 10, 20, 30]
+    cellx = 84
+    for name, disp in (("100", "100"), ("d25", "25¢")):
+        d.text((40, y + 14 - 9), disp, font=f_row, fill=ACCENT)
+        for i, deg in enumerate(frames):
+            cx = 130 + i * cellx
+            if deg:
+                p = os.path.join(PNG_DIR, "chip_%s_obln%s_28.png" % (name, yaw_tag(deg)))
+                im = Image.open(p).convert("RGBA")
+            else:
+                im = chip(name, "obln", 28)
+            img.paste(im, (cx - im.width // 2, y), im)
+            ctext(d, cx, y + 30, ("%+d°" % deg) if deg else "0°", f_cap, DIM)
+        y += 56
+    y += 8
+    d.line([40, y, W - 40, y], fill=RULE, width=1)
+    y += 18
+
+    # ── block 5: the cash labels ──────────────────────────────────────────
     d.text((40, y), "кэш 1:1 — obln 22 / 28 px: сумма напечатана на фишке",
            font=f_block, fill=WHITE)
     d.text((40, y + 26), "центы со знаком ¢ (1¢ 5¢ 10¢ 25¢), доллары числом (1 5 25 100 500): "
@@ -324,7 +403,7 @@ def build_sheet():
     y += 14
     d.line([40, y, W - 40, y], fill=RULE, width=1)
     y += 12
-    d.text((40, y), "Источник: pokerth-src/tools/chipgen/chipgen.py → resources/chips/*.svg (55 файлов) · "
+    d.text((40, y), "Источник: pokerth-src/tools/chipgen/chipgen.py → resources/chips/*.svg (157 файлов + chipyaw.js) · "
                     "фон #17452e · рендер resvg_py",
            font=f_small, fill=DIM)
     y += 26
@@ -338,6 +417,7 @@ def build_sheet():
 def main():
     ok_xml, xml_problems, files = check_svg_files()
     ok_compat, compat_problems, compat_checked = check_original_compat()
+    ok_yaw, yaw_problems, yaw_rendered = check_yaw_frames()
     ok_render, render_errors, rendered = render_all()
     out, size = build_sheet()
 
@@ -355,6 +435,11 @@ def main():
     print("Original-generator 1:1 check (sm/lg/num): %s (%d variant(s))"
           % ("OK" if ok_compat else "FAIL", compat_checked))
     for p in compat_problems:
+        print("  !", p)
+    print("yaw frames check (chipyaw.js, %d frames): %s (%d rendered, %d problem(s))"
+          % (len(yaw_frames()), "OK" if ok_yaw else "FAIL", yaw_rendered,
+             len(yaw_problems)))
+    for p in yaw_problems:
         print("  !", p)
     print("resvg render check: %s (%d PNGs, %d error(s))"
           % ("OK" if ok_render else "FAIL", rendered, len(render_errors)))

@@ -722,7 +722,6 @@ Rectangle {
                     "to": to,
                     "value": value,
                     "arc": 0,
-                    "spin": 0,
                     "delay": delay,
                     "duration": Math.round(200 + dist * 0.62),
                     "fadeOut": 80
@@ -1704,7 +1703,6 @@ Rectangle {
                         to: modelData.to
                         value: modelData.value
                         arc: modelData.arc
-                        spin: modelData.spin
                         delay: modelData.delay
                         duration: modelData.duration
                         chipSize: 22

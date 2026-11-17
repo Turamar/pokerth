@@ -381,30 +381,133 @@
         <file>resources/chips/chip_spare_bronze_lg.svg</file>
         <file>resources/chips/chip_10000_obl.svg</file>
         <file>resources/chips/chip_10000_obln.svg</file>
+        <file>resources/chips/chip_10000_obln_ym30.svg</file>
+        <file>resources/chips/chip_10000_obln_ym20.svg</file>
+        <file>resources/chips/chip_10000_obln_ym10.svg</file>
+        <file>resources/chips/chip_10000_obln_yp10.svg</file>
+        <file>resources/chips/chip_10000_obln_yp20.svg</file>
+        <file>resources/chips/chip_10000_obln_yp30.svg</file>
         <file>resources/chips/chip_100_obl.svg</file>
         <file>resources/chips/chip_100_obln.svg</file>
+        <file>resources/chips/chip_100_obln_ym30.svg</file>
+        <file>resources/chips/chip_100_obln_ym20.svg</file>
+        <file>resources/chips/chip_100_obln_ym10.svg</file>
+        <file>resources/chips/chip_100_obln_yp10.svg</file>
+        <file>resources/chips/chip_100_obln_yp20.svg</file>
+        <file>resources/chips/chip_100_obln_yp30.svg</file>
         <file>resources/chips/chip_10_obl.svg</file>
         <file>resources/chips/chip_10_obln.svg</file>
+        <file>resources/chips/chip_10_obln_ym30.svg</file>
+        <file>resources/chips/chip_10_obln_ym20.svg</file>
+        <file>resources/chips/chip_10_obln_ym10.svg</file>
+        <file>resources/chips/chip_10_obln_yp10.svg</file>
+        <file>resources/chips/chip_10_obln_yp20.svg</file>
+        <file>resources/chips/chip_10_obln_yp30.svg</file>
         <file>resources/chips/chip_2500_obl.svg</file>
         <file>resources/chips/chip_2500_obln.svg</file>
+        <file>resources/chips/chip_2500_obln_ym30.svg</file>
+        <file>resources/chips/chip_2500_obln_ym20.svg</file>
+        <file>resources/chips/chip_2500_obln_ym10.svg</file>
+        <file>resources/chips/chip_2500_obln_yp10.svg</file>
+        <file>resources/chips/chip_2500_obln_yp20.svg</file>
+        <file>resources/chips/chip_2500_obln_yp30.svg</file>
         <file>resources/chips/chip_25_obl.svg</file>
         <file>resources/chips/chip_25_obln.svg</file>
+        <file>resources/chips/chip_25_obln_ym30.svg</file>
+        <file>resources/chips/chip_25_obln_ym20.svg</file>
+        <file>resources/chips/chip_25_obln_ym10.svg</file>
+        <file>resources/chips/chip_25_obln_yp10.svg</file>
+        <file>resources/chips/chip_25_obln_yp20.svg</file>
+        <file>resources/chips/chip_25_obln_yp30.svg</file>
         <file>resources/chips/chip_50000_obl.svg</file>
         <file>resources/chips/chip_50000_obln.svg</file>
+        <file>resources/chips/chip_50000_obln_ym30.svg</file>
+        <file>resources/chips/chip_50000_obln_ym20.svg</file>
+        <file>resources/chips/chip_50000_obln_ym10.svg</file>
+        <file>resources/chips/chip_50000_obln_yp10.svg</file>
+        <file>resources/chips/chip_50000_obln_yp20.svg</file>
+        <file>resources/chips/chip_50000_obln_yp30.svg</file>
         <file>resources/chips/chip_500_obl.svg</file>
         <file>resources/chips/chip_500_obln.svg</file>
+        <file>resources/chips/chip_500_obln_ym30.svg</file>
+        <file>resources/chips/chip_500_obln_ym20.svg</file>
+        <file>resources/chips/chip_500_obln_ym10.svg</file>
+        <file>resources/chips/chip_500_obln_yp10.svg</file>
+        <file>resources/chips/chip_500_obln_yp20.svg</file>
+        <file>resources/chips/chip_500_obln_yp30.svg</file>
         <file>resources/chips/chip_5_obl.svg</file>
         <file>resources/chips/chip_5_obln.svg</file>
+        <file>resources/chips/chip_5_obln_ym30.svg</file>
+        <file>resources/chips/chip_5_obln_ym20.svg</file>
+        <file>resources/chips/chip_5_obln_ym10.svg</file>
+        <file>resources/chips/chip_5_obln_yp10.svg</file>
+        <file>resources/chips/chip_5_obln_yp20.svg</file>
+        <file>resources/chips/chip_5_obln_yp30.svg</file>
         <file>resources/chips/chip_spare_bronze_obl.svg</file>
         <file>resources/chips/chip_spare_ink_obl.svg</file>
         <file>resources/chips/chip_c1_obln.svg</file>
+        <file>resources/chips/chip_c1_obln_ym30.svg</file>
+        <file>resources/chips/chip_c1_obln_ym20.svg</file>
+        <file>resources/chips/chip_c1_obln_ym10.svg</file>
+        <file>resources/chips/chip_c1_obln_yp10.svg</file>
+        <file>resources/chips/chip_c1_obln_yp20.svg</file>
+        <file>resources/chips/chip_c1_obln_yp30.svg</file>
         <file>resources/chips/chip_c5_obln.svg</file>
+        <file>resources/chips/chip_c5_obln_ym30.svg</file>
+        <file>resources/chips/chip_c5_obln_ym20.svg</file>
+        <file>resources/chips/chip_c5_obln_ym10.svg</file>
+        <file>resources/chips/chip_c5_obln_yp10.svg</file>
+        <file>resources/chips/chip_c5_obln_yp20.svg</file>
+        <file>resources/chips/chip_c5_obln_yp30.svg</file>
         <file>resources/chips/chip_c10_obln.svg</file>
+        <file>resources/chips/chip_c10_obln_ym30.svg</file>
+        <file>resources/chips/chip_c10_obln_ym20.svg</file>
+        <file>resources/chips/chip_c10_obln_ym10.svg</file>
+        <file>resources/chips/chip_c10_obln_yp10.svg</file>
+        <file>resources/chips/chip_c10_obln_yp20.svg</file>
+        <file>resources/chips/chip_c10_obln_yp30.svg</file>
         <file>resources/chips/chip_c25_obln.svg</file>
+        <file>resources/chips/chip_c25_obln_ym30.svg</file>
+        <file>resources/chips/chip_c25_obln_ym20.svg</file>
+        <file>resources/chips/chip_c25_obln_ym10.svg</file>
+        <file>resources/chips/chip_c25_obln_yp10.svg</file>
+        <file>resources/chips/chip_c25_obln_yp20.svg</file>
+        <file>resources/chips/chip_c25_obln_yp30.svg</file>
         <file>resources/chips/chip_d1_obln.svg</file>
+        <file>resources/chips/chip_d1_obln_ym30.svg</file>
+        <file>resources/chips/chip_d1_obln_ym20.svg</file>
+        <file>resources/chips/chip_d1_obln_ym10.svg</file>
+        <file>resources/chips/chip_d1_obln_yp10.svg</file>
+        <file>resources/chips/chip_d1_obln_yp20.svg</file>
+        <file>resources/chips/chip_d1_obln_yp30.svg</file>
         <file>resources/chips/chip_d5_obln.svg</file>
+        <file>resources/chips/chip_d5_obln_ym30.svg</file>
+        <file>resources/chips/chip_d5_obln_ym20.svg</file>
+        <file>resources/chips/chip_d5_obln_ym10.svg</file>
+        <file>resources/chips/chip_d5_obln_yp10.svg</file>
+        <file>resources/chips/chip_d5_obln_yp20.svg</file>
+        <file>resources/chips/chip_d5_obln_yp30.svg</file>
         <file>resources/chips/chip_d25_obln.svg</file>
+        <file>resources/chips/chip_d25_obln_ym30.svg</file>
+        <file>resources/chips/chip_d25_obln_ym20.svg</file>
+        <file>resources/chips/chip_d25_obln_ym10.svg</file>
+        <file>resources/chips/chip_d25_obln_yp10.svg</file>
+        <file>resources/chips/chip_d25_obln_yp20.svg</file>
+        <file>resources/chips/chip_d25_obln_yp30.svg</file>
         <file>resources/chips/chip_d100_obln.svg</file>
+        <file>resources/chips/chip_d100_obln_ym30.svg</file>
+        <file>resources/chips/chip_d100_obln_ym20.svg</file>
+        <file>resources/chips/chip_d100_obln_ym10.svg</file>
+        <file>resources/chips/chip_d100_obln_yp10.svg</file>
+        <file>resources/chips/chip_d100_obln_yp20.svg</file>
+        <file>resources/chips/chip_d100_obln_yp30.svg</file>
         <file>resources/chips/chip_d500_obln.svg</file>
+        <file>resources/chips/chip_d500_obln_ym30.svg</file>
+        <file>resources/chips/chip_d500_obln_ym20.svg</file>
+        <file>resources/chips/chip_d500_obln_ym10.svg</file>
+        <file>resources/chips/chip_d500_obln_yp10.svg</file>
+        <file>resources/chips/chip_d500_obln_yp20.svg</file>
+        <file>resources/chips/chip_d500_obln_yp30.svg</file>
+        <file>resources/chips/chipyaw.js</file>
     </qresource>
 </RCC>

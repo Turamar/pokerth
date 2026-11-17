@@ -495,7 +495,6 @@ SeatBox {
                 to: modelData.to
                 value: modelData.value
                 arc: modelData.arc
-                spin: modelData.spin
                 delay: modelData.delay
                 duration: modelData.duration
                 // Short fade at the very end: the chips land exactly when the pile
@@ -563,7 +562,6 @@ SeatBox {
                                dst.y + (Math.random() * 5 - 2.5)),
                 "value": vals[i],
                 "arc": 16 + Math.random() * 14,
-                "spin": Math.random() * 100 - 50,
                 "delay": i * 45,
                 "duration": 250 + Math.random() * 60
             })

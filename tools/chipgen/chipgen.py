@@ -21,11 +21,24 @@ does not use them).
     python chipgen.py --out DIR --png --png-dir PNGDIR
     python chipgen.py --out DIR --tiers sm,lg,tnum,obl,obln   # subset of tiers
     python chipgen.py --out DIR --tiers obln --oblique-label squash|flat
+    python chipgen.py --out DIR --tiers obln --oblique-yaws "-30,-20,-10,0,10,20,30"
 
 Without --png nothing is rasterised; "tnum" and the lying tiers render their own
 sizes (TNUM_PNG_SIZES / OBL_PNG_SIZES).  --oblique-label chooses how the value is
 drawn on a lying chip: "squash" (inside the squashed face — chosen for the game)
 or "flat" (normal proportions fitted into the ellipse — kept as an alternative).
+
+--oblique-yaws writes extra frames of the lying chip turned by a YAW (a rotation
+about the vertical axis — the only rotation a chip lying on the table can have):
+chip_<name>_obln_yp30.svg for +30°, chip_<name>_obln_ym10.svg for -10°; 0° is the
+plain chip_<name>_obln.svg.  A frame is the WHOLE chip, not a rotated picture:
+the printed parts of the face (inserts, value) are turned in the chip plane and
+only then squashed, the rim colours on the side band are extruded at the turned
+azimuth (the band is the wall of the same cylinder, so its stripes move with the
+rim), and the symmetric parts — body/inlay fills, step rings, sheen, shade, rim
+stroke — stay in canvas coordinates, so the light does not turn with the chip.
+The list of frames is written to chipyaw.js next to the SVGs; the client reads it
+(ChipImage.yaw quantises to the nearest frame).  2026-11-17.
 """
 import argparse
 import math
@@ -275,6 +288,13 @@ TIERS = {
 # the ellipse by its corners. Set by --oblique-label.
 OBL_LABEL = "squash"
 
+# Yaw of the lying chip (a turn about the vertical axis), degrees, for the extra
+# frames written by --oblique-yaws. 0 is the shipped asset. Only the lying chip
+# can be turned this way: a rotation of the finished picture would turn the
+# projection itself (the squash would tilt with it, and the chip would read as
+# standing on its edge) — see the header.
+OBL_YAW = 0.0
+
 
 def body_stops(spec):
     b = rgb(spec["body"])
@@ -380,7 +400,11 @@ def band_svg(spec, g, cy):
     x_start = None
     while True:
         xc = max(C - R, min(C + R, x))
-        theta = math.degrees(math.acos(max(-1.0, min(1.0, (xc - C) / R))))
+        # The stripe on the band is the rim colour at the azimuth of the wall
+        # point visible at this x; a yawed chip has its rim turned, so the whole
+        # extrusion moves with the rim (2026-11-17).
+        theta = (math.degrees(math.acos(max(-1.0, min(1.0, (xc - C) / R))))
+                 - OBL_YAW)
         seg = None
         for i in range(n):
             c = (270.0 + 360.0 * i / n) % 360.0
@@ -537,11 +561,29 @@ def build_svg(spec, tier):
         # the face is squashed about its own centre and moved so that the side
         # sits right under it; the side itself is drawn in canvas coordinates
         shift = face_cy - C * sy
+        # A yawed chip: only the PRINTED parts turn (inserts + value). Everything
+        # else — the body and inlay fills, the step rings, the sheen/shade rings and
+        # the rim stroke — is rotationally symmetric, and leaving it in canvas
+        # coordinates keeps the lighting where it is instead of dragging the
+        # highlight around the chip with the turn (2026-11-17).
+        face = ""
+        for e in el:
+            if OBL_YAW and (e.startswith("<g") or 'fill="url(#ins)"' in e):
+                face += ('<g transform="translate(%.2f %.2f) rotate(%.4f) '
+                         'translate(%.2f %.2f)">%s</g>'
+                         % (C, C, OBL_YAW, -C, -C, e))
+            else:
+                face += e
         body = ("".join(band_svg(spec, g, face_cy))
                 + '<g transform="translate(0 %.2f) scale(1 %.4f)">%s</g>'
-                % (shift, sy, "".join(el)))
+                % (shift, sy, face))
         if OBL_LABEL == "flat":
-            body += label_svg_flat(spec, R * g["ins_in"], tier, face_cy, sy)
+            flat = label_svg_flat(spec, R * g["ins_in"], tier, face_cy, sy)
+            if OBL_YAW and flat:
+                flat = ('<g transform="translate(%.2f %.2f) rotate(%.4f) '
+                        'translate(%.2f %.2f)">%s</g>'
+                        % (C, C, OBL_YAW, -C, -C, flat))
+            body += flat
 
     return ('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" '
             'viewBox="0 0 %d %d"><defs>%s</defs>%s</svg>'
@@ -559,6 +601,56 @@ TNUM_PNG_SIZES = (24, 28, 32, 36, 40, 48, 96)
 OBL_PNG_SIZES = (20, 24, 28, 32, 36, 40, 48, 64, 96, 192)
 
 
+def yaw_tag(yaw):
+    """File-name tag of a yaw frame: "" for 0, "_yp30" / "_ym10" otherwise."""
+    if not yaw:
+        return ""
+    return "_y" + ("p" if yaw > 0 else "m") + ("%g" % abs(yaw))
+
+
+def write_yaw_js(path, yaws):
+    """The frame list for the client (ChipImage quantises yaw to a frame)."""
+    steps = sorted(float(y) for y in yaws)
+    lines = [
+        ".pragma library",
+        "",
+        "// Yaw frames of the lying chip set. GENERATED by",
+        "// tools/chipgen/chipgen.py --oblique-yaws, do not edit.",
+        "//",
+        "// A chip lying on the table can only be turned about the vertical axis, and",
+        "// a turn is a WHOLE chip in the asset: the printed parts of the face are",
+        "// turned in the chip plane and squashed after that, the rim colours on the",
+        "// band move with the rim, the light stays put. Frame 0 is the plain",
+        "// chip_<name>_obln.svg.",
+        "var steps = [%s]" % ", ".join("%g" % v for v in steps),
+        "",
+        "// Nearest existing frame of `yaw` degrees (a quantised turn is invisible at",
+        "// table size; an angle outside the list clamps to the nearest end frame).",
+        "function frame(yaw) {",
+        "    var best = steps[0], bestD = 1e9",
+        "    for (var i = 0; i < steps.length; ++i) {",
+        "        var d = Math.abs(yaw - steps[i])",
+        "        if (d < bestD) {",
+        "            bestD = d",
+        "            best = steps[i]",
+        "        }",
+        "    }",
+        "    return best",
+        "}",
+        "",
+        "// File-name tag of a frame: \"\" for 0, \"_yp30\" / \"_ym10\" otherwise.",
+        "function tag(deg) {",
+        "    if (!deg)",
+        "        return \"\"",
+        "    return (deg > 0 ? \"_yp\" : \"_ym\") + Math.abs(deg)",
+        "}",
+        "",
+    ]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    return path
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="PokerTH chip asset generator")
     ap.add_argument("--out", default=os.path.join(HERE, "svg"),
@@ -573,9 +665,17 @@ def main(argv=None):
                     choices=("squash", "flat"),
                     help="value on the lying chip (tier obl): squashed with the "
                          "face (squash) or drawn with normal proportions (flat)")
+    ap.add_argument("--oblique-yaws", default="",
+                    help="comma-separated yaw frames of the lying NUMBERED chip "
+                         "(tier obln), degrees, e.g. \"-30,-20,-10,0,10,20,30\"; "
+                         "0 is the plain file, the rest become "
+                         "chip_<name>_obln_yp30/_ym10.svg and are listed in "
+                         "chipyaw.js next to the SVGs")
     args = ap.parse_args(argv)
-    global OBL_LABEL
+    global OBL_LABEL, OBL_YAW
     OBL_LABEL = args.oblique_label
+    OBL_YAW = 0.0
+    yaws = [float(v) for v in args.oblique_yaws.split(",") if v.strip()]
 
     wanted = [t.strip() for t in args.tiers.split(",") if t.strip()]
     out_svg = os.path.abspath(args.out)
@@ -602,6 +702,21 @@ def main(argv=None):
                 f.write(svg)
             print(p, len(svg.encode("utf-8")), "bytes")
             total += 1
+            # The yaw frames: the same chip turned about its vertical axis, each
+            # one a complete picture (see --oblique-yaws).
+            if yaws and tier == "obln":
+                for yaw in yaws:
+                    if not yaw:
+                        continue
+                    OBL_YAW = yaw
+                    frame_svg = build_svg(spec, tier)
+                    fp = os.path.join(out_svg, "chip_%s_%s%s.svg"
+                                      % (name, tier, yaw_tag(yaw)))
+                    with open(fp, "w", encoding="utf-8") as f:
+                        f.write(frame_svg)
+                    print(fp, len(frame_svg.encode("utf-8")), "bytes")
+                    total += 1
+                OBL_YAW = 0.0
             if not args.png:
                 continue
             if tier in ("obl", "obln"):
@@ -616,6 +731,8 @@ def main(argv=None):
                 with open(os.path.join(os.path.abspath(args.png_dir),
                                        "chip_%s_%s_%d.png" % (name, tier, px)), "wb") as f:
                     f.write(render(svg, px))
+    if yaws:
+        print(write_yaw_js(os.path.join(out_svg, "chipyaw.js"), yaws))
     print("%d SVG files -> %s" % (total, out_svg))
 
 
