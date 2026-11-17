@@ -82,8 +82,10 @@ Item {
     // light stays put — see ChipImage.yaw). `rotation` must not be used: it turns
     // the projection with the picture and the chip reads as standing on its edge.
     // Only the covered chips turn (their band's rim stripes give the small
-    // deviation); the top chip stays upright for its value.
-    property real yawSpread: 30
+    // deviation); the top chip stays upright for its value. The spread is SMALL (±10):
+    // at ±30 the band's white segment wandered to the front and a 2-chip stack read as
+    // if its bottom chip had slid out (player's report 2026-11-18, see BetChip).
+    property real yawSpread: 10
     property real topYawSpread: 0
     property var _yaws: []
     function _rollYaws() {

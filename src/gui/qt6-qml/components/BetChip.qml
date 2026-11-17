@@ -72,7 +72,13 @@ Item {
     // covered chips of a stack turn (only their band and rim stripes show); the top
     // chip stays upright — its value is read, and random turns of it were rejected
     // by the player.
-    property real yawSpread: 30
+    // Turn of the COVERED chips of a stack about the vertical axis (frames of the whole
+    // asset, see ChipImage.yaw): a SMALL deviation of the rim stripes, the player's
+    // "небольшое отклонение бортика" (2026-11-17). It has to stay small (±10): at ±30 the
+    // white segment of the band wandered to the front of a 2-chip stack and the bottom
+    // chip read as if it had slid out from under the top one (player's report
+    // 2026-11-18: "одинаковая стопка, но такое чувство будто нижняя фишка уехала").
+    property real yawSpread: 10
     property real topYawSpread: 0
 
     // The ladder (top rung first, the last one is the smallest chip):
