@@ -43,3 +43,44 @@ function split(amount, cash, maxPiles, maxPerStack) {
     }
     return out
 }
+
+// Every chip of an amount as a flat list, biggest first — the chip multiset of
+// the pot, independent of how it is stacked.
+function chipList(amount, cash) {
+    var piles = split(amount, cash, 4096, 4)
+    var out = []
+    for (var i = 0; i < piles.length; ++i)
+        for (var k = 0; k < piles[i].count; ++k)
+            out.push(piles[i].value)
+    return out
+}
+
+// The POT: columns (stacks) of chips, bottom -> top per column (decision
+// 2026-11-17, the player's rule):
+//   • a column holds up to `maxPerStack` chips, the biggest chip at the bottom;
+//   • ONE DENOMINATION PER COLUMN while columns are left: 200 = 2x100 is ONE
+//     column (not 100 + 100 in two), 900 = 500 + 4x100 is two columns;
+//   • a denomination that needs more chips than one column holds continues in the
+//     next column (by the ladder this never happens — a rung repeats at most 4
+//     times — but the rule is kept general);
+//   • when the denominations outnumber the columns, the smallest ones are mixed
+//     into the LAST column while it has room, and whatever still does not fit is
+//     not drawn: the pill has the truth.
+function columns(amount, cash, maxColumns, maxPerStack) {
+    var chips = chipList(amount, cash)
+    var cols = [], i = 0
+    while (i < chips.length) {
+        if (cols.length < maxColumns) {
+            var v = chips[i], col = []
+            while (i < chips.length && col.length < maxPerStack && chips[i] === v)
+                col.push(chips[i++])
+            cols.push(col)
+        } else {
+            var last = cols[cols.length - 1]
+            if (!last || last.length >= maxPerStack)
+                break
+            last.push(chips[i++])
+        }
+    }
+    return cols
+}

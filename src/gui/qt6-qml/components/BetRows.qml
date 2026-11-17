@@ -81,9 +81,10 @@ Item {
     // frame of the WHOLE chip in the asset (face and side band turn together, the
     // light stays put — see ChipImage.yaw). `rotation` must not be used: it turns
     // the projection with the picture and the chip reads as standing on its edge.
-    // The top chip turns less — its value stays readable.
+    // Only the covered chips turn (their band's rim stripes give the small
+    // deviation); the top chip stays upright for its value.
     property real yawSpread: 30
-    property real topYawSpread: 10
+    property real topYawSpread: 0
     property var _yaws: []
     function _rollYaws() {
         var cols = columnsOf(row.amount)

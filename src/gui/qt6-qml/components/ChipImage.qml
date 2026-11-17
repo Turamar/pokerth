@@ -63,11 +63,10 @@ Item {
     // to the nearest frame (invisible at table size) and 0 is the plain asset.
     property real yaw: 0
 
-    // The frame actually drawn; the tag goes into the file name, "" for 0°.
-    // Frames exist for the numbered lying tier only (an unnumbered chip has no
-    // print to turn, and the band stripes are the same at any angle at this size).
+    // The frame actually drawn; its tag goes into the file name, "" for 0°. Frames
+    // exist for the numbered lying tier only (an unnumbered chip has no print to
+    // turn, and the band stripes are the same at any angle at this size).
     readonly property real _yawFrame: lying ? ChipYaw.frame(yaw) : 0
-    readonly property string _yawTag: (_tier === "obln") ? ChipYaw.tag(_yawFrame) : ""
 
     width: chipSize
     height: chipSize
@@ -79,8 +78,8 @@ Item {
     // The file name inside the set (`chip_<name>_<tier>.svg`).
     // Tournament chips count chips, the cash ones count money (see the header):
     // the same body carries different values, so the labelled asset differs.
-    readonly property string _tournamentName: {
-        switch (value) {
+    function tournamentName(v) {
+        switch (v) {
         case 5:     return "5"
         case 10:    return "10"
         case 25:    return "25"
@@ -92,10 +91,12 @@ Item {
         default:    return "spare_ink"       // 0 = neutral, no denomination
         }
     }
-    // Cash labels: 1¢/5¢/10¢/25¢ and the dollar rungs as plain numbers.
-    readonly property string _cashName: {
-        if (_tier === "obln") {
-            switch (value) {
+    // Cash labels: 1¢/5¢/10¢/25¢ and the dollar rungs as plain numbers. The small
+    // chip (tier "obl", no room for the value) uses the tournament bodies — only
+    // the bronze penny has no tournament twin.
+    function cashName(v, tier) {
+        if (tier === "obln") {
+            switch (v) {
             case 1:     return "c1"
             case 5:     return "c5"
             case 10:    return "c10"
@@ -108,11 +109,11 @@ Item {
             default:    return "spare_ink"
             }
         }
-        // Small chip (no room for the value): the same bodies as the tournament
-        // set — only the bronze penny has no tournament twin.
-        return value === 1 ? "spare_bronze" : _tournamentName
+        return v === 1 ? "spare_bronze" : tournamentName(v)
     }
-    readonly property string _name: cash ? _cashName : _tournamentName
+    function chipName(v, tier) {
+        return cash ? cashName(v, tier) : tournamentName(v)
+    }
     readonly property bool _numbered: value > 0
     readonly property string _tier: {
         if (lying) {
@@ -123,6 +124,18 @@ Item {
              : (_screenPx >= 21 ? "lg" : "sm")
     }
     readonly property int _rasterPx: Math.max(1, Math.ceil(_screenPx * _dpr))
+
+    // ONE binding builds the whole file name from a single tier snapshot: the name
+    // and the yaw-frame tag both depend on the tier, and a mixed stale pair asks for
+    // a file that does not exist (a `chip_spare_bronze_obl_yp20.svg` was logged when
+    // `renderScale` dropped after the yaw had already been rolled). A plain chip has
+    // the tag "".
+    readonly property string _source: {
+        var tier = chip._tier
+        var tag = (tier === "obln") ? ChipYaw.tag(chip._yawFrame) : ""
+        return "../resources/chips/chip_" + chipName(chip.value, tier)
+             + "_" + tier + tag + ".svg"
+    }
 
     // Geometry of the lying asset, in item (logical) units. A stack is built by
     // offsetting the next chip up by exactly `bandStep`; then every lower chip
@@ -138,8 +151,7 @@ Item {
         // A relative path works in both modes: from disk (POKERTH_QML_DIR dev
         // mode) it resolves next to this file, in the compiled build relative to
         // qrc:/components/ → qrc:/resources/chips/… (the qrc keeps the tree flat).
-        source: "../resources/chips/chip_" + chip._name + "_" + chip._tier
-                + chip._yawTag + ".svg"
+        source: chip._source
         sourceSize.width: chip._rasterPx
         sourceSize.height: chip._rasterPx
         fillMode: Image.PreserveAspectFit

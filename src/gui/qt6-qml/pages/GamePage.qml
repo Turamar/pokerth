@@ -1027,8 +1027,8 @@ Rectangle {
                     // (was 0.72) – the cards were a touch small in a 1024×621 window.
                     var floor     = boxScale * (isCmp ? 0.85 : 0.76)
                     var res       = Math.max(0.55, Math.min(cap, Math.max(floor, gapFill)))
-                    // The block (pot + cards) is 118.32·scale high (the pot block is
-                    // 86.32 above the card row centre + 32 below) and has to fit into
+                    // The block (pot + cards) is 120.84·scale high (the pot block is
+                    // 88.84 above the card row centre + 32 below) and has to fit into
                     // the band between the top row and the self box - with air. On a
                     // table with FEW players the boxes are huge and the band is
                     // narrow: there the block shrinks (3 players at 1024x621
@@ -1036,7 +1036,7 @@ Rectangle {
                     // smaller, so dense tables (where gapFill is the binding limit
                     // anyway) stay unchanged.
                     var band      = selfVisualTopY - topOpponentBottomY
-                    var fitBand   = band > 0 ? (band - 16) / 118.32 : 0.55
+                    var fitBand   = band > 0 ? (band - 26) / 120.84 : 0.55
                     return Math.max(0.55, Math.min(res, fitBand))
                 }
                 // Portrait: the community sits vertically BETWEEN the upper (~0.345)
@@ -1382,13 +1382,13 @@ Rectangle {
                 var cs = communityScale
                 var bandTop = topOpponentRealBottomY
                 var bandBottom = selfVisualTopY
-                // The block reaches 86.32·cs above and 32·cs below the card row
-                // centre (card half 32 + pot gap 6 + pot block 48.32), so its centre
-                // sits 27.16·cs above the row centre. Compensate that, then it is
+                // The block reaches 88.84·cs above and 32·cs below the card row
+                // centre (card half 32 + pot gap 3 + pot block 53.84), so its centre
+                // sits 28.42·cs above the row centre. Compensate that, then it is
                 // really centred.
-                var cy = (bandTop + bandBottom) / 2 + 27.16 * cs
+                var cy = (bandTop + bandBottom) / 2 + 28.42 * cs
                 // Keep the block inside the band as long as it fits in there at all.
-                var lo = bandTop + 86.32 * cs
+                var lo = bandTop + 88.84 * cs
                 var hi = bandBottom - 32 * cs
                 if (lo <= hi && (cy < lo || cy > hi))
                     cy = Math.max(lo, Math.min(hi, cy))

@@ -36,9 +36,11 @@ import "../config" as Config
 // felt can turn about the vertical axis only, so the whole chip is an asset frame
 // (face and side band turn together, the light stays put — see ChipImage.yaw).
 // Rotating the picture instead tilts the projection and the chip reads as standing
-// on its edge; on a real chip the face cannot turn without its rim. Lower chips of
-// a stack show only their band, so they turn more; the top chip shows its value, so
-// it turns less (yawSpread / topYawSpread).
+// on its edge; on a real chip the face cannot turn without its rim. Only the
+// COVERED chips of a stack turn (their faces are hidden — what moves is the rim
+// stripes on their band, a small deviation); the top chip stays upright so its
+// value is straight (player's rule 2026-11-17: random turns of the value chip are
+// not wanted). `yawSpread` / `topYawSpread` are the knobs.
 //
 // The randomness is rolled when the amount changes and stored: a repaint, a
 // resize or a QML re-evaluation keeps the same picture.
@@ -66,11 +68,12 @@ Item {
     property int maxPerStack: 4
     // Pyramid (a bet) vs a flat row of stacks (the pot) — see the header.
     property bool pyramid: true
-    // Yaw of the chips on the felt, degrees (2026-11-17, see the header): lower
-    // chips of a stack (their faces are covered — only the band and its rim
-    // stripes show) and the top chip (its value is the only thing turned here).
+    // Yaw of the chips on the felt, degrees (2026-11-17, see the header): the
+    // covered chips of a stack turn (only their band and rim stripes show); the top
+    // chip stays upright — its value is read, and random turns of it were rejected
+    // by the player.
     property real yawSpread: 30
-    property real topYawSpread: 10
+    property real topYawSpread: 0
 
     // The ladder (top rung first, the last one is the smallest chip):
     //   • tournament — chip counts 5 … 50000, eight rungs (the smallest is 5, so

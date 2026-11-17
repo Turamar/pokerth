@@ -39,10 +39,11 @@ Item {
                  potBadge.y + potBadge.height / 2)
 
     // The chip values of an amount, split exactly like the pot pile itself
-    // (`chipsplit.js`, the same greedy ladder). The collect animation takes a few
-    // per seat's bet.
+    // (`chipsplit.js`, the same greedy ladder and the same denominations): the
+    // biggest rungs first, up to four chips each. The collect animation takes a
+    // few per seat's bet.
     function chipValues(amount) {
-        return ChipSplit.split(amount, root.chipCash, 3, 2)
+        return ChipSplit.split(amount, root.chipCash, 5, 4)
     }
 
     // True while any board slot is currently revealing new cards
@@ -187,12 +188,14 @@ Item {
     }
 
     // ── The pot ──────────────────────────────────────────────────────────────
-    // A PACKED PYRAMID of lying chips (2026-11-17, `PotPile`): the front row keeps
-    // a 1 px gap and the chips of the second row nestle in the hollows between
-    // them — all on the felt, the second row is only drawn one depth step higher
-    // (0.6847·(d + gap) = 15.75 px, the asset's own projection). Up to four chips
-    // in the front row and three in the hollows; the rest is not drawn, the pill
-    // has the truth. The block is 91 wide and 48.32 high.
+    // COLUMNS of lying chips in a pyramid (2026-11-17, `PotPile`): up to five
+    // stacks of up to four chips, one denomination per stack while stacks are left
+    // (200 = 2×100 is ONE stack of two), the biggest chip at the bottom. Three
+    // stacks stand in the front row, two in the top row, nestling in the hollows
+    // one depth step higher (0.6847·(d + gap) = 15.75 px, the asset's own
+    // projection); the top row is drawn first and is covered by the front row.
+    // Everything that does not fit is not drawn — the pill has the truth.
+    // The worst-case block is 68 wide and 53.84 high.
     //
     // Since 2026-11-12 the pot shows ONLY COLLECTED chips (`GameTable.pot`, not
     // `totalPot` = pot + the current betting round): when a player bets, the
@@ -203,16 +206,17 @@ Item {
     // chip was below the digit threshold on a small table and the player reported
     // that chips "lose their digit when they get into the pot" (2026-11-12).
     //
-    // Height budget (Lead, GamePage): chips 19.57 + hollow step 15.75 + pill 13
-    // = 48.32 base px, sits 6 above the card row → 32 (half a card) + 6 + 48.32
-    // = 86.32 units above the centre of the card row for `potTop` in GamePage;
-    // the whole "pot + cards" block is 118.32 high.
+    // Height budget (Lead, GamePage): chips face 17.39 + 4 bands 8.69 = 26.09,
+    // + top row depth 15.75 + pill 13 − 1 px the pill tucks under the chips
+    // = 53.84 base px, sits 3 above the card row → 32 (half a card) + 3 + 53.84 =
+    // 88.84 units above the centre of the card row for `potTop` in GamePage; the
+    // whole "pot + cards" block is 120.84 high.
     Item {
         id: potBadge
         anchors.horizontalCenter: cardRow.horizontalCenter
         anchors.bottom: cardRow.top
-        // Fixed by the vertical budget above: 6 both in landscape and portrait.
-        anchors.bottomMargin: 6
+        // Fixed by the vertical budget above: 3 both in landscape and portrait.
+        anchors.bottomMargin: 3
         visible: root.shownPot > 0
         width: potPile.width
         height: potPile.height
