@@ -85,9 +85,6 @@ Item {
     // animation shows exactly those chips instead of a fresh split of the money.
     // `amount` still feeds the pill (the share's money) and is ignored for the columns.
     property var chipsOverride: []
-    // Pill fade of the payout: a share shows its sum while the pot divides, the number
-    // fades away before the chips travel (the player: the pill goes out, the chips move).
-    property real pillOpacity: 1
 
     function _rollSeed() {
         _seed = 1 + Math.floor(Math.random() * 2147483646)
@@ -261,7 +258,6 @@ Item {
     Rectangle {
         id: pill
         visible: pot.amount > 0
-        opacity: pot.pillOpacity
         y: pot.height - pot._pillH
         x: (pot.width - width) / 2
         width: pillLabel.implicitWidth + 14
