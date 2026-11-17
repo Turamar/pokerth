@@ -258,6 +258,11 @@ Rectangle {
         }
     }
 
+    // The categories of the settings after the audit of 2026-11-18 (PLAN.md §7):
+    // only pages that can change something in this single-player build. The
+    // network/internet pages are gone from the menu (their files stay in the
+    // tree: the network code is hidden, not deleted - see PLAN.md §1). "Erweitert"
+    // holds the log settings, "Standardeinstellung" the reset.
     ListModel {
         id: settingsMenuListItems
         ListElement {
@@ -266,9 +271,14 @@ Rectangle {
             source: "Gui"
         }
         ListElement {
-            name: qsTr("Stil")
-            icon: "palette"
-            source: "Style"
+            name: qsTr("Tisch")
+            icon: "spade"
+            source: "LocalGame"
+        }
+        ListElement {
+            name: qsTr("Spieler")
+            icon: "userSquare"
+            source: "NicknameAvatar"
         }
         ListElement {
             name: qsTr("Sound")
@@ -276,27 +286,12 @@ Rectangle {
             source: "Sound"
         }
         ListElement {
-            name: qsTr("Lokales Spiel")
-            icon: "spade"
-            source: "LocalGame"
+            name: qsTr("Stil")
+            icon: "palette"
+            source: "Style"
         }
         ListElement {
-            name: qsTr("Netzwerkspiel")
-            icon: "network"
-            source: "NetworkGame"
-        }
-        ListElement {
-            name: qsTr("Internetspiel")
-            icon: "globe"
-            source: "InternetGame"
-        }
-        ListElement {
-            name: qsTr("Nicknamen/Avatare")
-            icon: "userSquare"
-            source: "NicknameAvatar"
-        }
-        ListElement {
-            name: qsTr("Log-Nachrichten")
+            name: qsTr("Erweitert")
             icon: "terminalWindow"
             source: "Logs"
         }

@@ -130,15 +130,15 @@ Item {
         case "lanIntro": return qsTr("A game on your local network: this device becomes the server, and the others connect with **Join Network Game**. Let’s go through the settings one at a time — **Next** moves on, **Back** goes back, **Later** stops the tour.")
         case "lanDouble": return qsTr("**Always double blinds**: the small blind doubles at each raise. Switched off, the blinds follow your manual blinds order from the network game settings.")
         case "cfActionsLan": return qsTr("Last step: **Create Game** starts the server on this device and opens its lobby; **Cancel** goes back.")
-        case "localIntro": return qsTr("Training table: choose the number of players, the starting stack, the blinds and the game speed, then start the game. Nothing here counts towards a ranking.")
-        case "localPlayers": return qsTr("**Number of players**: you and up to 9 computer players.")
-        case "localBlinds": return qsTr("**Blinds**: keep the saved settings, or change them here — the first small blind, how often it goes up (every so many hands or minutes) and how: always doubled, or a manual blinds order.")
-        case "localSpeed": return qsTr("**Game speed**: how fast the computer players act and the cards are dealt — from 1 (slow) to 11 (fast).")
+        case "localIntro": return qsTr("Cash table: pick the limit, the number of players and the buy-in, then sit down. Nothing here counts towards a ranking.")
+        case "localPlayers": return qsTr("**Number of players**: you and up to eight computer players.")
+        case "localBuyIn": return qsTr("**Buy-in**: the stack you sit down with, in big blinds (20 to 100). It leaves your balance when the table starts and comes back when you leave.")
+        case "localBlinds": return qsTr("**Blinds**: fixed by the limit — a cash table never raises them.")
         case "localActions": return qsTr("Last step: **Start game** opens the table straight away; **Cancel** goes back.")
         case "wRankingHub": return qsTr("The official **PokerTH** ranking and the community ones (**BBC**, **WEC**). Pick one: search a player, choose a season, and tap a name to open the profile.")
         case "wRanking": return qsTr("The official ranking: the current season, or an earlier one under **Season**. Search a player by name and tap a row for the profile. At the bottom: how the ranking is calculated.")
         case "wForum": return qsTr("The latest posts of the pokerth.net forum, newest first. Tap a post to read it here — it is then marked as read. A filled dot means not read yet; the badge on the newspaper button counts them, and **Mark all as read** clears them all. **BBC games** lists the upcoming BBC games.")
-        case "wSettings": return qsTr("Every setting, by section: interface, style, sound, local, network and internet games, nicknames and avatars, log messages, and back to the defaults. Ace’s Help is switched on and off in the interface settings.")
+        case "wSettings": return qsTr("Every setting, by section: interface, table, players, sound, style, the advanced log settings, and back to the defaults. Ace’s Help is switched on and off in the interface settings.")
         case "wLogs": return qsTr("Your logs: every game played on this device is recorded here. Pick a game for a preview, export it as HTML or text, or analyse it for a review of your play.")
         case "wProfile": return qsTr("A player’s card: the profile and the statistics — the current season, the last games and the results so far.")
         }
@@ -207,9 +207,8 @@ Item {
           steps: [
               { text: "localIntro" },
               { text: "localPlayers", target: "players", optional: true },
-              { text: "cfStack", target: "stack", optional: true },
+              { text: "localBuyIn", target: "stack", optional: true },
               { text: "localBlinds", target: "blinds", optional: true },
-              { text: "localSpeed", target: "speed", optional: true },
               { text: "localActions", target: "actions", optional: true }
           ] },
         // pokerth.net lobby: point everyone at the same Ranking table.

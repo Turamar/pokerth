@@ -100,16 +100,6 @@ Rectangle {
                         }
 
                         ConfigCheckBox {
-                            text: qsTr("Lobby-Chat-Benachrichtigungen")
-                            configKey: "PlayLobbyChatNotification"
-                        }
-
-                        ConfigCheckBox {
-                            text: qsTr("Netzwerkspiel-Benachrichtigungen")
-                            configKey: "PlayNetworkGameNotification"
-                        }
-
-                        ConfigCheckBox {
                             text: qsTr("Blind-Erhöhungs-Benachrichtigung")
                             configKey: "PlayBlindRaiseNotification"
                         }

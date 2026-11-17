@@ -5,10 +5,16 @@ import QtQuick.Layouts
 
 import "../config" as Config
 
+// The "Spieler" page of the settings (settings audit 2026-11-18, PLAN.md §7).
+//
+// Only the player themselves can be configured here: the name and the avatar of
+// the own seat. The page used to have nine opponent slots as well (the widgets
+// client's local game read names and avatars for the computer players). Those
+// rows are gone - the bots keep the names the engine has always given them
+// ("Player 1"…), and the config keys "OpponentNName/Avatar" stay untouched in
+// the file, so the core keeps working exactly as before.
 Rectangle {
     id: nicknameAvatarSettings
-    //Layout.preferredWidth: parent.width - 8
-    //Layout.preferredHeight: parent.height - 8
     Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
     color: "transparent"
 
@@ -16,7 +22,7 @@ Rectangle {
         id: nicknameAvatarSettingsContent
         anchors.fill: parent
 
-        SettingsHeader { title: qsTr("Nicknamen/Avatare"); topGap: 4 }
+        SettingsHeader { title: qsTr("Spieler"); topGap: 4 }
 
         ScrollView {
             id: nickScrollView
@@ -143,120 +149,6 @@ Rectangle {
                     }
                 }
 
-                // Opponents 1-9 names and avatars
-                Repeater {
-                    model: 9
-                    delegate: GroupBox {
-                        Layout.fillWidth: true
-                        title: qsTr("Gegner %1").arg(index + 1)
-
-                        ColumnLayout {
-                            anchors.fill: parent
-
-                            RowLayout {
-                                Layout.fillWidth: true
-
-                                Label {
-                                    Layout.preferredWidth: 120
-                                    text: qsTr("Nickname:")
-                                    color: Config.StaticData.palette.secondary.col200
-                                }
-
-                                TextField {
-                                    id: opponentNameField
-                                    Layout.fillWidth: true
-                                    maximumLength: 64
-                                    text: SettingsManager ? SettingsManager.readConfigString("Opponent" + (index + 1) + "Name") : ""
-                                    onEditingFinished: {
-                                        if (SettingsManager) SettingsManager.writeConfigString("Opponent" + (index + 1) + "Name", text.trim())
-                                    }
-                                }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 8
-
-                                Rectangle {
-                                    Layout.preferredWidth: 56
-                                    Layout.preferredHeight: 56
-                                    Layout.alignment: Qt.AlignVCenter
-                                    radius: 6
-                                    color: Config.StaticData.palette.secondary.col600
-                                    clip: true
-
-                                    Image {
-                                        id: opponentAvatarPreview
-                                        anchors.fill: parent
-                                        anchors.margins: 2
-                                        source: SettingsManager
-                                                ? SettingsManager.avatarDisplayUrl(opponentAvatarField.text)
-                                                : ""
-                                        fillMode: Image.PreserveAspectCrop
-                                        smooth: true
-                                        visible: status === Image.Ready
-                                    }
-                                }
-
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 2
-
-                                    Label {
-                                        text: qsTr("Avatar:")
-                                        color: Config.StaticData.palette.secondary.col200
-                                    }
-
-                                    AppText {
-                                        Layout.fillWidth: true
-                                        text: opponentAvatarField.text.length > 0
-                                              ? opponentAvatarField.text.split("/").pop()
-                                              : qsTr("Kein Avatar gewählt")
-                                        font.pointSize: 10
-                                        color: Config.StaticData.palette.secondary.col400
-                                        elide: Text.ElideLeft
-                                    }
-                                }
-
-                                TextField {
-                                    id: opponentAvatarField
-                                    visible: false
-                                    text: SettingsManager ? SettingsManager.readConfigString("Opponent" + (index + 1) + "Avatar") : ""
-                                }
-
-                                ColumnLayout {
-                                    spacing: 4
-
-                                    Button {
-                                        Layout.fillWidth: true
-                                        text: qsTr("Auswählen...")
-                                        onClicked: {
-                                            if (!SettingsManager) return
-                                            let path = SettingsManager.pickImageFile(qsTr("Avatar auswählen"))
-                                            if (path) {
-                                                opponentAvatarField.text = path
-                                                SettingsManager.writeConfigString("Opponent" + (index + 1) + "Avatar", path)
-                                            }
-                                        }
-                                    }
-
-                                    Button {
-                                        Layout.fillWidth: true
-                                        text: qsTr("Beispiele...")
-                                        onClicked: {
-                                            avatarPicker.onPicked = function(path) {
-                                                opponentAvatarField.text = path
-                                                if (SettingsManager) SettingsManager.writeConfigString("Opponent" + (index + 1) + "Avatar", path)
-                                            }
-                                            avatarPicker.openPicker()
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
                 Item {
                     Layout.fillHeight: true
                 }
@@ -264,9 +156,7 @@ Rectangle {
         }
     }
 
-    // Gallery of the bundled example avatars. One shared picker for all
-    // player fields; the field to be addressed is set via onPicked before
-    // opening it.
+    // Gallery of the bundled example avatars.
     ExampleAvatarPicker {
         id: avatarPicker
 

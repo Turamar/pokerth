@@ -130,7 +130,6 @@ Rectangle {
         case "players": return [numPlayersLabel, numPlayers]
         case "stack":   return [buyInLabel, buyIn]
         case "blinds":  return blindsNote
-        case "speed":   return [gameSpeedLabel, gameSpeed]
         case "actions": return startGameButton.parent
         }
         return null
@@ -313,21 +312,10 @@ Rectangle {
                         }
 
                         // --- Spielgeschwindigkeit ---
-                        Label {
-                            id: gameSpeedLabel
-                            text: qsTr("Spielgeschwindigkeit\n(1=langsam, 11=schnell):")
-                            color: Config.StaticData.palette.secondary.col200
-                            Layout.fillWidth: true
-                        }
-                        CustomSpinBox {
-                            id: gameSpeed
-                            from: 1
-                            to: 11
-                            value: SettingsManager ? SettingsManager.readConfigInt("GameSpeed") : 4
-                            onValueModified: {
-                                if (SettingsManager) SettingsManager.writeConfigInt("GameSpeed", value)
-                            }
-                        }
+                        // No speed control here any more: the old "GameSpeed"
+                        // 1..11 never had an effect in the QML client. The pace of
+                        // the table is set in the settings, "Tisch" (the pause
+                        // before a computer player's move; settings audit, PLAN.md §7).
                     }
                 }
 

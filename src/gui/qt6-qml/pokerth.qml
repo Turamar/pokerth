@@ -322,13 +322,6 @@ ApplicationWindow {
         // Decorative effects (shadow/glow/blur) from the persistent setting.
         Config.Theme.effectsEnabled = SettingsManager
             ? SettingsManager.readConfigInt("QmlReduceEffects") === 0 : true
-        // The seat style of the player boxes (the bet in the base or next to it). An
-        // empty value means "default" – then the default of the
-        // singleton stays.
-        var seatStyle = SettingsManager
-            ? SettingsManager.readConfigString("QmlSeatStyle") : ""
-        if (seatStyle === "inset" || seatStyle === "classic")
-            Config.SeatStyle.variant = seatStyle
     }
 
     // Mirror the light/dark of the operating system into the singletons (which
@@ -764,6 +757,16 @@ ApplicationWindow {
                 // Keep the screen awake during the game and the waiting room (Android:
                 // FLAG_KEEP_SCREEN_ON via JNI). Release it when leaving.
                 ScreenHelper.setKeepScreenOn(isGame || isGameWait);
+                // The local action clock only runs while the table is actually on
+                // screen (settings audit, PLAN.md §7): a page above it – the
+                // settings, the wallet, the stats – suspends it, coming back
+                // starts it again from its full length.
+                if (typeof GameTable !== "undefined" && GameTable) {
+                    if (isGame)
+                        GameTable.resumeLocalActionClock()
+                    else
+                        GameTable.suspendLocalActionClock()
+                }
             }
         }
 

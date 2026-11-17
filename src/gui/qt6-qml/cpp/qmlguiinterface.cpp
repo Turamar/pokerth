@@ -757,10 +757,20 @@ void QmlGuiInterface::nextPlayerAnimation()
 
 void QmlGuiInterface::beRoAnimation2(int /*myBeRoID*/)
 {
-	// CPU player's turn: advance to nextPlayer() with a short delay
+	// CPU player's turn: advance to nextPlayer() after the configured pause.
+	// "BotThinkMs" (settings audit, PLAN.md §7) is the only pacing knob of the
+	// local table: 150..900 ms, the default is the 300 ms that used to be fixed.
+	// Everything else (streets, showdown, the 5.5 s before the next hand) stays
+	// hard-coded - the payout animation needs that window.
+	int delayMs = 300;
+	if (m_config) {
+		const int configured = m_config->readConfigInt("BotThinkMs");
+		if (configured >= 150 && configured <= 900)
+			delayMs = configured;
+	}
 	if (!m_gameHandler) return;
 	GameHandler *gh = m_gameHandler;
-	QTimer::singleShot(300, gh, [gh]() {
+	QTimer::singleShot(delayMs, gh, [gh]() {
 		QMetaObject::invokeMethod(gh, "onNextPlayerBeRo", Qt::DirectConnection);
 	});
 }

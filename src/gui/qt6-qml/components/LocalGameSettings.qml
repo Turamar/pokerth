@@ -5,54 +5,25 @@ import QtQuick.Layouts
 
 import "../config" as Config
 
+// The "Tisch" page of the settings (settings audit 2026-11-18, PLAN.md §7).
+//
+// It used to be the configuration of the old local game of the widgets client -
+// starting cash, the first small blind, raising blinds, the manual blind order,
+// the bot engine version. None of that reaches a game in this build: a cash
+// table takes its blinds from the limit ladder and a tournament its structure
+// from the catalogue, and the bots always run on engine 4 (engine 3 would ignore
+// their calibrated strength/style). What is left are the controls that really
+// affect the table: the default number of seats and the pace.
 Rectangle {
     id: localGameSettings
     Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
     color: "transparent"
 
-    // Manual blind list (initialized on load)
-    property var manualBlindsList: []
-    property int selectedBlindIndex: -1
-
-    function loadManualBlindsList() {
-        if (!SettingsManager) return
-        var raw = SettingsManager.readConfigIntList("ManualBlindsList")
-        var arr = []
-        for (var i = 0; i < raw.length; i++) arr.push(raw[i])
-        arr.sort(function(a, b) { return a - b })
-        manualBlindsList = arr
-    }
-
-    function saveManualBlindsList() {
-        if (!SettingsManager) return
-        SettingsManager.writeConfigIntList("ManualBlindsList", manualBlindsList)
-    }
-
-    function addBlind(val) {
-        var arr = manualBlindsList.slice()
-        if (arr.indexOf(val) === -1) {
-            arr.push(val)
-            arr.sort(function(a, b) { return a - b })
-        }
-        manualBlindsList = arr
-        saveManualBlindsList()
-    }
-
-    function removeBlindAt(idx) {
-        var arr = manualBlindsList.slice()
-        arr.splice(idx, 1)
-        manualBlindsList = arr
-        selectedBlindIndex = -1
-        saveManualBlindsList()
-    }
-
-    Component.onCompleted: loadManualBlindsList()
-
     ColumnLayout {
         id: localGameSettingsContent
         anchors.fill: parent
 
-        SettingsHeader { title: qsTr("Lokales Spiel"); topGap: 4 }
+        SettingsHeader { title: qsTr("Tisch"); topGap: 4 }
 
         ScrollView {
             id: localScrollView
@@ -69,10 +40,11 @@ Rectangle {
                 width: parent.width - 12
                 spacing: 12
 
-                // Players & starting money
+                // Players: the default for the spinbox on the cash page. A
+                // tournament takes its seat count from its own event.
                 GroupBox {
                     Layout.fillWidth: true
-                    title: qsTr("Spieler & Startkapital")
+                    title: qsTr("Spieler")
 
                     GridLayout {
                         anchors.fill: parent
@@ -102,328 +74,15 @@ Rectangle {
                                 if (SettingsManager) SettingsManager.writeConfigInt("NumberOfPlayers", value)
                             }
                         }
-
-                        Label {
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                            text: qsTr("Startkapital:")
-                            color: Config.StaticData.palette.secondary.col200
-                        }
-
-                        CustomSpinBox {
-                            id: startCash
-                            from: 1000
-                            to: 1000000
-                            stepSize: 50
-                            value: SettingsManager ? SettingsManager.readConfigInt("StartCash") : 5000
-                            onValueModified: {
-                                if (SettingsManager) SettingsManager.writeConfigInt("StartCash", value)
-                            }
-                        }
-
-                        Label {
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                            text: qsTr("Erster Small Blind:")
-                            color: Config.StaticData.palette.secondary.col200
-                        }
-
-                        CustomSpinBox {
-                            id: firstSmallBlind
-                            from: 5
-                            to: 20000
-                            stepSize: 5
-                            value: SettingsManager ? SettingsManager.readConfigInt("FirstSmallBlind") : 10
-                            onValueModified: {
-                                if (SettingsManager) SettingsManager.writeConfigInt("FirstSmallBlind", value)
-                            }
-                        }
                     }
                 }
 
-                // Raise blinds
+                // Pace: the action clock, the pause between hands and the one
+                // pacing knob of the local table - the pause before a computer
+                // player's move (QmlGuiInterface::beRoAnimation2).
                 GroupBox {
                     Layout.fillWidth: true
-                    title: qsTr("Blinds erhöhen")
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        spacing: 8
-
-                        ButtonGroup {
-                            id: raiseBlindsGroup
-                        }
-
-                        RadioButton {
-                            id: raiseBlindsAtHands
-                            text: qsTr("Blinds bei Anzahl der Hände erhöhen")
-                            checked: SettingsManager ? SettingsManager.readConfigInt("RaiseBlindsAtHands") !== 0 : true
-                            ButtonGroup.group: raiseBlindsGroup
-                            onCheckedChanged: {
-                                if (SettingsManager && checked) {
-                                    SettingsManager.writeConfigInt("RaiseBlindsAtHands", 1)
-                                    SettingsManager.writeConfigInt("RaiseBlindsAtMinutes", 0)
-                                }
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.leftMargin: 30
-
-                            Label {
-                                Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                                text: qsTr("Small Blind erhöhen alle:")
-                                color: Config.StaticData.palette.secondary.col200
-                                enabled: raiseBlindsAtHands.checked
-                            }
-
-                            CustomSpinBox {
-                                id: raiseSmallBlindEveryHands
-                                from: 1
-                                to: 100
-                                value: SettingsManager ? SettingsManager.readConfigInt("RaiseSmallBlindEveryHands") : 8
-                                enabled: raiseBlindsAtHands.checked
-                                onValueModified: {
-                                    if (SettingsManager) SettingsManager.writeConfigInt("RaiseSmallBlindEveryHands", value)
-                                }
-                            }
-
-                            Label {
-                                text: qsTr("Hände")
-                                color: Config.StaticData.palette.secondary.col200
-                                enabled: raiseBlindsAtHands.checked
-                            }
-                        }
-
-                        RadioButton {
-                            id: raiseBlindsAtMinutes
-                            text: qsTr("Blinds zeitbasiert erhöhen")
-                            checked: SettingsManager ? SettingsManager.readConfigInt("RaiseBlindsAtMinutes") !== 0 : false
-                            ButtonGroup.group: raiseBlindsGroup
-                            onCheckedChanged: {
-                                if (SettingsManager && checked) {
-                                    SettingsManager.writeConfigInt("RaiseBlindsAtHands", 0)
-                                    SettingsManager.writeConfigInt("RaiseBlindsAtMinutes", 1)
-                                }
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.leftMargin: 30
-
-                            Label {
-                                Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                                text: qsTr("Small Blind erhöhen alle:")
-                                color: Config.StaticData.palette.secondary.col200
-                                enabled: raiseBlindsAtMinutes.checked
-                            }
-
-                            CustomSpinBox {
-                                id: raiseSmallBlindEveryMinutes
-                                from: 1
-                                to: 60
-                                value: SettingsManager ? SettingsManager.readConfigInt("RaiseSmallBlindEveryMinutes") : 5
-                                enabled: raiseBlindsAtMinutes.checked
-                                onValueModified: {
-                                    if (SettingsManager) SettingsManager.writeConfigInt("RaiseSmallBlindEveryMinutes", value)
-                                }
-                            }
-
-                            Label {
-                                text: qsTr("Minuten")
-                                color: Config.StaticData.palette.secondary.col200
-                                enabled: raiseBlindsAtMinutes.checked
-                            }
-                        }
-                    }
-                }
-
-                // Blind raise order
-                GroupBox {
-                    Layout.fillWidth: true
-                    title: qsTr("Blind-Erhöhungsreihenfolge")
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        spacing: 8
-
-                        ButtonGroup {
-                            id: blindsOrderGroup
-                        }
-
-                        RadioButton {
-                            id: alwaysDoubleBlinds
-                            text: qsTr("Blinds immer verdoppeln")
-                            checked: SettingsManager ? SettingsManager.readConfigInt("AlwaysDoubleBlinds") !== 0 : true
-                            ButtonGroup.group: blindsOrderGroup
-                            onCheckedChanged: {
-                                if (SettingsManager && checked) {
-                                    SettingsManager.writeConfigInt("AlwaysDoubleBlinds", 1)
-                                    SettingsManager.writeConfigInt("ManualBlindsOrder", 0)
-                                }
-                            }
-                        }
-
-                        RadioButton {
-                            id: manualBlindsOrder
-                            text: qsTr("Manuelle Blind-Reihenfolge")
-                            checked: SettingsManager ? SettingsManager.readConfigInt("ManualBlindsOrder") !== 0 : false
-                            ButtonGroup.group: blindsOrderGroup
-                            onCheckedChanged: {
-                                if (SettingsManager && checked) {
-                                    SettingsManager.writeConfigInt("AlwaysDoubleBlinds", 0)
-                                    SettingsManager.writeConfigInt("ManualBlindsOrder", 1)
-                                }
-                            }
-                        }
-
-                        // Manual blind order – list editor (only active when selected)
-                        GroupBox {
-                            Layout.fillWidth: true
-                            title: qsTr("Manuelle Blind-Reihenfolge")
-                            enabled: manualBlindsOrder.checked
-
-                            ColumnLayout {
-                                anchors.fill: parent
-                                spacing: 6
-
-                                // List of the configured blinds
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 120
-                                    color: Config.Theme.colorBox ?? "#222"
-                                    border.color: Config.StaticData.palette.secondary.col500
-                                    border.width: 1
-                                    radius: 3
-                                    clip: true
-
-                                    ListView {
-                                        id: blindsListView
-                                        anchors.fill: parent
-                                        anchors.margins: 2
-                                        model: localGameSettings.manualBlindsList
-                                        currentIndex: localGameSettings.selectedBlindIndex
-                                        clip: true
-
-                                        delegate: ItemDelegate {
-                                            width: ListView.view.width
-                                            height: 28
-                                            highlighted: ListView.isCurrentItem
-                                            text: "$" + modelData
-                                            font.pixelSize: 13
-                                            onClicked: localGameSettings.selectedBlindIndex = index
-                                        }
-                                    }
-                                }
-
-                                // Input + add/delete
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 6
-
-                                    CustomSpinBox {
-                                        id: newBlindInput
-                                        Layout.fillWidth: true
-                                        from: firstSmallBlind.value + 1
-                                        to: 20000
-                                        value: firstSmallBlind.value + 5
-                                    }
-
-                                    Button {
-                                        text: qsTr("Hinzufügen")
-                                        onClicked: localGameSettings.addBlind(newBlindInput.value)
-                                    }
-
-                                    Button {
-                                        text: qsTr("Löschen")
-                                        enabled: localGameSettings.selectedBlindIndex >= 0
-                                        onClicked: localGameSettings.removeBlindAt(localGameSettings.selectedBlindIndex)
-                                    }
-                                }
-
-                                // Danach-Optionen
-                                GroupBox {
-                                    Layout.fillWidth: true
-                                    title: qsTr("Danach:")
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        spacing: 4
-
-                                        ButtonGroup { id: afterMBGroup }
-
-                                        RadioButton {
-                                            id: afterMBAlwaysDouble
-                                            text: qsTr("Blinds immer verdoppeln")
-                                            ButtonGroup.group: afterMBGroup
-                                            checked: SettingsManager ? SettingsManager.readConfigInt("AfterMBAlwaysDoubleBlinds") !== 0 : true
-                                            onCheckedChanged: {
-                                                if (SettingsManager && checked) {
-                                                    SettingsManager.writeConfigInt("AfterMBAlwaysDoubleBlinds", 1)
-                                                    SettingsManager.writeConfigInt("AfterMBAlwaysRaiseAbout", 0)
-                                                    SettingsManager.writeConfigInt("AfterMBStayAtLastBlind", 0)
-                                                }
-                                            }
-                                        }
-
-                                        RowLayout {
-                                            spacing: 6
-                                            RadioButton {
-                                                id: afterMBAlwaysRaise
-                                                text: qsTr("Immer erhöhen um:")
-                                                ButtonGroup.group: afterMBGroup
-                                                checked: SettingsManager ? SettingsManager.readConfigInt("AfterMBAlwaysRaiseAbout") !== 0 : false
-                                                onCheckedChanged: {
-                                                    if (SettingsManager && checked) {
-                                                        SettingsManager.writeConfigInt("AfterMBAlwaysDoubleBlinds", 0)
-                                                        SettingsManager.writeConfigInt("AfterMBAlwaysRaiseAbout", 1)
-                                                        SettingsManager.writeConfigInt("AfterMBStayAtLastBlind", 0)
-                                                    }
-                                                }
-                                            }
-                                            CustomSpinBox {
-                                                id: afterMBRaiseValue
-                                                from: 1
-                                                to: 20000
-                                                value: SettingsManager ? SettingsManager.readConfigInt("AfterMBAlwaysRaiseValue") : 5
-                                                enabled: afterMBAlwaysRaise.checked
-                                                onValueModified: {
-                                                    if (SettingsManager) SettingsManager.writeConfigInt("AfterMBAlwaysRaiseValue", value)
-                                                }
-                                            }
-                                            Label {
-                                                text: "$"
-                                                color: Config.StaticData.palette.secondary.col200
-                                                enabled: afterMBAlwaysRaise.checked
-                                            }
-                                        }
-
-                                        RadioButton {
-                                            id: afterMBStayAtLast
-                                            text: qsTr("Letzten Blind beibehalten")
-                                            ButtonGroup.group: afterMBGroup
-                                            checked: SettingsManager ? SettingsManager.readConfigInt("AfterMBStayAtLastBlind") !== 0 : false
-                                            onCheckedChanged: {
-                                                if (SettingsManager && checked) {
-                                                    SettingsManager.writeConfigInt("AfterMBAlwaysDoubleBlinds", 0)
-                                                    SettingsManager.writeConfigInt("AfterMBAlwaysRaiseAbout", 0)
-                                                    SettingsManager.writeConfigInt("AfterMBStayAtLastBlind", 1)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Spielgeschwindigkeit
-                GroupBox {
-                    Layout.fillWidth: true
-                    title: qsTr("Spielgeschwindigkeit")
+                    title: qsTr("Tempo")
 
                     GridLayout {
                         anchors.fill: parent
@@ -431,26 +90,6 @@ Rectangle {
                         columnSpacing: 12
                         rowSpacing: 8
 
-                        Label {
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                            text: qsTr("Spielgeschwindigkeit\n(1=langsam, 11=schnell):")
-                            color: Config.StaticData.palette.secondary.col200
-                        }
-
-                        CustomSpinBox {
-                            id: gameSpeed
-                            from: 1
-                            to: 11
-                            value: SettingsManager ? SettingsManager.readConfigInt("GameSpeed") : 4
-                            onValueModified: {
-                                if (SettingsManager) SettingsManager.writeConfigInt("GameSpeed", value)
-                            }
-                        }
-
-                        // Die Aktionsuhr (PLAN.md, "Темп и таймер"): sie läuft im
-                        // lokalen Spiel genauso wie im Netzwerk, damit der Spieler
-                        // sich an das Limit gewöhnt, bevor es Turniere gibt.
                         Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
@@ -476,55 +115,27 @@ Rectangle {
                             defaultChecked: false
                         }
 
-                        ConfigCheckBox {
-                            Layout.columnSpan: 2
-                            text: qsTr("Spiel-Einstellungsdialog bei neuem Spiel anzeigen")
-                            configKey: "ShowGameSettingsDialogOnNewGame"
-                        }
-                    }
-                }
-
-                // Computerspieler
-                GroupBox {
-                    Layout.fillWidth: true
-                    title: qsTr("Computerspieler")
-
-                    GridLayout {
-                        anchors.fill: parent
-                        columns: 2
-                        columnSpacing: 12
-                        rowSpacing: 8
-
                         Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            text: qsTr("Spielstärke:")
+                            text: qsTr("Pause vor dem Zug des Computers\n(Millisekunden):")
                             color: Config.StaticData.palette.secondary.col200
                         }
 
-                        ComboBox {
-                            id: botStrengthSelector
-                            // Index 0 = klassische Engine (Config 0),
-                            // Index 1 = EV-basierte Engine 4 (Config 4)
-                            model: [qsTr("Klassisch"), qsTr("Stark")]
-                            currentIndex: 1   // matches the default value of the configuration
-                            Component.onCompleted: {
-                                if (SettingsManager)
-                                    currentIndex = (SettingsManager.readConfigInt("EngineVersion") >= 4) ? 1 : 0
+                        CustomSpinBox {
+                            id: botThinkMs
+                            from: 150
+                            to: 900
+                            stepSize: 50
+                            value: {
+                                if (typeof SettingsManager === "undefined" || !SettingsManager)
+                                    return 300
+                                var v = SettingsManager.readConfigInt("BotThinkMs")
+                                return Math.max(150, Math.min(900, v > 0 ? v : 300))
                             }
-                            onActivated: {
-                                if (SettingsManager)
-                                    SettingsManager.writeConfigInt("EngineVersion", currentIndex === 1 ? 4 : 0)
+                            onValueModified: {
+                                if (SettingsManager) SettingsManager.writeConfigInt("BotThinkMs", value)
                             }
-                        }
-
-                        Label {
-                            Layout.columnSpan: 2
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                            text: qsTr("Gilt für lokale Spiele. Bei Netzwerkspielen bestimmt der Server die Stärke seiner Computerspieler.")
-                            font.pixelSize: 12
-                            color: Config.StaticData.palette.secondary.col300
                         }
                     }
                 }

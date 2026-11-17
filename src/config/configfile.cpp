@@ -94,7 +94,10 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	//      of the game table, both closed by default).
 	// 114: ShowCurrentHandName was added (the QML table shows the player's own
 	//      current hand on the flop/turn/river; off by default, PLAN.md §6).
-	configRev = 114;
+	// 115: BotThinkMs was added (the settings audit, PLAN.md §7): the pause before
+	//      the computer's move in a local game, in milliseconds. The old GameSpeed
+	//      control is gone - it never had an effect in the QML client.
+	configRev = 115;
 
 	// standard defaults
 	logOnOffDefault = "1";
@@ -312,11 +315,6 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	// and the corner index stays legible behind the player plate.
 	configList.push_back(ConfigInfo("QmlCardDeckStyle", CONFIG_TYPE_STRING, "nobus_4c_classic"));
 	configList.push_back(ConfigInfo("QmlCardBackStyle", CONFIG_TYPE_STRING, "default"));
-	// QML client: seat style of the player boxes (config/SeatStyle.qml) – where a
-	// player's bet is shown. "inset" = in the base INSIDE the box,
-	// "classic" = outside next to it. Empty (the default) = the default of the QML
-	// singleton, i.e. "inset" on all platforms.
-	configList.push_back(ConfigInfo("QmlSeatStyle", CONFIG_TYPE_STRING, ""));
 	// QML client: decorative render effects (drop shadow/glow/blur) can be
 	// switched off globally for weak/passively cooled systems or software rendering.
 	// 0 = effects on (default), 1 = reduced. See config/Theme.qml.
@@ -349,6 +347,10 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	configList.push_back(ConfigInfo("AfterMBAlwaysRaiseValue", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("AfterMBStayAtLastBlind", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("GameSpeed", CONFIG_TYPE_INT, "4"));
+	// Local game: pause before a computer player's move, in milliseconds (PLAN.md
+	// §7, the settings audit). Read by QmlGuiInterface::beRoAnimation2; 150..900,
+	// the default is the 300 ms that used to be hard-coded.
+	configList.push_back(ConfigInfo("BotThinkMs", CONFIG_TYPE_INT, "300"));
 	configList.push_back(ConfigInfo("PauseBetweenHands", CONFIG_TYPE_INT, "0"));
 	// Seconds of action time in a local game; 0 switches the clock off. On by
 	// default: the clock is part of a tournament format, and a player who only
@@ -805,6 +807,21 @@ void ConfigFile::updateConfig(ConfigState myConfigState)
 				QDomElement deckElement = config.firstChildElement("QmlCardDeckStyle");
 				if (!deckElement.isNull() && deckElement.attribute("value") == "default")
 					setElementValue("QmlCardDeckStyle", "nobus_4c_classic");
+			}
+
+			// 115: the settings audit (PLAN.md §7). The seat style switch is gone -
+			// the bet always lies on the felt beside the avatar, because the chip
+			// collect/payout animations aim at exactly that point; a stored "inset"
+			// (the old default) put the chip inside the box instead. The bot engine
+			// version is no longer selectable either: only engine 4 uses the
+			// calibrated strength/archetype of a seat.
+			if (configRev >= 115) {
+				QDomElement seatStyleElement = config.firstChildElement("QmlSeatStyle");
+				if (!seatStyleElement.isNull())
+					setElementValue("QmlSeatStyle", "classic");
+				QDomElement engineElement = config.firstChildElement("EngineVersion");
+				if (!engineElement.isNull() && engineElement.attribute("value").toInt() < 4)
+					setElementValue("EngineVersion", "4");
 			}
 			///////// VERSION HACK SECTION ///////////////////////
 

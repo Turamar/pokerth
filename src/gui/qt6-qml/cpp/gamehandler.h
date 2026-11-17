@@ -291,6 +291,13 @@ public:
 	LocalTableHost::Snapshot snapshot() const override;
 	Q_INVOKABLE void endLocalGame();
 	Q_INVOKABLE bool isLocalGameRunning() const;
+	// The local action clock is suspended while a page of our own lies above the
+	// table (the settings, opened with the gear or Alt+S): the player cannot see
+	// the seat bar, so the clock must not run (settings audit, PLAN.md §7). The
+	// navigation in pokerth.qml calls these on every page change; resume starts
+	// the clock again from its full length.
+	Q_INVOKABLE void suspendLocalActionClock();
+	Q_INVOKABLE void resumeLocalActionClock();
 	// An amount as the table talks about it: cents ("$40") at a cash table,
 	// chips ("1 500") in a tournament (PLAN.md section 3 - chips are not money,
 	// a stack is not a prize). Every number on the felt goes through this, so
@@ -773,6 +780,10 @@ private:
 	// The local action clock (see startLocalActionTimer). One shot: it either
 	// sees my action first (then it is stopped) or it is the action.
 	QTimer *m_localActionTimer = nullptr;
+	// A page of our own lies above the table (the settings): the clock does not
+	// run and does not start when a turn arrives meanwhile (see the Q_INVOKABLE
+	// suspend/resume pair above).
+	bool m_localActionClockSuspended = false;
 	// The rate limit for the AFK reset (ResetTimeoutMessage). As in the widgets
 	// client: send it at most every few minutes, on real user activity.
 	QElapsedTimer m_afkResetTimer;

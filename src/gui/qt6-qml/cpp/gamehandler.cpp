@@ -399,6 +399,10 @@ QStringList GameHandler::tableStatsNicks() const
 
 void GameHandler::playYourTurnTimeoutSound()
 {
+	// The warning belongs to the "game actions" sound category (settings audit,
+	// PLAN.md §7): whoever switched the game sounds off must not be beeped at.
+	if (!m_config || m_config->readConfigInt("PlayGameActions") == 0)
+		return;
 	if (m_soundEventHandler)
 		m_soundEventHandler->playSound("yourturn", 0);
 }
@@ -1501,9 +1505,32 @@ void GameHandler::onStopTimeoutAnimation(int playerNum)
 // performs the same default action a server would: check if it is free, fold
 // otherwise.
 
+void GameHandler::suspendLocalActionClock()
+{
+	if (m_localActionClockSuspended)
+		return;
+	m_localActionClockSuspended = true;
+	// Also covers the case that the turn arrives while the settings page is
+	// already above the table - startLocalActionTimer() refuses to start then.
+	stopLocalActionTimer();
+}
+
+void GameHandler::resumeLocalActionClock()
+{
+	if (!m_localActionClockSuspended)
+		return;
+	m_localActionClockSuspended = false;
+	// Full length again: the seconds spent in the settings do not count, the
+	// player could not see the table anyway.
+	startLocalActionTimer();
+}
+
 void GameHandler::startLocalActionTimer()
 {
 	stopLocalActionTimer();
+	// A page of our own lies above the table (the settings): no clock while it is
+	// open (settings audit, PLAN.md §7).
+	if (m_localActionClockSuspended) return;
 	if (!m_session || m_session->isNetworkClientRunning()) return;
 	if (!m_config) return;
 	const int seconds = m_config->readConfigInt("ActionTimer");

@@ -22,7 +22,7 @@ Rectangle {
         id: logsettingsContent
         anchors.fill: parent
 
-        SettingsHeader { title: qsTr("Log-Nachrichten"); topGap: 4 }
+        SettingsHeader { title: qsTr("Erweitert"); topGap: 4 }
 
         ScrollView {
             id: logsScrollView

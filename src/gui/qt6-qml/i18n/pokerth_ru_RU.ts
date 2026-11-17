@@ -1866,23 +1866,23 @@
     </message>
     <message>
         <location line="+1"/>
-        <source>Training table: choose the number of players, the starting stack, the blinds and the game speed, then start the game. Nothing here counts towards a ranking.</source>
-        <translation>Тренировочный стол: выбери количество игроков, стартовый стек, блайнды и скорость игры, затем начни игру. Ничто здесь не идёт в рейтинг.</translation>
+        <source>Cash table: pick the limit, the number of players and the buy-in, then sit down. Nothing here counts towards a ranking.</source>
+        <translation>Кэш-стол: выбери лимит, количество игроков и бай-ин, затем садись. Ничто здесь не идёт в рейтинг.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>**Number of players**: you and up to 9 computer players.</source>
-        <translation>**Количество игроков**: ты и до 9 компьютерных игроков.</translation>
+        <source>**Number of players**: you and up to eight computer players.</source>
+        <translation>**Количество игроков**: ты и до восьми компьютерных игроков.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>**Blinds**: keep the saved settings, or change them here — the first small blind, how often it goes up (every so many hands or minutes) and how: always doubled, or a manual blinds order.</source>
-        <translation>**Блайнды**: оставь сохранённые настройки или измени их здесь — первый малый блайнд, как часто он растёт (каждые столько раздач или минут) и как: всегда удваивается или по ручному порядку блайндов.</translation>
+        <source>**Blinds**: fixed by the limit — a cash table never raises them.</source>
+        <translation>**Блайнды**: заданы лимитом — кэш-стол их не повышает.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>**Game speed**: how fast the computer players act and the cards are dealt — from 1 (slow) to 11 (fast).</source>
-        <translation>**Скорость игры**: как быстро действуют компьютерные игроки и раздаются карты — от 1 (медленно) до 11 (быстро).</translation>
+        <source>**Buy-in**: the stack you sit down with, in big blinds (20 to 100). It leaves your balance when the table starts and comes back when you leave.</source>
+        <translation>**Бай-ин**: стек, с которым садишься, в больших блайндах (от 20 до 100). Он списывается с баланса при старте стола и возвращается, когда встаёшь.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1906,8 +1906,8 @@
     </message>
     <message>
         <location line="+1"/>
-        <source>Every setting, by section: interface, style, sound, local, network and internet games, nicknames and avatars, log messages, and back to the defaults. Ace’s Help is switched on and off in the interface settings.</source>
-        <translation>Все настройки по разделам: интерфейс, стиль, звук, локальная, сетевая и интернет-игра, ники и аватары, сообщения журнала и возврат к значениям по умолчанию. Помощь туза включается и выключается в настройках интерфейса.</translation>
+        <source>Every setting, by section: interface, table, players, sound, style, the advanced log settings, and back to the defaults. Ace’s Help is switched on and off in the interface settings.</source>
+        <translation>Все настройки по разделам: интерфейс, стол, игроки, звук, стиль, расширенные настройки журнала и возврат к значениям по умолчанию. Помощь туза включается и выключается в настройках интерфейса.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3113,6 +3113,24 @@ PokerTH может уменьшить его. Новый аватар вступ
 <context>
     <name>LocalGameSettings</name>
     <message>
+        <source>Tisch</source>
+        <translation>Стол</translation>
+    </message>
+    <message>
+        <source>Spieler</source>
+        <translation>Игроки</translation>
+    </message>
+    <message>
+        <source>Tempo</source>
+        <translation>Темп</translation>
+    </message>
+    <message>
+        <source>Pause vor dem Zug des Computers
+(Millisekunden):</source>
+        <translation>Пауза перед ходом компьютера
+(миллисекунды):</translation>
+    </message>
+    <message>
         <location filename="../components/LocalGameSettings.qml" line="+55"/>
         <source>Lokales Spiel</source>
         <translation>Локальная игра</translation>
@@ -3443,6 +3461,10 @@ Uploading log files may fail if you are using an http proxy.</source>
 </context>
 <context>
     <name>LogsSettings</name>
+    <message>
+        <source>Erweitert</source>
+        <translation>Дополнительно</translation>
+    </message>
     <message>
         <location filename="../components/LogsSettings.qml" line="+25"/>
         <source>Log-Nachrichten</source>
@@ -3829,6 +3851,10 @@ Bitte PokerTH neu starten, damit die Logdateien dort abgelegt werden.</source>
 </context>
 <context>
     <name>NicknameAvatarSettings</name>
+    <message>
+        <source>Spieler</source>
+        <translation>Игроки</translation>
+    </message>
     <message>
         <location filename="../components/NicknameAvatarSettings.qml" line="+19"/>
         <source>Nicknamen/Avatare</source>
@@ -5028,6 +5054,18 @@ Please check your username and password.</source>
 </context>
 <context>
     <name>SettingsPage</name>
+    <message>
+        <source>Tisch</source>
+        <translation>Стол</translation>
+    </message>
+    <message>
+        <source>Spieler</source>
+        <translation>Игроки</translation>
+    </message>
+    <message>
+        <source>Erweitert</source>
+        <translation>Дополнительно</translation>
+    </message>
     <message>
         <location filename="../pages/SettingsPage.qml" line="+264"/>
         <source>Benutzeroberfläche</source>
