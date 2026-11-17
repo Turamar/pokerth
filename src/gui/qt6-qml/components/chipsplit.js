@@ -55,32 +55,48 @@ function chipList(amount, cash) {
     return out
 }
 
-// The POT: columns (stacks) of chips, bottom -> top per column (decision
-// 2026-11-17, the player's rule):
-//   • a column holds up to `maxPerStack` chips, the biggest chip at the bottom;
-//   • ONE DENOMINATION PER COLUMN while columns are left: 200 = 2x100 is ONE
-//     column (not 100 + 100 in two), 900 = 500 + 4x100 is two columns;
-//   • a denomination that needs more chips than one column holds continues in the
-//     next column (by the ladder this never happens — a rung repeats at most 4
-//     times — but the rule is kept general);
-//   • when the denominations outnumber the columns, the smallest ones are mixed
-//     into the LAST column while it has room, and whatever still does not fit is
-//     not drawn: the pill has the truth.
+// The POT: columns (stacks) of chips (decision 2026-11-17, player's rules):
+//   • a column holds ONE denomination, up to `maxPerStack` chips (a denomination
+//     that needs more chips continues in the next column — by the ladder that
+//     never happens, a rung repeats at most 4 times, but the rule stays general);
+//   • the columns are laid out in the CREATION ORDER the player described:
+//     1 front left, 2 front right ("two chips as now, a row"), 3 top centre (in
+//     the hollow — a pyramid), 4 top right (two below, two above), 5 the front
+//     centre that CLOSES the front row and takes the leftovers;
+//   • the POSITION of a column is random: the biggest denomination must not
+//     always land in slot 1. The columns themselves are not touched — a stack
+//     stays one denomination; only the slots are shuffled (the closing slot 5
+//     keeps the leftovers);
+//   • when the denominations outnumber the slots, the chips that did not fit are
+//     merged into the closing column; whatever still does not fit is not drawn —
+//     the pill has the truth.
 function columns(amount, cash, maxColumns, maxPerStack) {
-    var chips = chipList(amount, cash)
-    var cols = [], i = 0
-    while (i < chips.length) {
-        if (cols.length < maxColumns) {
-            var v = chips[i], col = []
-            while (i < chips.length && col.length < maxPerStack && chips[i] === v)
-                col.push(chips[i++])
+    var piles = split(amount, cash, 4096, maxPerStack)
+    var cols = []
+    for (var i = 0; i < piles.length; ++i) {
+        var rest = piles[i].count
+        while (rest > 0) {
+            var take = Math.min(rest, maxPerStack)
+            var col = []
+            for (var k = 0; k < take; ++k)
+                col.push(piles[i].value)
             cols.push(col)
-        } else {
-            var last = cols[cols.length - 1]
-            if (!last || last.length >= maxPerStack)
-                break
-            last.push(chips[i++])
+            rest -= take
         }
+    }
+    // More columns than slots: the tail is poured into the closing column.
+    if (cols.length > maxColumns) {
+        var dump = cols[maxColumns - 1]
+        for (var c = maxColumns; c < cols.length; ++c)
+            for (var k2 = 0; k2 < cols[c].length && dump.length < maxPerStack; ++k2)
+                dump.push(cols[c][k2])
+        cols = cols.slice(0, maxColumns)
+    }
+    // Random POSITIONS only (the closing column, if the pot has one, stays last).
+    var movable = Math.min(cols.length, maxColumns - 1)
+    for (var s = movable - 1; s > 0; --s) {
+        var j = Math.floor(Math.random() * (s + 1))
+        var t = cols[s]; cols[s] = cols[j]; cols[j] = t
     }
     return cols
 }

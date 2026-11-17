@@ -3,30 +3,34 @@ import QtQuick
 import "chipsplit.js" as ChipSplit
 import "../config" as Config
 
-// The pot as COLUMNS of lying chips in a pyramid (decision 2026-11-17, replacing
-// the packed pyramid of single chips).
+// The pot as COLUMNS of lying chips in a pyramid (decision 2026-11-17, late pass:
+// the creation ORDER and the chip mix were fixed by the player).
 //
-//   • a column is a stack of up to 4 chips, the biggest chip at the bottom;
-//   • ONE DENOMINATION PER COLUMN while columns are left (5): 200 = 2×100 is one
-//     column of two, not 100 + 100 in two columns; 900 = 500 + 4×100 is two
-//     columns. A denomination that would need more than four chips continues in
-//     the next column; when the denominations outnumber the columns the smallest
-//     ones are mixed into the LAST column, and whatever still does not fit is not
-//     drawn — the pill has the truth (`chipsplit.js::columns`);
-//   • LAYOUT: three columns in the front row, two in the top row. The top row
-//     nestles in the hollows between the front columns — the same equilateral
-//     packing as a chip lying in a hollow — so it sits one depth step higher and
-//     one row further away: sqrt(3)/2 · (d + gap) in depth, which the lying
-//     asset's own projection (sin θ = faceH/d) maps to
-//         0.6847 · (d + gap) = 15.75 px    at d = 22, gap = 1
-//     on the screen. The top row is drawn FIRST and is covered by the front row:
-//     occlusion, never intersection (the same rule as everywhere on the felt).
-//   • The block: width 3·(d+gap) + d = 68 (the front row), height
-//     faceH + 4·band + 15.75 + pill 13 = 54.84 in the worst case (a four-chip
-//     column in the top row). CommunityCards hangs the block 6 px above the card
-//     row; GamePage reserves potTop 92.84 (= 32 + 6 + 54.84) above the card row
-//     centre and a 124.84-high "pot + cards" block (see there and
-//     tools/table-preview/geometry.js).
+// Creation order (the columns are filled in exactly this order):
+//   1. front left        — the first chip of the pot
+//   2. front right       — "two chips as now, a row"
+//   3. top centre        — in the HOLLOW between the two front columns, one depth
+//                          step higher (0.6847·(d+gap) = 15.75 px at d = 22,
+//                          gap = 1): a pyramid of two stacks under one
+//   4. top right         — next to the third, on the same top row: two below, two
+//                          above. It is NOT placed behind the right front stack
+//                          (that read as a chip stuck on it) but one step further
+//                          right, on the top row
+//   5. front centre      — it CLOSES the front row (three stacks) and takes the
+//                          chips that did not fit anywhere else (leftovers).
+//
+// A column is a stack of up to 4 chips. The chips are NOT sorted by denomination:
+// the chip multiset is shuffled (`chipsplit.js::columns`), so the pot reads as a
+// real mix. Whatever still does not fit is not drawn — the pill has the truth.
+//
+// The top row is drawn FIRST (it lies further away) and is covered by the front
+// row: occlusion, never intersection.
+//
+// Geometry: with five columns the block is 3·(d+gap) + d = 68 wide and
+// faceH + 4·band + 15.75 + pill 13 − 1 (the pill tucks under the chips)
+// = 53.84 high. CommunityCards hangs the block 3 px above the card row; GamePage
+// reserves potTop 88.84 above the card row centre and a 120.84-high "pot + cards"
+// block (see there and tools/table-preview/geometry.js).
 Item {
     id: pot
 
@@ -34,9 +38,8 @@ Item {
     property bool cash: false
     property real renderScale: 1
     property int chipSize: 22
-    // Up to five columns (three front + two top); the block's width budget.
+    // Slot order below is fixed: three front slots + two top slots.
     property int maxColumns: 5
-    // Up to four chips per column.
     property int maxPerStack: 4
     // Test hook (see BetChip): when set, printed instead of GameTable.amount().
     property string amountText: ""
@@ -48,17 +51,16 @@ Item {
     readonly property real _faceH: 0.7906 * _d
     readonly property real _chipBottom: _d / 2 + (_faceH + _band) / 2
     readonly property int _pillH: 13
-    // The pill tucks 1 px under the front row (invisible) — that keeps the block
-    // 1 px shorter, which the tight 5-seat bands need.
+    // The pill tucks 1 px under the front row (invisible) — the block is 1 px
+    // shorter, which the tight 5-seat bands need.
     readonly property int _pillOverlap: 1
     // One depth step of the lying asset: a column standing one row further away
-    // is drawn higher by exactly this much (same as a chip in the hollow).
+    // is drawn higher by exactly this much (the same as a chip in the hollow).
     readonly property real _shift: 0.8660254 * _step * (_faceH / _d)
 
-    // ── the pot's chips: columns, bottom → top ──────────────────────────────
+    // ── the piles: columns in slot order, bottom → top ──────────────────────
     // Rolled when the amount changes and stored: a repaint or a resize keeps the
-    // picture (the mix rule picks the same columns anyway, but this also keeps
-    // the z/y evaluation cheap).
+    // picture (and the random mix).
     property var _columns: []
     function _rebuild() {
         _columns = ChipSplit.columns(amount, cash, maxColumns, maxPerStack)
@@ -67,49 +69,67 @@ Item {
     Component.onCompleted: _rebuild()
 
     readonly property int _n: _columns.length
-    // Three columns stand in the front row, the rest in the top row (behind).
-    readonly property int _frontN: Math.min(_n, 3)
-    readonly property int _backN: Math.max(0, _n - 3)
 
-    // Centre of a column relative to the block centre; each row is centred on the
-    // block, so adding a column re-centres the pile as a whole.
-    function colCentre(i) {
-        if (i < _frontN)
-            return (i - (_frontN - 1) / 2) * _step
-        var j = i - _frontN
-        return (j - (_backN - 1) / 2) * _step
+    // ONE atomic snapshot of the layout: the slot of every column (its centre and
+    // whether it stands in the top row), the chips to paint, the bounding box and
+    // the height of the chip block. Everything is computed in ONE binding from a
+    // copy of `_columns`: reading separate `_slots`/`_chips` bindings used to hit
+    // a stale array on an amount change ("Cannot read property 'back' of
+    // undefined").
+    readonly property var _layout: {
+        var cols = pot._columns
+        var n = cols.length
+        // The front row holds two stacks; the fifth column closes it.
+        var frontN = n >= 5 ? 3 : Math.min(n, 2)
+        var d = pot._d, step = pot._step, shift = pot._shift
+        var chips = [], backChips = [], frontChips = []
+        var minX = 0, maxX = 0, chipsH = 0
+        for (var i = 0; i < n; ++i) {
+            var back = i >= frontN
+            var cx = 0
+            if (!back) {
+                // front slots in creation order: left, right, then the closing one
+                if (frontN === 3)
+                    cx = i === 2 ? 0 : (i === 0 ? -step : step)
+                else if (frontN === 2)
+                    cx = i === 0 ? -step / 2 : step / 2
+            } else {
+                var j = i - frontN
+                if (frontN === 3)
+                    // the classic pair in the two hollows of the closed front row
+                    cx = j === 0 ? -step / 2 : step / 2
+                else if (frontN === 2)
+                    // above the hollow, then next to it on the right
+                    cx = j === 0 ? 0 : step
+            }
+            minX = Math.min(minX, cx - d / 2)
+            maxX = Math.max(maxX, cx + d / 2)
+            var col = cols[i]
+            var h = pot._faceH + col.length * pot._band + (back ? shift : 0)
+            if (h > chipsH)
+                chipsH = h
+            for (var k = 0; k < col.length; ++k) {
+                var item = { "value": col[k], "cx": cx, "level": k, "back": back }
+                if (back)
+                    backChips.push(item)
+                else
+                    frontChips.push(item)
+            }
+        }
+        // the top row first (it lies further away), then the front row
+        return { "chips": backChips.concat(frontChips),
+                 "minX": minX, "maxX": maxX, "midX": (minX + maxX) / 2,
+                 "chipsH": chipsH }
     }
 
-    readonly property real _frontW: _frontN > 0 ? (_frontN - 1) * _step + _d : 0
-    readonly property real _backW: _backN > 0 ? (_backN - 1) * _step + _d : 0
-    width: Math.max(_frontW, _backW)
-
-    // Height of the chips alone: the tallest column, plus the depth step when it
-    // stands in the top row.
-    readonly property real _chipsH: {
-        var h = 0
-        for (var i = 0; i < _n; ++i)
-            h = Math.max(h, _faceH + _columns[i].length * _band
-                            + (i >= _frontN ? _shift : 0))
-        return h
-    }
-    height: _chipsH + _pillH - _pillOverlap
+    // The pile is centred on its OWN bounding box: the four-column state is not
+    // symmetric (the top row is shifted right), so the item cannot just centre the
+    // slot origin.
+    width: _layout.maxX - _layout.minX
+    height: _layout.chipsH + _pillH - _pillOverlap
     // Bottom line of the front row (the pill hangs under it, overlapping 1 px).
     readonly property real _baseY: height - (_pillH - _pillOverlap)
-
-    // The chips to paint: the top row first (it lies further away), then the front
-    // row; inside a column the bottom chip first, so every upper chip covers its
-    // neighbour's band.
-    readonly property var _chips: {
-        var back = [], front = []
-        for (var i = 0; i < _n; ++i) {
-            var dst = i >= _frontN ? back : front
-            for (var k = 0; k < _columns[i].length; ++k)
-                dst.push({ "value": _columns[i][k], "cx": colCentre(i), "level": k,
-                           "back": i >= _frontN })
-        }
-        return back.concat(front)
-    }
+    readonly property var _chips: _layout.chips
 
     Repeater {
         model: pot._chips
@@ -121,7 +141,7 @@ Item {
             value: modelData.value
             cash: pot.cash
             renderScale: pot.renderScale
-            x: pot.width / 2 + modelData.cx - width / 2
+            x: pot.width / 2 + (modelData.cx - pot._layout.midX) - width / 2
             y: pot._baseY - (modelData.back ? pot._shift : 0)
                - pot._chipBottom - modelData.level * pot._band
         }
