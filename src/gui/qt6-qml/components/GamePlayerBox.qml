@@ -56,11 +56,14 @@ SeatBox {
     // `betOnFelt` says whether the pile lies on the felt at all: landscape yes, in
     // portrait it keeps sitting in the group next to the box.
     property bool betOnFelt: false
-    // The pile's block: a pyramid of lying 22 px chips (47 × 39.13) with the sum pill
-    // (13 high) under them — 47 × 52.13 base px, the same at every seat and every bet.
-    readonly property real _betW: 47
-    readonly property real _betH: 52.13
-    readonly property real _betChipsH: 39.13     // chips without the sum pill
+    // The pile's block: two base stacks 1 px apart with a chip in the hollow
+    // (45 × 35.31) and the sum pill (13 high) under them — 45 × 48.32 base px, the
+    // same at every seat and every bet (2026-11-17: the hollow chip is drawn one
+    // depth step 15.75 px up instead of one chip height 19.57, so the block lost
+    // 3.8 px of height).
+    readonly property real _betW: 45
+    readonly property real _betH: 48.32
+    readonly property real _betChipsH: 35.31     // chips without the sum pill
     readonly property real _betOverlap: 10       // how deep the pile cuts into the avatar
     readonly property real _avatarCx: root._avatarX + root._avatarD / 2
     readonly property real _avatarCy: root._plateY + root._plateH / 2

@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Effects
 
+import "chipsplit.js" as ChipSplit
+
 import "../config" as Config
 
 // Community cards (flop/turn/river) + pot badge in the centre of the table.
@@ -37,9 +39,10 @@ Item {
                  potBadge.y + potBadge.height / 2)
 
     // The chip values of an amount, split exactly like the pot pile itself
-    // (`BetChip.splitOf`). The collect animation takes a few per seat's bet.
+    // (`chipsplit.js`, the same greedy ladder). The collect animation takes a few
+    // per seat's bet.
     function chipValues(amount) {
-        return potChip.splitOf(amount)
+        return ChipSplit.split(amount, root.chipCash, 3, 2)
     }
 
     // True while any board slot is currently revealing new cards
@@ -184,11 +187,12 @@ Item {
     }
 
     // ── The pot ──────────────────────────────────────────────────────────────
-    // The pot is the same chips as a player's bet (`BetChip`), but laid out as a
-    // FLAT ROW of up to three stacks (two chips each) with the sum in a dark pill
-    // under them. A pyramid with its top stack would be 52.13 base px high and push
-    // the top-centre seat's bet into its plate on a small table; the row is 72 wide
-    // and 34.7 high and still shows up to six chips.
+    // A PACKED PYRAMID of lying chips (2026-11-17, `PotPile`): the front row keeps
+    // a 1 px gap and the chips of the second row nestle in the hollows between
+    // them — all on the felt, the second row is only drawn one depth step higher
+    // (0.6847·(d + gap) = 15.75 px, the asset's own projection). Up to four chips
+    // in the front row and three in the hollows; the rest is not drawn, the pill
+    // has the truth. The block is 91 wide and 48.32 high.
     //
     // Since 2026-11-12 the pot shows ONLY COLLECTED chips (`GameTable.pot`, not
     // `totalPot` = pot + the current betting round): when a player bets, the
@@ -197,16 +201,12 @@ Item {
     //
     // The chips are 22 px, the same as on a bet (they were 18 px): at 18 px the
     // chip was below the digit threshold on a small table and the player reported
-    // that chips "lose their digit when they get into the pot" (2026-11-12);
-    // two lone discs also did not read as a pile ("стопок в банке тоже нет" — that
-    // 1195 was the pot). Up to two chips per stack: four chips of one denomination
-    // (e.g. a 400 pot) are spread 2+2, and a stack of four would add 2.2 px of
-    // height for nothing — the ladder never gives more than four of one rung.
+    // that chips "lose their digit when they get into the pot" (2026-11-12).
     //
-    // Height budget (Lead, GamePage): 22 px chips + pill = at most 34.7 base
-    // pixels, sits 6 above the card row → 32 (half a card) + 6 + 34.7 = 72.7
-    // units above the centre of the card row for `potTop` in GamePage; the whole
-    // "pot + cards" block is 104.7 high.
+    // Height budget (Lead, GamePage): chips 19.57 + hollow step 15.75 + pill 13
+    // = 48.32 base px, sits 6 above the card row → 32 (half a card) + 6 + 48.32
+    // = 86.32 units above the centre of the card row for `potTop` in GamePage;
+    // the whole "pot + cards" block is 118.32 high.
     Item {
         id: potBadge
         anchors.horizontalCenter: cardRow.horizontalCenter
@@ -214,26 +214,16 @@ Item {
         // Fixed by the vertical budget above: 6 both in landscape and portrait.
         anchors.bottomMargin: 6
         visible: root.shownPot > 0
-        width: potChip.width
-        height: potChip.height
+        width: potPile.width
+        height: potPile.height
         transformOrigin: Item.Center
 
-        BetChip {
-            id: potChip
+        PotPile {
+            id: potPile
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
             amount: root.shownPot
-            // Same chip size as a player's bet, flat row of three stacks: the value
-            // is the readable part (`ChipImage` prints it from 22 screen px), the
-            // pill below is the truth.
             chipSize: 22
-            pyramid: false
-            maxPiles: 3
-            maxPerStack: 2
-            // Same pill height as the felt bets (font 10 → 13 px): the strip above
-            // the board has no room for a bigger one.
-            fontSize: 10
-            textColor: Config.Theme.colorAccent
             cash: root.chipCash
             renderScale: root.chipRenderScale
         }

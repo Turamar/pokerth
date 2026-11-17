@@ -8,7 +8,9 @@
         <file>components/BetRows.qml</file>
         <file>components/ChipFly.qml</file>
         <file>components/chipflight.js</file>
+        <file>components/chipsplit.js</file>
         <file>components/ChipImage.qml</file>
+        <file>components/PotPile.qml</file>
         <file>components/BlindButtonImage.qml</file>
         <file>components/PlayerActionBadge.qml</file>
         <file>components/PlayerTimeoutBar.qml</file>
