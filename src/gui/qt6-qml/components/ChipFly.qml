@@ -3,19 +3,24 @@ import QtQuick
 // One chip of a chip flight — the small animation that makes the table read as a
 // table instead of a diagram (2026-11-13):
 //   • a new bet comes from the player: `GamePlayerBox` / `GamePlayerSelfBox` fly up
-//     to three chips from the avatar to the pile (an arc — a chip is thrown);
-//   • a betting round is collected: `GamePage` slides a few chips from EVERY
-//     seat's bet into the pot and holds the pot sum back until they land;
-//   • the pot is paid out: `GamePage` slides chips from the pot to every winner
-//     and empties the pot when the last one has landed.
-// The chips that go to/from the pot stay ON the felt: arc 0 and no spin, distance
-// gives the time (player decision 2026-11-13: "по столу, не полёт").
+//     to three chips from the avatar to the pile — a THROW (`glide` false, an arc);
+//   • a betting round is collected: `GamePage` GLIDES a few chips from EVERY seat's
+//     bet into the pot and holds the pot sum back until they land.
+// The chips that go to the pot stay ON the felt: no arc, no spin, a straight even
+// glide (player decision 2026-11-13 "по столу, не полёт"; refined 2026-11-18: "то же
+// самое плавное движение, а не полёт низкой дугой" — the old path bowed upwards even
+// with arc 0, because the control point sat on the HIGHER end instead of the middle).
 //
 // The chip is one `ChipImage` (the lying tier — the same asset as the piles) that
 // travels from `from` to `to` — the CENTRES of the chip in the PARENT's coordinates
-// — along a shallow arc (arc 0 = straight slide) and fades out as it lands. It is
-// NOT turned on the way (2026-11-17): a chip on the felt can only turn about the
-// vertical axis, and a turn is a frame of the whole asset (face + rim together),
+// — along a quadratic path and fades out as it lands. `glide` false: the control
+// point lifts the path above the higher end (`arc`), i.e. a chip is thrown. `glide`
+// true: the control point sits on the middle of the segment, the path is a perfectly
+// straight line on the felt, and the easing is symmetric (`InOutSine`) instead of the
+// throw's `OutQuad`.
+//
+// It is NOT turned on the way (2026-11-17): a chip on the felt can only turn about
+// the vertical axis, and a turn is a frame of the whole asset (face + rim together),
 // not a rotation of the picture — and the toss no longer spins at all (the player
 // kept the turns on the table, where they give the piles life, and dropped them in
 // flight).
@@ -42,8 +47,12 @@ Item {
     // Centre of the chip at the start and at the end (parent coordinates).
     property point from: Qt.point(0, 0)
     property point to: Qt.point(0, 0)
-    // How high the arc rises above the straight line (px); 0 = a straight slide.
+    // How high the arc rises above the straight line (px); 0 = no arc. Only a THROW
+    // (`glide` false) uses it — a glide is always a straight line on the felt.
     property real arc: 26
+    // true = slide along the felt (a straight, symmetric glide); false = throw (an arc,
+    // fast start). The bet fly-in from the plate is a throw, the collect is a glide.
+    property bool glide: false
     property int chipSize: 22
     property int value: 5
     property bool cash: false
@@ -82,14 +91,16 @@ Item {
         id: flight
         PauseAnimation { duration: fly.delay }
         ParallelAnimation {
-            // The arc: a quadratic path from the start to the end. The control point
-            // sits above the HIGHER of the two ends (Math.min — y grows downwards), so
-            // a chip thrown "up" from the plate arcs over the felt and comes down on
-            // the pile instead of sliding along a straight line.
+            // The path: a quadratic from the start to the end. `glide` puts the control
+            // point on the MIDDLE of the segment — a quadratic Bézier with its control
+            // point on the segment IS that segment, so the chip slides straight over the
+            // felt. A throw lifts the control point above the HIGHER end (Math.min — y
+            // grows downwards), so a chip thrown "up" from the plate arcs over the felt
+            // and comes down on the pile.
             PathAnimation {
                 target: fly
                 duration: fly.duration
-                easing.type: Easing.OutQuad
+                easing.type: fly.glide ? Easing.InOutSine : Easing.OutQuad
                 path: Path {
                     startX: fly.from.x - fly.chipSize / 2
                     startY: fly.from.y - fly.chipSize / 2
@@ -97,8 +108,10 @@ Item {
                         x: fly.to.x - fly.chipSize / 2
                         y: fly.to.y - fly.chipSize / 2
                         controlX: (fly.from.x + fly.to.x) / 2 - fly.chipSize / 2
-                        controlY: Math.min(fly.from.y, fly.to.y)
-                                  - fly.arc - fly.chipSize / 2
+                        controlY: fly.glide
+                                  ? (fly.from.y + fly.to.y) / 2 - fly.chipSize / 2
+                                  : Math.min(fly.from.y, fly.to.y)
+                                    - fly.arc - fly.chipSize / 2
                     }
                 }
             }
@@ -109,7 +122,7 @@ Item {
                 property: "scale"
                 to: fly.scaleTo
                 duration: fly.duration
-                easing.type: Easing.OutQuad
+                easing.type: fly.glide ? Easing.InOutSine : Easing.OutQuad
             }
             // Fade-out: the chip does not stop dead, it sinks into the pile.
             SequentialAnimation {

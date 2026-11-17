@@ -743,11 +743,12 @@ Rectangle {
                     tableZone.potShown = GameTable.pot
             }
 
-            // One chip pushed over the felt: the distance gives the time, the path is
-            // a straight line (arc 0, no spin) and the chip fades as it arrives. The
-            // scale goes from the scale it takes off with to the scale it lands with:
-            // a bet is drawn at the boxes' scale, the pot at the cards' scale, and on
-            // a small table those differ by up to 30 % (2026-11-18).
+            // One chip PUSHED over the felt: a straight line (glide — no arc at all), a
+            // smooth even start and stop (InOutSine) and a short fade as it sinks into the
+            // pile. The distance gives the time; the scale goes from the scale it takes off
+            // with to the scale it lands with (a bet is drawn at the boxes' scale, the pot
+            // at the cards' scale — up to 30 % apart on a small table, 2026-11-18). The
+            // player (2026-11-18): "то же самое плавное движение, а не полёт низкой дугой".
             function _slideEntry(from, to, value, delay, scaleFrom, scaleTo) {
                 var dx = to.x - from.x
                 var dy = to.y - from.y
@@ -757,9 +758,10 @@ Rectangle {
                     "to": to,
                     "value": value,
                     "arc": 0,
+                    "glide": true,
                     "delay": delay,
-                    "duration": Math.round(200 + dist * 0.62),
-                    "fadeOut": 80,
+                    "duration": Math.round(420 + dist * 0.5),
+                    "fadeOut": 100,
                     "scaleFrom": scaleFrom,
                     "scaleTo": scaleTo
                 }
@@ -809,6 +811,10 @@ Rectangle {
             // pot grows column by column (`PotPile.arrivalPoints`, the same chips that
             // the pile will show) — the chips land where the column shows up
             // (2026-11-18).
+            //
+            // They GLIDE (straight, no arc): the chips of one seat leave one after
+            // another (a stack emptying), the seats follow each other with a small step,
+            // so the collect reads as a flow of chips over the felt instead of a throw.
             function _potFlightEntries(added) {
                 var out = []
                 if (typeof GameTable === "undefined" || !GameTable)
@@ -825,6 +831,7 @@ Rectangle {
                                                      communityArea.potCentre.x,
                                                      communityArea.potCentre.y))
                 var aimed = 0
+                var seatOrder = 0
                 for (var i = 0; i < players.length; ++i) {
                     var bet = players[i] ? players[i].bet : 0
                     if (!bet || bet <= 0)
@@ -832,6 +839,8 @@ Rectangle {
                     var src = _seatBetCentre(i)
                     if (!src)
                         continue
+                    var base = seatOrder * 45 + Math.random() * 20
+                    seatOrder++
                     var vals = ChipFlight.take(communityArea.chipValues(bet), 3)
                     for (var k = 0; k < vals.length; ++k) {
                         var aim = pts[aimed++ % pts.length]
@@ -839,7 +848,8 @@ Rectangle {
                                             src.y + Math.random() * 6 - 3)
                         var to = Qt.point(aim.x + Math.random() * 6 - 3,
                                           aim.y + Math.random() * 5 - 2.5)
-                        out.push(_slideEntry(from, to, vals[k], 6 * k + Math.random() * 18,
+                        out.push(_slideEntry(from, to, vals[k],
+                                             base + k * 70 + Math.random() * 15,
                                              tableZone.oppScale, tableZone.communityScale))
                     }
                 }
@@ -1825,6 +1835,8 @@ Rectangle {
                         to: modelData.to
                         value: modelData.value
                         arc: modelData.arc
+                        // A collect is a straight GLIDE over the felt, not a throw.
+                        glide: modelData.glide === true
                         delay: modelData.delay
                         duration: modelData.duration
                         scaleFrom: modelData.scaleFrom
