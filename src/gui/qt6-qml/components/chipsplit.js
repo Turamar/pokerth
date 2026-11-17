@@ -125,6 +125,34 @@ function columns(amount, cash, maxColumns, maxPerStack, rng) {
     return cols
 }
 
+// Columns out of an explicit list of chips (the order is the caller's: the pot's payout
+// hands the biggest denomination first). Used by the payout animation, where the winner's
+// share must be drawn from the chips that were really in the pot, not from a re-split of
+// its money. Consecutive equal values become one column (up to maxPerStack); when there
+// are more columns than slots the tail is merged into the last one, as in `columns`.
+function fromChips(chips, maxColumns, maxPerStack) {
+    var cols = []
+    if (!chips)
+        return cols
+    for (var i = 0; i < chips.length; ++i) {
+        var v = chips[i]
+        var last = cols.length > 0 ? cols[cols.length - 1] : null
+        if (last !== null && last.length < maxPerStack && last[0] === v) {
+            last.push(v)
+            continue
+        }
+        cols.push([v])
+    }
+    if (cols.length > maxColumns) {
+        var dump = cols[maxColumns - 1]
+        for (var c = maxColumns; c < cols.length; ++c)
+            for (var k = 0; k < cols[c].length && dump.length < maxPerStack; ++k)
+                dump.push(cols[c][k])
+        cols = cols.slice(0, maxColumns)
+    }
+    return cols
+}
+
 // The pot GROWS: add the chips of `added` to the columns that are already on the
 // table (2026-11-18). The columns are not touched — a chip goes into the column
 // whose TOP chip has its denomination (up to `maxPerStack`), otherwise into a NEW

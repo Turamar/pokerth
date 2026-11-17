@@ -47,6 +47,12 @@ SeatBox {
     property bool _betArriving: false
     property int _lastBet: 0
 
+    // The stack the plate SHOWS: -1 = the live value. The pot payout holds the winner's
+    // number back until the chips have landed (GamePage._heldStacks).
+    property int heldStack: -1
+    readonly property int _stackShown: heldStack >= 0 ? heldStack
+                                    : (seatData ? seatData.stack : 0)
+
     // Bet base (betInset/betStripH) and unfolding the base: see SeatBox.
     readonly property int hMargin: 4
     readonly property int vMargin: 4
@@ -181,7 +187,7 @@ SeatBox {
                 elide: Text.ElideRight
                 text: root._showAction
                       ? root.actionText
-                      : (root.seatData ? (GameTable ? GameTable.amount(root.seatData.stack) : "") : "")
+                      : (root.seatData ? (GameTable ? GameTable.amount(root._stackShown) : "") : "")
                 color: root._showAction
                        ? Config.Theme.actionEdgeColor(root.action)
                        : Config.Theme.colorAccent

@@ -76,9 +76,18 @@ Item {
     // POSITIONS — rolled when the pot empties, so a hand keeps its layout and the
     // collect animation can predict the next one (`arrivalPoints`: the same seed
     // gives the same columns twice).
-    property var _columns: []
+    property var _stateColumns: []
     property int _seed: 1
     property int _lastAmount: 0
+
+    // A pile drawn from an EXPLICIT chip list instead of a sum (2026-11-18, the pot
+    // payout): a winner's share is a subset of the chips that lay in the pot, and the
+    // animation shows exactly those chips instead of a fresh split of the money.
+    // `amount` still feeds the pill (the share's money) and is ignored for the columns.
+    property var chipsOverride: []
+    // Pill fade of the payout: a share shows its sum while the pot divides, the number
+    // fades away before the chips travel (the player: the pill goes out, the chips move).
+    property real pillOpacity: 1
 
     function _rollSeed() {
         _seed = 1 + Math.floor(Math.random() * 2147483646)
@@ -87,21 +96,27 @@ Item {
         return ChipSplit.seeded(_seed)
     }
     function _rebuild() {
-        _columns = ChipSplit.columns(amount, cash, maxColumns, maxPerStack, _rng())
+        // An explicit chip list (a payout share) owns the columns — the sum is only
+        // the pill's text there.
+        if (chipsOverride.length > 0)
+            return
+        _stateColumns = ChipSplit.columns(amount, cash, maxColumns, maxPerStack, _rng())
     }
 
     onAmountChanged: {
         var prev = _lastAmount
         _lastAmount = amount
+        if (chipsOverride.length > 0)
+            return
         if (amount <= 0) {
             // The hand is over: drop the chips and roll the positions of the next pot.
-            _columns = []
+            _stateColumns = []
             _rollSeed()
-        } else if (_columns.length === 0 || amount <= prev) {
+        } else if (_stateColumns.length === 0 || amount <= prev) {
             _rebuild()
         } else {
-            _columns = ChipSplit.grow(_columns, amount - prev, cash,
-                                      maxColumns, maxPerStack)
+            _stateColumns = ChipSplit.grow(_stateColumns, amount - prev, cash,
+                                           maxColumns, maxPerStack)
         }
     }
     Component.onCompleted: {
@@ -110,6 +125,11 @@ Item {
         if (amount > 0)
             _rebuild()
     }
+
+    // The columns actually drawn: the explicit list (a payout share) or the grown pot.
+    readonly property var _columns: chipsOverride.length > 0
+        ? ChipSplit.fromChips(chipsOverride, maxColumns, maxPerStack)
+        : _stateColumns
 
     readonly property int _n: _columns.length
 
@@ -172,6 +192,20 @@ Item {
     // Bottom line of the front row (the pill hangs under it, overlapping 1 px).
     readonly property real _baseY: height - (_pillH - _pillOverlap)
     readonly property var _chips: _layout.chips
+    // Distance from the pile's BOTTOM line to the centre of the chip block: the payout
+    // puts a share on the pot's bottom line and then aims the chips at the winner, so
+    // this is the offset between the two (see GamePage, the payout layer).
+    readonly property real chipBlockUp: (_pillH - _pillOverlap) + _layout.chipsH / 2
+
+    // The chips the pile actually draws, column by column (bottom → top): the payout
+    // hands the pot's own chips out to the winners, no re-split of the money.
+    function drawnChipList() {
+        var out = []
+        for (var i = 0; i < _columns.length; ++i)
+            for (var k = 0; k < _columns[i].length; ++k)
+                out.push(_columns[i][k])
+        return out
+    }
 
     // ── where the arriving chips will land ──────────────────────────────────
     // The collect animation holds the pot sum back while the chips fly
@@ -187,15 +221,15 @@ Item {
     function arrivalPoints(added) {
         if (added <= 0)
             return []
-        var fut = (_columns.length === 0)
+        var fut = (_stateColumns.length === 0)
                 ? ChipSplit.columns(amount + added, cash, maxColumns, maxPerStack, _rng())
-                : ChipSplit.grow(_columns, added, cash, maxColumns, maxPerStack)
+                : ChipSplit.grow(_stateColumns, added, cash, maxColumns, maxPerStack)
         if (fut.length === 0)
             return []
         var lay = _layoutOf(fut)
         var out = []
         for (var i = 0; i < fut.length; ++i) {
-            var wasN = i < _columns.length ? _columns[i].length : 0
+            var wasN = i < _stateColumns.length ? _stateColumns[i].length : 0
             var nowN = fut[i].length
             if (nowN <= wasN)
                 continue
@@ -227,6 +261,7 @@ Item {
     Rectangle {
         id: pill
         visible: pot.amount > 0
+        opacity: pot.pillOpacity
         y: pot.height - pot._pillH
         x: (pot.width - width) / 2
         width: pillLabel.implicitWidth + 14

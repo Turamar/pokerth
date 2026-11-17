@@ -52,10 +52,13 @@ Rectangle {
     // close button (the toggle) is not there at all any more.
     readonly property bool spectating: tableZone ? tableZone.spectating : false
 
-    // Test hook (tools/tablecheck.ps1): true while the chips of a collected betting
-    // round are on their way into the pot. A 0.4 s animation is almost never hit by a
+    // Test hook (tools/tablecheck.ps1): true while chips are moving on the felt — the
+    // chips of a collected betting round on their way into the pot, or the divided pot
+    // of the payout (which stands still for a second first, so the stand catches both
+    // the divided piles and the travel). A 0.4 s animation is almost never hit by a
     // fixed time mark, so the stand grabs a frame on this flag.
-    readonly property bool chipsFlying: tableZone ? tableZone._potCollecting : false
+    readonly property bool chipsFlying: tableZone
+        ? (tableZone._potCollecting || tableZone._potPaying) : false
 
     // Docked chat/info panels: desktop, and on mobile only tablets (shorter screen
     // side >= 600 dp, the Android "sw600dp" criterion). Based on the screen, not the
@@ -662,7 +665,7 @@ Rectangle {
                 (typeof GameTable !== "undefined" && GameTable) ? GameTable.spectating : false
 
             // ── The chips on the felt: collecting a round and paying out the pot ──
-            // Two moments put chips in motion (ChipFly, the layer below):
+            // Two moments put chips in motion:
             //
             //  1. COLLECT — when a betting round is collected the engine raises
             //     `GameTable.pot` BEFORE it clears the seats' bets
@@ -671,32 +674,47 @@ Rectangle {
             //     slide a few chips from EVERY betting seat into the pot. The sum
             //     under the pot is held back while they move (`potShown`) and grows
             //     when they land: the number never runs ahead of the chips.
+            //     Since 2026-11-18 the pot is a PYRAMID OF COLUMNS that GROWS: the
+            //     collect is aimed at the column that is about to appear
+            //     (`CommunityCards.potArrivalPoints` → `PotPile.arrivalPoints`), and
+            //     the chips change from the boxes' scale to the cards' scale on the
+            //     way (ChipFly).
             //
-            //  2. PAYOUT — when the hand ends, `GameHandler::onShowdown` reports the
-            //     real payout as `GameTable.potAwards` (seat + amount, main AND side
-            //     pots) and the chips slide from the pot to every seat that won
-            //     money. When the last chip has landed the pot empties: the chips
-            //     have left it (the winner is marked by the badge, not by the pot).
+            //  2. PAYOUT — the pot DIVIDES and the piles travel (player's decision
+            //     2026-11-18): "прям вся стопка плавно но быстро едет к игроку и
+            //     исчезает… стек разделяется, видно суммы, он задерживается так на
+            //     секунду и потом кучки едут к игрокам". `GameHandler.onShowdown`
+            //     reports the real payout as `GameTable.potAwards` (seat + amount, main
+            //     AND side pots); the pot's own drawn chips are shared out between the
+            //     winners (in proportion to the money, at least one chip each), the
+            //     shares appear on the pot's bottom line as separate stacks with their
+            //     own sums, stay for a second and then slide to the winner's bet point
+            //     and fade. The pot's own pill goes out with the old sum; the winner's
+            //     stack number is held back until the pile lands.
             //
             // The chips stay ON the felt: a straight slide, no arc and no spin
             // (player decision 2026-11-13: "перемещение в банк по столу, не полёт").
             // Only the bet fly-in from the plate keeps its arc — that one is a throw
             // and the player likes it.
             //
-            // Since 2026-11-18 the pot is a PYRAMID OF COLUMNS that GROWS: the collect
-            // animation is aimed at the column that is about to appear
-            // (`CommunityCards.potArrivalPoints` → `PotPile.arrivalPoints`), not at the
-            // middle of the block, and the chips change from the boxes' scale to the
-            // cards' scale on the way (ChipFly).
-            //
             // `_potFlights` is a plain list of flight entries for the Repeater in the
             // zoom layer below; `potFlightTimer` empties it after the last chip.
-            // `_potFlightKind` tells the timer what the flight was doing ("collect"
-            // or "award") — the two end differently.
+            // The payout has its own list (`_potPayouts`) and timer.
             property var _potFlights: []
             property bool _potCollecting: false
             property int potShown: 0
             property string _potFlightKind: ""
+            // The divided pot of the payout: one entry per winner.
+            property var _potPayouts: []
+            // The winners' stacks WHILE their chips are on the way (seat → number):
+            // the plate must not grow before the pile arrives.
+            property var _heldStacks: ({})
+            property bool _potPaying: false
+            // The player's beat: the divided stacks stand still with their sums for a
+            // second, then the numbers go out and the chips travel.
+            readonly property int _payoutPause: 1000
+            readonly property int _payoutStagger: 60
+            readonly property int _payoutFade: 90
 
             Timer {
                 id: potFlightTimer
@@ -707,14 +725,9 @@ Rectangle {
             function _potFlightDone() {
                 tableZone._potFlights = []
                 tableZone._potCollecting = false
-                var kind = tableZone._potFlightKind
                 tableZone._potFlightKind = ""
-                if (kind === "award") {
-                    // Paid out: the chips went to the winners, the pot is empty.
-                    tableZone.potShown = 0
-                } else if (typeof GameTable !== "undefined" && GameTable) {
+                if (typeof GameTable !== "undefined" && GameTable)
                     tableZone.potShown = GameTable.pot
-                }
             }
 
             // One chip pushed over the felt: the distance gives the time, the path is
@@ -820,63 +833,31 @@ Rectangle {
                 return out
             }
 
-            // Chips from the pot to the winners. The payout comes from the engine
-            // (`potAwards`: seat + amount, main and side pots); without it (a network
-            // table that does not report it) fall back to the main-pot winners with
-            // equal shares. The chips of the pot are shared out in proportion to the
-            // amounts, so a split pot sends chips to both winners.
-            function _potAwardEntries() {
-                var out = []
-                if (typeof GameTable === "undefined" || !GameTable)
-                    return out
-                var awards = GameTable.potAwards
-                if (!awards || awards.length === 0) {
-                    var ids = GameTable.winnerSeatIds
-                    if (!ids || ids.length === 0)
-                        return out
-                    awards = []
-                    for (var w = 0; w < ids.length; ++w)
-                        awards.push({"seat": ids[w], "amount": 1})
-                }
-                var total = 0
-                for (var a = 0; a < awards.length; ++a)
-                    total += awards[a].amount
-                if (total <= 0)
-                    return out
-                var potValue = tableZone.potShown
-                if (potValue <= 0)
-                    potValue = GameTable.pot
-                // The pot pile's own split (piles of value + count) flattened into a
-                // list of chip values — the same helper the collect animation uses.
-                var vals = ChipFlight.take(communityArea.chipValues(potValue), 6)
-                if (!vals || vals.length === 0)
-                    return out
-                var aim = communityArea.mapToItem(zoomContent,
-                                communityArea.potCentre.x, communityArea.potCentre.y)
-                var vi = 0
-                for (var i = 0; i < awards.length; ++i) {
-                    var dst = _seatBetCentre(awards[i].seat)
-                    if (!dst)
-                        continue
-                    var n = Math.max(1, Math.round(vals.length * awards[i].amount / total))
-                    for (var k = 0; k < n; ++k) {
-                        var from = Qt.point(aim.x + Math.random() * 8 - 4,
-                                            aim.y + Math.random() * 6 - 3)
-                        var to = Qt.point(dst.x + Math.random() * 8 - 4,
-                                          dst.y + Math.random() * 6 - 3)
-                        out.push(_slideEntry(from, to, vals[vi % vals.length],
-                                             20 + k * 35 + Math.random() * 15,
-                                             tableZone.communityScale, tableZone.oppScale))
-                        vi++
-                    }
-                }
-                return out
+            // ── The payout: the pot divides and the piles travel ────────────────
+            // The pot's own drawn chips are shared out between the winners in proportion
+            // to the money (at least one chip each — more winners than chips: the chips
+            // repeat, the sums are the truth). Every share is drawn as its own stack on
+            // the pot's bottom line, the sums stand for `_payoutPause`, then the numbers
+            // go out and the piles slide to the winners' bet points and fade.
+
+            Timer {
+                id: potPayoutTimer
+                repeat: false
+                onTriggered: tableZone._potPayoutDone()
+            }
+
+            // The last pile landed: the pot is empty, the winners' new stacks show.
+            function _potPayoutDone() {
+                tableZone._potPayouts = []
+                tableZone._potPaying = false
+                tableZone._heldStacks = ({})
+                tableZone.potShown = 0
             }
 
             function _startPotPayout() {
                 if (typeof GameTable === "undefined" || !GameTable)
                     return
-                if (tableZone._potFlightKind === "award")
+                if (tableZone._potPaying)
                     return
                 var awards = GameTable.potAwards
                 var winners = GameTable.winnerSeatIds
@@ -884,20 +865,82 @@ Rectangle {
                 var hasWinners = winners !== undefined && winners !== null && winners.length > 0
                 if (!hasAwards && !hasWinners) {
                     // Nothing to pay out (a reset, the next hand): drop the chips.
-                    if (tableZone._potFlightKind === "collect") {
-                        tableZone._potFlights = []
-                        tableZone._potCollecting = false
-                        tableZone._potFlightKind = ""
-                        tableZone.potShown = 0
-                    }
-                    return
-                }
-                var flights = tableZone._potAwardEntries()
-                if (flights.length === 0) {
+                    tableZone._potFlights = []
+                    tableZone._potCollecting = false
+                    tableZone._potFlightKind = ""
+                    potFlightTimer.stop()
                     tableZone.potShown = 0
                     return
                 }
-                tableZone._potFlightsStart(flights, "award")
+                if (!hasAwards) {
+                    // An engine that does not report the amounts: equal shares.
+                    awards = []
+                    for (var w = 0; w < winners.length; ++w)
+                        awards.push({ "seat": winners[w], "amount": 1 })
+                }
+                // Sort by money: the biggest share takes the biggest chips.
+                var entries = []
+                for (var a = 0; a < awards.length; ++a)
+                    entries.push({ "seat": awards[a].seat,
+                                   "amount": Math.max(0, awards[a].amount) })
+                entries.sort(function(x, y) { return y.amount - x.amount })
+                // The chips that are really in the pot, divided so that each pile's VALUE
+                // is close to that winner's money; everybody gets at least one chip.
+                var chips = communityArea.drawnChipList()
+                if (chips.length === 0 || tableZone.potShown <= 0) {
+                    tableZone.potShown = 0
+                    return
+                }
+                var amounts = []
+                for (var s = 0; s < entries.length; ++s)
+                    amounts.push(entries[s].amount)
+                var shares = ChipFlight.divide(chips, amounts)
+                // Anchor: the pot's bottom centre in the zoom layer. The shares stand on
+                // that line (the pot's own bottom line), fanned out so the division reads.
+                var anchor = communityArea.mapToItem(zoomContent,
+                                                     communityArea.potAnchor.x,
+                                                     communityArea.potAnchor.y)
+                var payouts = []
+                var held = ({})
+                var players = GameTable.players
+                for (var i = 0; i < entries.length; ++i) {
+                    var seat = entries[i].seat
+                    var dst = _seatBetCentre(seat)
+                    if (!dst)
+                        dst = Qt.point(anchor.x, anchor.y)   // the seat is gone: fade in place
+                    // The shares stand side by side on the pot's line, spaced by a pile
+                    // width so that the sums stay readable; ONE winner stands exactly where
+                    // the pot was (the switch from the pot to its pile is invisible).
+                    var fan = (i - (entries.length - 1) / 2) * 54
+                    var from = Qt.point(anchor.x + fan, anchor.y + Math.abs(fan) * 0.12)
+                    var ddx = dst.x - from.x
+                    var ddy = dst.y - from.y
+                    var dist = Math.sqrt(ddx * ddx + ddy * ddy)
+                    payouts.push({
+                        "seat": seat,
+                        "amount": entries[i].amount,
+                        "chips": shares[i],
+                        "from": from,
+                        "to": dst,
+                        "delay": tableZone._payoutPause + i * tableZone._payoutStagger,
+                        "duration": Math.round(240 + dist * 0.5)
+                    })
+                    // The plate keeps the OLD stack until its pile has landed.
+                    if (players && seat >= 0 && seat < players.length && players[seat]) {
+                        var old = players[seat].stack - entries[i].amount
+                        if (old >= 0)
+                            held[seat] = old
+                    }
+                }
+                tableZone._heldStacks = held
+                tableZone._potPayouts = payouts
+                tableZone._potPaying = true
+                tableZone.potShown = 0               // the pot IS the divided piles now
+                var end = 0
+                for (var f = 0; f < payouts.length; ++f)
+                    end = Math.max(end, payouts[f].delay + payouts[f].duration)
+                potPayoutTimer.interval = end + 60
+                potPayoutTimer.restart()
             }
 
             Connections {
@@ -928,7 +971,7 @@ Rectangle {
                 // The payout: `potAwards` is the exact answer (amounts, side pots);
                 // `winnerSeatIds` is the fallback trigger for an engine that does not
                 // report the awards (both fire in the same onShowdown, the awards
-                // first — `_startPotPayout` ignores the second call).
+                // first — `_potPaying` ignores the second call).
                 function onPotAwardsChanged() {
                     tableZone._startPotPayout()
                 }
@@ -1690,6 +1733,10 @@ Rectangle {
                         // a split: below it there is no room, and the puck next to the
                         // centred bet would overlap it.
                         betSplit: seatSlot.bottomCenter
+                        // The winner's stack number is held back until the payout pile has
+                        // landed (GamePage._heldStacks, the payout block above).
+                        heldStack: tableZone._heldStacks[seatSlot.index] !== undefined
+                                   ? tableZone._heldStacks[seatSlot.index] : -1
                     }
                 }
             }
@@ -1712,6 +1759,9 @@ Rectangle {
                 scale: tableZone.boxScale
                 // Rasterize the cards in the real screen size (boxScale × zoom).
                 cardRenderScale: tableZone.boxScale * tableZone.zoomRenderMul
+                // The winner's stack number is held back until the payout pile has landed.
+                heldStack: tableZone._heldStacks[0] !== undefined
+                           ? tableZone._heldStacks[0] : -1
             }
 
             // ── The chips in flight into the pot ───────────────────────────────────
@@ -1741,6 +1791,98 @@ Rectangle {
                         // Rasterise for the bigger of the two ends.
                         renderScale: Math.max(modelData.scaleFrom, modelData.scaleTo)
                                      * tableZone.zoomRenderMul
+                    }
+                }
+            }
+
+            // ── The pot paid out: the divided stacks travel ─────────────────────────
+            // One PotPile per winner, drawn from the pot's own chips (chipsOverride)
+            // and at the pot's scale ("в одном размере"): the pile stands on the pot's
+            // bottom line with the share's sum in its pill for `_payoutPause`, then the
+            // number goes out and the chips slide to that winner's bet point and fade.
+            // z 50: above the boxes, like the chips in flight.
+            Item {
+                id: potPayoutLayer
+                anchors.fill: parent
+                z: 50
+                Repeater {
+                    model: tableZone._potPayouts
+                    delegate: Item {
+                        id: payWrap
+                        required property var modelData
+                        // Bottom centre of the pile in zoom coordinates — animated by the
+                        // travel below. transformOrigin Bottom keeps it fixed while the
+                        // pile is scaled.
+                        property real atX: modelData.from.x
+                        property real atY: modelData.from.y
+                        width: payPile.width
+                        height: payPile.height
+                        transformOrigin: Item.Bottom
+                        scale: tableZone.communityScale
+                        x: payWrap.atX - width / 2
+                        y: payWrap.atY - height
+
+                        PotPile {
+                            id: payPile
+                            // Sizes itself from its own columns; the wrapper follows.
+                            amount: payWrap.modelData.amount
+                            chipsOverride: payWrap.modelData.chips
+                            cash: (typeof GameTable !== "undefined" && GameTable
+                                   && GameTable.tournamentMode !== true)
+                            renderScale: tableZone.communityScale * tableZone.zoomRenderMul
+                        }
+
+                        // The sums stand still, then go out just before the chips move.
+                        SequentialAnimation {
+                            id: payPillFade
+                            PauseAnimation { duration: payWrap.modelData.delay }
+                            NumberAnimation {
+                                target: payPile
+                                property: "pillOpacity"
+                                to: 0
+                                duration: 150
+                            }
+                        }
+                        // The slide: a fast, even glide (the player: "плавно но быстро").
+                        // The CHIP block lands on the point, not the bottom line (the pill
+                        // hangs under it), and the last stretch fades out.
+                        SequentialAnimation {
+                            id: payTravel
+                            PauseAnimation { duration: payWrap.modelData.delay }
+                            ParallelAnimation {
+                                NumberAnimation {
+                                    target: payWrap
+                                    property: "atX"
+                                    to: payWrap.modelData.to.x
+                                    duration: payWrap.modelData.duration
+                                    easing.type: Easing.OutQuad
+                                }
+                                NumberAnimation {
+                                    target: payWrap
+                                    property: "atY"
+                                    to: payWrap.modelData.to.y
+                                        + payPile.chipBlockUp * tableZone.communityScale
+                                    duration: payWrap.modelData.duration
+                                    easing.type: Easing.OutQuad
+                                }
+                                SequentialAnimation {
+                                    PauseAnimation {
+                                        duration: Math.max(0, payWrap.modelData.duration
+                                                              - tableZone._payoutFade)
+                                    }
+                                    NumberAnimation {
+                                        target: payWrap
+                                        property: "opacity"
+                                        to: 0
+                                        duration: tableZone._payoutFade
+                                    }
+                                }
+                            }
+                        }
+                        Component.onCompleted: {
+                            payPillFade.start()
+                            payTravel.start()
+                        }
                     }
                 }
             }

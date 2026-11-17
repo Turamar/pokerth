@@ -90,6 +90,13 @@ SeatBox {
     property bool _betArriving: false
     property int _lastBet: 0
 
+    // The stack the plate SHOWS: -1 = the live value. The pot payout holds the winner's
+    // number back until the chips have landed (GamePage._heldStacks), so the plate does
+    // not grow before the pile arrives.
+    property int heldStack: -1
+    readonly property int _stackShown: heldStack >= 0 ? heldStack
+                                    : (seatData ? seatData.stack : 0)
+
     // ── Size of the box ──────────────────────────────────────────────────────
     // Everything is derived from the body height, so that the seat style "inset"
     // (which adds the bet base below the body) does not move a single pixel:
@@ -309,7 +316,7 @@ SeatBox {
                 text: root._showAction
                       ? root.actionText
                       : (root.seatData && root.seatData.name !== ""
-                            ? (GameTable ? GameTable.amount(root.seatData.stack) : "") : "")
+                            ? (GameTable ? GameTable.amount(root._stackShown) : "") : "")
                 color: root._showAction
                        ? Config.Theme.actionEdgeColor(root.action)
                        : Config.Theme.colorAccent

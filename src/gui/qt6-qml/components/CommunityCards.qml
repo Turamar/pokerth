@@ -43,6 +43,17 @@ Item {
     // grows upwards).
     readonly property int _potGap: 3
 
+    // Bottom centre of the pot block in this item's coordinates: the anchor of the
+    // payout, where the divided piles appear and sit on the pot's own bottom line.
+    readonly property point potAnchor:
+        Qt.point(cardRow.x + cardRow.width / 2, cardRow.y - _potGap)
+
+    // The chips the pot draws (column by column, bottom → top) — the payout shares THESE
+    // out among the winners instead of re-splitting the money.
+    function drawnChipList() {
+        return potPile.drawnChipList()
+    }
+
     // Where the chips that are ARRIVING will land — the centre of the new top chip of
     // every column that grows (PotPile.arrivalPoints). The pot still shows the OLD sum
     // during the flight (GamePage.potShown), so the pile computes the layout it is
