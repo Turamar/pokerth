@@ -8,6 +8,14 @@
 // the free stacks instead of being cut off at `maxPerStack`, and the remainder
 // is not drawn — the sum pill is the truth (decision 2026-11-12).
 //
+// The POT is the exception: it does not split a total, it GROWS (`grow`). The chips
+// that are already on the table keep their column and their place, and only the
+// chips that arrived since the last collect are added — a column appears in the
+// player's creation order instead of the whole pyramid being rebuilt (2026-11-18).
+// `seeded` exists for PotPile: the random POSITIONS must be rolled once per hand,
+// but the collect animation has to know where the next chip will land BEFORE the
+// pot updates, so the same seed has to give the same columns twice.
+//
 // The ladders: a tournament counts chips, a cash table counts money in CENTS and
 // has the 1¢ rung on top, so every cash amount is a whole number of pennies.
 function ladder(cash) {
@@ -55,7 +63,20 @@ function chipList(amount, cash) {
     return out
 }
 
-// The POT: columns (stacks) of chips (decision 2026-11-17, player's rules):
+// A deterministic generator over a 32-bit seed (a small LCG). QML's Math.random
+// cannot be replayed, and the pot needs a REPLAYABLE roll: `PotPile` rolls the seed
+// once per hand, and both the future layout (the landing point of the flying chips)
+// and the layout that actually appears are computed from the same seed.
+function seeded(seed) {
+    var s = seed >>> 0
+    return function() {
+        s = (1664525 * s + 1013904223) >>> 0
+        return s / 4294967296
+    }
+}
+
+// The POT at its first appearance: columns (stacks) of chips (decision 2026-11-17,
+// player's rules):
 //   • a column holds ONE denomination, up to `maxPerStack` chips (a denomination
 //     that needs more chips continues in the next column — by the ladder that
 //     never happens, a rung repeats at most 4 times, but the rule stays general);
@@ -70,7 +91,10 @@ function chipList(amount, cash) {
 //   • when the denominations outnumber the slots, the chips that did not fit are
 //     merged into the closing column; whatever still does not fit is not drawn —
 //     the pill has the truth.
-function columns(amount, cash, maxColumns, maxPerStack) {
+// `rng` is the generator of the shuffle (default Math.random); PotPile passes
+// `seeded(...)` so that the same pot can be laid out twice.
+function columns(amount, cash, maxColumns, maxPerStack, rng) {
+    var rand = rng || Math.random
     var piles = split(amount, cash, 4096, maxPerStack)
     var cols = []
     for (var i = 0; i < piles.length; ++i) {
@@ -95,8 +119,48 @@ function columns(amount, cash, maxColumns, maxPerStack) {
     // Random POSITIONS only (the closing column, if the pot has one, stays last).
     var movable = Math.min(cols.length, maxColumns - 1)
     for (var s = movable - 1; s > 0; --s) {
-        var j = Math.floor(Math.random() * (s + 1))
+        var j = Math.floor(rand() * (s + 1))
         var t = cols[s]; cols[s] = cols[j]; cols[j] = t
     }
     return cols
+}
+
+// The pot GROWS: add the chips of `added` to the columns that are already on the
+// table (2026-11-18). The columns are not touched — a chip goes into the column
+// whose TOP chip has its denomination (up to `maxPerStack`), otherwise into a NEW
+// column in the next free slot of the creation order, and once every slot exists
+// into the CLOSING column (the last one), which may become mixed: that is the
+// column for the leftovers. Chips that fit nowhere are not drawn — the pill has the
+// truth. The input array is not mutated.
+function grow(cols, added, cash, maxColumns, maxPerStack) {
+    var out = []
+    for (var i = 0; i < cols.length; ++i)
+        out.push(cols[i].slice())
+    var chips = chipList(added, cash)
+    for (var c = 0; c < chips.length; ++c) {
+        var v = chips[c]
+        // An amount below the smallest chip has no chip of its own (the split gives
+        // the neutral 0) — nothing to add, the sum has moved by less than a chip.
+        if (v === 0)
+            continue
+        var placed = false
+        for (var k = 0; k < out.length; ++k) {
+            var col = out[k]
+            if (col.length < maxPerStack && col[col.length - 1] === v) {
+                col.push(v)
+                placed = true
+                break
+            }
+        }
+        if (placed)
+            continue
+        if (out.length < maxColumns) {
+            out.push([v])
+            continue
+        }
+        var last = out[out.length - 1]
+        if (last.length < maxPerStack)
+            last.push(v)
+    }
+    return out
 }

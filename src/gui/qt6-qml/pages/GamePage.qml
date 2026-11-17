@@ -683,6 +683,12 @@ Rectangle {
             // Only the bet fly-in from the plate keeps its arc — that one is a throw
             // and the player likes it.
             //
+            // Since 2026-11-18 the pot is a PYRAMID OF COLUMNS that GROWS: the collect
+            // animation is aimed at the column that is about to appear
+            // (`CommunityCards.potArrivalPoints` → `PotPile.arrivalPoints`), not at the
+            // middle of the block, and the chips change from the boxes' scale to the
+            // cards' scale on the way (ChipFly).
+            //
             // `_potFlights` is a plain list of flight entries for the Repeater in the
             // zoom layer below; `potFlightTimer` empties it after the last chip.
             // `_potFlightKind` tells the timer what the flight was doing ("collect"
@@ -712,8 +718,11 @@ Rectangle {
             }
 
             // One chip pushed over the felt: the distance gives the time, the path is
-            // a straight line (arc 0, no spin) and the chip fades as it arrives.
-            function _slideEntry(from, to, value, delay) {
+            // a straight line (arc 0, no spin) and the chip fades as it arrives. The
+            // scale goes from the scale it takes off with to the scale it lands with:
+            // a bet is drawn at the boxes' scale, the pot at the cards' scale, and on
+            // a small table those differ by up to 30 % (2026-11-18).
+            function _slideEntry(from, to, value, delay, scaleFrom, scaleTo) {
                 var dx = to.x - from.x
                 var dy = to.y - from.y
                 var dist = Math.sqrt(dx * dx + dy * dy)
@@ -724,7 +733,9 @@ Rectangle {
                     "arc": 0,
                     "delay": delay,
                     "duration": Math.round(200 + dist * 0.62),
-                    "fadeOut": 80
+                    "fadeOut": 80,
+                    "scaleFrom": scaleFrom,
+                    "scaleTo": scaleTo
                 }
             }
 
@@ -767,14 +778,27 @@ Rectangle {
 
             // A few chips from every seat that still shows a bet. The values come from
             // the pot pile's own split, so a sliding chip carries a denomination of
-            // the bet it comes from (chipflight.js, at most three per seat).
-            function _potFlightEntries() {
+            // the bet it comes from (chipflight.js, at most three per seat). The AIM is
+            // not the middle of the block but the column that is about to appear: the
+            // pot grows column by column (`PotPile.arrivalPoints`, the same chips that
+            // the pile will show) — the chips land where the column shows up
+            // (2026-11-18).
+            function _potFlightEntries(added) {
                 var out = []
                 if (typeof GameTable === "undefined" || !GameTable)
                     return out
                 var players = GameTable.players
-                var aim = communityArea.mapToItem(zoomContent,
-                                communityArea.potCentre.x, communityArea.potCentre.y)
+                var aims = communityArea.potArrivalPoints(added)
+                var pts = []
+                for (var a = 0; a < aims.length; ++a)
+                    pts.push(communityArea.mapToItem(zoomContent, aims[a].x, aims[a].y))
+                // No column grows (the pile is full, an amount below the smallest
+                // chip): fall back to the middle of the block, as before.
+                if (pts.length === 0)
+                    pts.push(communityArea.mapToItem(zoomContent,
+                                                     communityArea.potCentre.x,
+                                                     communityArea.potCentre.y))
+                var aimed = 0
                 for (var i = 0; i < players.length; ++i) {
                     var bet = players[i] ? players[i].bet : 0
                     if (!bet || bet <= 0)
@@ -784,11 +808,13 @@ Rectangle {
                         continue
                     var vals = ChipFlight.take(communityArea.chipValues(bet), 3)
                     for (var k = 0; k < vals.length; ++k) {
+                        var aim = pts[aimed++ % pts.length]
                         var from = Qt.point(src.x + Math.random() * 8 - 4,
                                             src.y + Math.random() * 6 - 3)
-                        var to = Qt.point(aim.x + Math.random() * 8 - 4,
-                                          aim.y + Math.random() * 6 - 3)
-                        out.push(_slideEntry(from, to, vals[k], 6 * k + Math.random() * 18))
+                        var to = Qt.point(aim.x + Math.random() * 6 - 3,
+                                          aim.y + Math.random() * 5 - 2.5)
+                        out.push(_slideEntry(from, to, vals[k], 6 * k + Math.random() * 18,
+                                             tableZone.oppScale, tableZone.communityScale))
                     }
                 }
                 return out
@@ -839,7 +865,8 @@ Rectangle {
                         var to = Qt.point(dst.x + Math.random() * 8 - 4,
                                           dst.y + Math.random() * 6 - 3)
                         out.push(_slideEntry(from, to, vals[vi % vals.length],
-                                             20 + k * 35 + Math.random() * 15))
+                                             20 + k * 35 + Math.random() * 15,
+                                             tableZone.communityScale, tableZone.oppScale))
                         vi++
                     }
                 }
@@ -889,7 +916,7 @@ Rectangle {
                         tableZone.potShown = np
                         return
                     }
-                    var flights = tableZone._potFlightEntries()
+                    var flights = tableZone._potFlightEntries(np - tableZone.potShown)
                     if (flights.length === 0) {
                         // No bets to animate (blinds collected at hand start, a
                         // refresh): the sum is the truth right away.
@@ -1690,7 +1717,8 @@ Rectangle {
             // ── The chips in flight into the pot ───────────────────────────────────
             // Between the boxes (z 1) and the emoji reactions (z 60): a bet belongs
             // to a seat — a chip on its way to the pot belongs to neither. The chips
-            // are drawn at the seat's scale, exactly like the bets they leave from.
+            // start at the seat's scale and end at the pot's scale (ChipFly does the
+            // interpolation), so a chip neither grows nor shrinks at the ends.
             Item {
                 id: potFlightLayer
                 anchors.fill: parent
@@ -1705,11 +1733,14 @@ Rectangle {
                         arc: modelData.arc
                         delay: modelData.delay
                         duration: modelData.duration
+                        scaleFrom: modelData.scaleFrom
+                        scaleTo: modelData.scaleTo
                         chipSize: 22
-                        scale: tableZone.oppScale
                         cash: (typeof GameTable !== "undefined" && GameTable
                                && GameTable.tournamentMode !== true)
-                        renderScale: tableZone.oppScale * tableZone.zoomRenderMul
+                        // Rasterise for the bigger of the two ends.
+                        renderScale: Math.max(modelData.scaleFrom, modelData.scaleTo)
+                                     * tableZone.zoomRenderMul
                     }
                 }
             }

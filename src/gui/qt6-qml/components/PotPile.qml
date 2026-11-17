@@ -6,7 +6,7 @@ import "../config" as Config
 // The pot as COLUMNS of lying chips in a pyramid (decision 2026-11-17, late pass:
 // the creation ORDER and the chip mix were fixed by the player).
 //
-// Creation order (the columns are filled in exactly this order):
+// Creation order — a column takes the next slot when it is created:
 //   1. front left        — the first chip of the pot
 //   2. front right       — "two chips as now, a row"
 //   3. top centre        — in the HOLLOW between the two front columns, one depth
@@ -18,10 +18,23 @@ import "../config" as Config
 //                          right, on the top row
 //   5. front centre      — it CLOSES the front row (three stacks) and takes the
 //                          chips that did not fit anywhere else (leftovers).
+// When the fifth column appears, the front row spreads from ±step/2 to ±step and the
+// top pair moves from (0, +step) into the two hollows (±step/2) — the only
+// arrangement with three stacks in front and two in the hollows. It happens once per
+// hand, together with the chips that close the row.
 //
-// A column is a stack of up to 4 chips. The chips are NOT sorted by denomination:
-// the chip multiset is shuffled (`chipsplit.js::columns`), so the pot reads as a
-// real mix. Whatever still does not fit is not drawn — the pill has the truth.
+// The pot GROWS (2026-11-18): between streets only the chips that arrived are added
+// (chipsplit.js::grow) — a column that is already on the table keeps its chips, its
+// slot and its height. The pyramid is rebuilt and the POSITIONS are re-rolled only
+// when the pot is empty again (a new hand). Before, every collect re-split the total
+// and re-shuffled the slots, so the columns jumped at every street, and the chips
+// that flew in had nothing to do with the column that appeared.
+//
+// A column is a stack of up to 4 chips of ONE denomination; the closing column may
+// become mixed (it takes the leftovers). The chips are NOT sorted by denomination:
+// when the first pot of a hand appears the columns are shuffled
+// (chipsplit.js::columns), so the biggest chip does not always take slot 1. Whatever
+// does not fit is not drawn — the pill has the truth.
 //
 // The top row is drawn FIRST (it lies further away) and is covered by the front
 // row: occlusion, never intersection.
@@ -58,59 +71,86 @@ Item {
     // is drawn higher by exactly this much (the same as a chip in the hollow).
     readonly property real _shift: 0.8660254 * _step * (_faceH / _d)
 
-    // ── the piles: columns in slot order, bottom → top ──────────────────────
-    // Rolled when the amount changes and stored: a repaint or a resize keeps the
-    // picture (and the random mix).
+    // ── the piles: columns in slot (creation) order, bottom → top ───────────
+    // State, not a binding: the pot grows. `_seed` is the seed of the random
+    // POSITIONS — rolled when the pot empties, so a hand keeps its layout and the
+    // collect animation can predict the next one (`arrivalPoints`: the same seed
+    // gives the same columns twice).
     property var _columns: []
-    function _rebuild() {
-        _columns = ChipSplit.columns(amount, cash, maxColumns, maxPerStack)
+    property int _seed: 1
+    property int _lastAmount: 0
+
+    function _rollSeed() {
+        _seed = 1 + Math.floor(Math.random() * 2147483646)
     }
-    onAmountChanged: _rebuild()
-    Component.onCompleted: _rebuild()
+    function _rng() {
+        return ChipSplit.seeded(_seed)
+    }
+    function _rebuild() {
+        _columns = ChipSplit.columns(amount, cash, maxColumns, maxPerStack, _rng())
+    }
+
+    onAmountChanged: {
+        var prev = _lastAmount
+        _lastAmount = amount
+        if (amount <= 0) {
+            // The hand is over: drop the chips and roll the positions of the next pot.
+            _columns = []
+            _rollSeed()
+        } else if (_columns.length === 0 || amount <= prev) {
+            _rebuild()
+        } else {
+            _columns = ChipSplit.grow(_columns, amount - prev, cash,
+                                      maxColumns, maxPerStack)
+        }
+    }
+    Component.onCompleted: {
+        _rollSeed()
+        _lastAmount = amount
+        if (amount > 0)
+            _rebuild()
+    }
 
     readonly property int _n: _columns.length
 
-    // ONE atomic snapshot of the layout: the slot of every column (its centre and
+    // The slot of the i-th CREATED column: 0 front left, 1 front right, 2 top
+    // centre, 3 top right, 4 front centre (closes the front row). `back` = the top
+    // row (one depth step further away). Before five columns the front pair stands
+    // half a step apart, so that a single column above it sits in the hollow.
+    function _slotAt(i, n) {
+        var closed = n >= 5
+        if (i === 0)
+            return { "cx": closed ? -_step : (n >= 2 ? -_step / 2 : 0), "back": false }
+        if (i === 1)
+            return { "cx": closed ? _step : _step / 2, "back": false }
+        if (i === 2)
+            return { "cx": closed ? -_step / 2 : 0, "back": true }
+        if (i === 3)
+            return { "cx": closed ? _step / 2 : _step, "back": true }
+        return { "cx": 0, "back": false }
+    }
+
+    // ONE atomic snapshot of a layout: the slot of every column (its centre and
     // whether it stands in the top row), the chips to paint, the bounding box and
-    // the height of the chip block. Everything is computed in ONE binding from a
-    // copy of `_columns`: reading separate `_slots`/`_chips` bindings used to hit
-    // a stale array on an amount change ("Cannot read property 'back' of
-    // undefined").
-    readonly property var _layout: {
-        var cols = pot._columns
+    // the height of the chip block. Computed from a COPY of the columns, so the
+    // flight can ask for the layout of a pot that has not appeared yet
+    // (`arrivalPoints`); reading separate bindings used to hit a stale array on an
+    // amount change ("Cannot read property 'back' of undefined").
+    function _layoutOf(cols) {
         var n = cols.length
-        // The front row holds two stacks; the fifth column closes it.
-        var frontN = n >= 5 ? 3 : Math.min(n, 2)
-        var d = pot._d, step = pot._step, shift = pot._shift
         var chips = [], backChips = [], frontChips = []
         var minX = 0, maxX = 0, chipsH = 0
         for (var i = 0; i < n; ++i) {
-            var back = i >= frontN
-            var cx = 0
-            if (!back) {
-                // front slots in creation order: left, right, then the closing one
-                if (frontN === 3)
-                    cx = i === 2 ? 0 : (i === 0 ? -step : step)
-                else if (frontN === 2)
-                    cx = i === 0 ? -step / 2 : step / 2
-            } else {
-                var j = i - frontN
-                if (frontN === 3)
-                    // the classic pair in the two hollows of the closed front row
-                    cx = j === 0 ? -step / 2 : step / 2
-                else if (frontN === 2)
-                    // above the hollow, then next to it on the right
-                    cx = j === 0 ? 0 : step
-            }
-            minX = Math.min(minX, cx - d / 2)
-            maxX = Math.max(maxX, cx + d / 2)
+            var s = _slotAt(i, n)
+            minX = Math.min(minX, s.cx - _d / 2)
+            maxX = Math.max(maxX, s.cx + _d / 2)
             var col = cols[i]
-            var h = pot._faceH + col.length * pot._band + (back ? shift : 0)
+            var h = _faceH + col.length * _band + (s.back ? _shift : 0)
             if (h > chipsH)
                 chipsH = h
             for (var k = 0; k < col.length; ++k) {
-                var item = { "value": col[k], "cx": cx, "level": k, "back": back }
-                if (back)
+                var item = { "value": col[k], "cx": s.cx, "level": k, "back": s.back }
+                if (s.back)
                     backChips.push(item)
                 else
                     frontChips.push(item)
@@ -122,6 +162,8 @@ Item {
                  "chipsH": chipsH }
     }
 
+    readonly property var _layout: _layoutOf(_columns)
+
     // The pile is centred on its OWN bounding box: the four-column state is not
     // symmetric (the top row is shifted right), so the item cannot just centre the
     // slot origin.
@@ -130,6 +172,40 @@ Item {
     // Bottom line of the front row (the pill hangs under it, overlapping 1 px).
     readonly property real _baseY: height - (_pillH - _pillOverlap)
     readonly property var _chips: _layout.chips
+
+    // ── where the arriving chips will land ──────────────────────────────────
+    // The collect animation holds the pot sum back while the chips fly
+    // (GamePage.potShown), so this pile still shows the OLD columns. The flight is
+    // aimed at the position the new chips WILL take, which is why the same
+    // grow/roll is computed here ahead of time (the seed makes it deterministic).
+    //
+    // One point per column that grows, at the centre of its new top chip. The point
+    // is given relative to the two things that do not depend on the height of the
+    // block: `dx` from the pile's centre (the middle of the block, where the badge
+    // hangs it) and `up` from the pile's BOTTOM line (the pill's bottom, fixed 3 px
+    // above the card row) — see CommunityCards.potArrivalPoints.
+    function arrivalPoints(added) {
+        if (added <= 0)
+            return []
+        var fut = (_columns.length === 0)
+                ? ChipSplit.columns(amount + added, cash, maxColumns, maxPerStack, _rng())
+                : ChipSplit.grow(_columns, added, cash, maxColumns, maxPerStack)
+        if (fut.length === 0)
+            return []
+        var lay = _layoutOf(fut)
+        var out = []
+        for (var i = 0; i < fut.length; ++i) {
+            var wasN = i < _columns.length ? _columns[i].length : 0
+            var nowN = fut[i].length
+            if (nowN <= wasN)
+                continue
+            var s = _slotAt(i, fut.length)
+            out.push({ "dx": s.cx - lay.midX,
+                       "up": (_pillH - _pillOverlap) + (s.back ? _shift : 0)
+                             + (_faceH + _band) / 2 + (nowN - 1) * _band })
+        }
+        return out
+    }
 
     Repeater {
         model: pot._chips

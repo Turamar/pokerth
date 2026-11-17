@@ -38,6 +38,26 @@ Item {
         Qt.point(potBadge.x + potBadge.width / 2,
                  potBadge.y + potBadge.height / 2)
 
+    // Gap between the pot block and the card row: the pill's bottom hangs this far
+    // above the cards (the pile's bottom line, which does not move when the pot
+    // grows upwards).
+    readonly property int _potGap: 3
+
+    // Where the chips that are ARRIVING will land — the centre of the new top chip of
+    // every column that grows (PotPile.arrivalPoints). The pot still shows the OLD sum
+    // during the flight (GamePage.potShown), so the pile computes the layout it is
+    // about to show; this adds the anchor: the bottom line of the pile is fixed
+    // (`_potGap` above the card row) and the pile is centred on the card row.
+    function potArrivalPoints(added) {
+        var pts = potPile.arrivalPoints(added)
+        var out = []
+        var cx = cardRow.x + cardRow.width / 2
+        var bottom = cardRow.y - _potGap
+        for (var i = 0; i < pts.length; ++i)
+            out.push(Qt.point(cx + pts[i].dx, bottom - pts[i].up))
+        return out
+    }
+
     // The chip values of an amount, split exactly like the pot pile itself
     // (`chipsplit.js`, the same greedy ladder and the same denominations): the
     // biggest rungs first, up to four chips each. The collect animation takes a
@@ -216,7 +236,7 @@ Item {
         anchors.horizontalCenter: cardRow.horizontalCenter
         anchors.bottom: cardRow.top
         // Fixed by the vertical budget above: 3 both in landscape and portrait.
-        anchors.bottomMargin: 3
+        anchors.bottomMargin: root._potGap
         visible: root.shownPot > 0
         width: potPile.width
         height: potPile.height
