@@ -714,6 +714,11 @@ Rectangle {
             // the plate must not grow before the pile arrives.
             property var _heldStacks: ({})
             property bool _potPaying: false
+            // The hand ended while the last betting round was still gliding into the pot:
+            // the payout waits for the chips to land (it must divide the COMPLETE pot, and
+            // the collect's own timer would otherwise show the pot again in the middle of
+            // the payout — the bug the player saw on 2026-11-18).
+            property bool _payoutPending: false
             // The player's beat (decisions 2026-11-18): the pot divides, the sums stand
             // for a moment, then the piles glide — SMALLEST payout first, the main pot
             // last ("а куда же улетит основной банк") — and each pile STAYS at its winner
@@ -722,8 +727,9 @@ Rectangle {
             readonly property int _payoutPause: 650
             readonly property int _payoutStagger: 500
             // The stagger is capped: with many winners the last piles leave together, so
-            // that the payout still ends well before the next hand (5.5 s locally).
-            readonly property int _payoutStaggerMax: 900
+            // that the payout still ends before the next hand (5.5 s locally) — also when
+            // it had to wait for the last collected round (`_payoutPending`).
+            readonly property int _payoutStaggerMax: 700
             readonly property int _payoutLinger: 2000
             readonly property int _payoutFade: 180
             readonly property int _payoutTravelBase: 700
@@ -741,6 +747,13 @@ Rectangle {
                 tableZone._potFlightKind = ""
                 if (typeof GameTable !== "undefined" && GameTable)
                     tableZone.potShown = GameTable.pot
+                // The last round was still gliding into the pot when the hand ended: the
+                // payout waited for it (`_payoutPending`), now the pot is complete and the
+                // piles can be made of the right chips.
+                if (tableZone._payoutPending) {
+                    tableZone._payoutPending = false
+                    tableZone._startPotPayout()
+                }
             }
 
             // One chip PUSHED over the felt: a straight line (glide — no arc at all), a
@@ -875,6 +888,7 @@ Rectangle {
             function _potPayoutDone() {
                 tableZone._potPayouts = []
                 tableZone._potPaying = false
+                tableZone._payoutPending = false
                 tableZone._heldStacks = ({})
                 tableZone.potShown = 0
             }
@@ -909,6 +923,15 @@ Rectangle {
                 }
                 if (tableZone._potPaying)
                     return
+                // The last betting round is still gliding into the pot (the hand ended
+                // right after it was collected): pay out only once those chips have landed
+                // — otherwise the pot is divided without them AND the collect's timer brings
+                // the pot back in the middle of the payout (`_potFlightDone`).
+                if (tableZone._potCollecting) {
+                    tableZone._payoutPending = true
+                    return
+                }
+                tableZone._payoutPending = false
                 if (!hasAwards) {
                     // An engine that does not report the amounts: equal shares.
                     awards = []
@@ -1007,8 +1030,9 @@ Rectangle {
                         tableZone._potCollecting = false
                         tableZone._potFlightKind = ""
                         potFlightTimer.stop()
-                        // A lingering payout pile must not lie over the new hand.
-                        if (tableZone._potPaying)
+                        // A lingering payout pile (or a payout still waiting for the last
+                        // collected round) must not live over the new hand.
+                        if (tableZone._potPaying || tableZone._payoutPending)
                             tableZone._potPayoutDone()
                         tableZone.potShown = np
                         return
