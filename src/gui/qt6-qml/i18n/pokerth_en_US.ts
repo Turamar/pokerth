@@ -854,6 +854,50 @@
         <source>New Game</source>
         <translation>New Game</translation>
     </message>
+    <message>
+        <source>Spectating</source>
+        <translation>Spectating</translation>
+    </message>
+    <message>
+        <source>Tisch-Info</source>
+        <translation>Table info</translation>
+    </message>
+    <message>
+        <source>Ace’s Help</source>
+        <translation>Ace’s Help</translation>
+    </message>
+    <message>
+        <source>Turnier beendet</source>
+        <translation>Tournament finished</translation>
+    </message>
+    <message>
+        <source>Du hast das Turnier gewonnen!</source>
+        <translation>You won the tournament!</translation>
+    </message>
+    <message>
+        <source>Ausgeschieden: Platz %1 von %2</source>
+        <translation>Knocked out: place %1 of %2</translation>
+    </message>
+    <message>
+        <source>Dein Stack ist aufgebraucht.</source>
+        <translation>Your stack is gone.</translation>
+    </message>
+    <message>
+        <source>Preis: %1</source>
+        <translation>Prize: %1</translation>
+    </message>
+    <message>
+        <source>Kein Preis</source>
+        <translation>No prize</translation>
+    </message>
+    <message>
+        <source>Guthaben: %1</source>
+        <translation>Balance: %1</translation>
+    </message>
+    <message>
+        <source>Noch einmal</source>
+        <translation>Play Again</translation>
+    </message>
 </context>
 <context>
     <name>GamePlayerBox</name>
@@ -1493,6 +1537,10 @@
         <source>Spieler in eigenen Community-Spielen vorschlagen</source>
         <translation>Suggest players in your own community games</translation>
     </message>
+    <message>
+        <source>Immer die aktuelle Hand anzeigen</source>
+        <translation>Always show the current hand</translation>
+    </message>
 </context>
 <context>
     <name>GuideOverlay</name>
@@ -1830,6 +1878,26 @@
         <location line="+1"/>
         <source>A player’s card: the profile and the statistics — the current season, the last games and the results so far.</source>
         <translation>A player’s card: the profile and the statistics — the current season, the last games and the results so far.</translation>
+    </message>
+    <message>
+        <source>Cash table: pick the limit, the number of players and the buy-in, then sit down. Nothing here counts towards a ranking.</source>
+        <translation>Cash table: pick the limit, the number of players and the buy-in, then sit down. Nothing here counts towards a ranking.</translation>
+    </message>
+    <message>
+        <source>**Number of players**: you and up to eight computer players.</source>
+        <translation>**Number of players**: you and up to eight computer players.</translation>
+    </message>
+    <message>
+        <source>**Buy-in**: the stack you sit down with, in big blinds (20 to 100). It leaves your balance when the table starts and comes back when you leave.</source>
+        <translation>**Buy-in**: the stack you sit down with, in big blinds (20 to 100). It leaves your balance when the table starts and comes back when you leave.</translation>
+    </message>
+    <message>
+        <source>**Blinds**: fixed by the limit — a cash table never raises them.</source>
+        <translation>**Blinds**: fixed by the limit — a cash table never raises them.</translation>
+    </message>
+    <message>
+        <source>Every setting, by section: interface, table, players, sound, style, the advanced log settings, and back to the defaults. Ace’s Help is switched on and off in the interface settings.</source>
+        <translation>Every setting, by section: interface, table, players, sound, style, the advanced log settings, and back to the defaults. Ace’s Help is switched on and off in the interface settings.</translation>
     </message>
 </context>
 <context>
@@ -2957,6 +3025,50 @@ PokerTH can scale it down for you. The new avatar becomes active the next time y
         <source>Spiel starten</source>
         <translation>Start game</translation>
     </message>
+    <message>
+        <source>Cash-Tisch</source>
+        <translation>Cash Table</translation>
+    </message>
+    <message>
+        <source>Guthaben</source>
+        <translation>Balance</translation>
+    </message>
+    <message>
+        <source>Tisch-Einstellungen</source>
+        <translation>Table Settings</translation>
+    </message>
+    <message>
+        <source>Limit (Blinds, ab wie viel Guthaben):</source>
+        <translation>Limit (blinds, balance required):</translation>
+    </message>
+    <message>
+        <source>Buy-in %1–%2</source>
+        <translation>Buy-in %1–%2</translation>
+    </message>
+    <message>
+        <source>offen</source>
+        <translation>open</translation>
+    </message>
+    <message>
+        <source>ab %1</source>
+        <translation>from %1</translation>
+    </message>
+    <message>
+        <source>Buy-in (Big Blinds):</source>
+        <translation>Buy-in (Big Blinds):</translation>
+    </message>
+    <message>
+        <source>%1 Big Blinds = %2 · Blinds %3 / %4, keine Erhöhung</source>
+        <translation>%1 big blinds = %2 · blinds %3 / %4, no increase</translation>
+    </message>
+    <message>
+        <source>Kein offenes Limit: für die unterste Stufe sind %1 nötig, dein Guthaben ist %2. Der Rebuy auf der Guthaben-Seite füllt bis dahin auf.</source>
+        <translation>No open limit: the bottom step needs %1, your balance is %2. The rebuy on the balance page fills it up to that.</translation>
+    </message>
+    <message>
+        <source>Der Platz konnte nicht gekauft werden.</source>
+        <translation>The seat could not be bought.</translation>
+    </message>
 </context>
 <context>
     <name>LocalGameSettings</name>
@@ -3104,6 +3216,30 @@ PokerTH can scale it down for you. The new avatar becomes active the next time y
         <location line="+16"/>
         <source>Gilt für lokale Spiele. Bei Netzwerkspielen bestimmt der Server die Stärke seiner Computerspieler.</source>
         <translation>Applies to local games. In network games the server decides how strong its computer players are.</translation>
+    </message>
+    <message>
+        <source>Tisch</source>
+        <translation>Table</translation>
+    </message>
+    <message>
+        <source>Spieler</source>
+        <translation>Players</translation>
+    </message>
+    <message>
+        <source>Tempo</source>
+        <translation>Pace</translation>
+    </message>
+    <message>
+        <source>Zeitlimit pro Aktion
+(Sekunden, 0 = aus):</source>
+        <translation>Time limit per action
+(seconds, 0 = off):</translation>
+    </message>
+    <message>
+        <source>Pause vor dem Zug des Computers
+(Millisekunden):</source>
+        <translation>Delay before the computer’s move
+(milliseconds):</translation>
     </message>
 </context>
 <context>
@@ -3356,6 +3492,10 @@ Please restart PokerTH so that the log files are stored there.</translation>
         <location line="-29"/>
         <source>Log-Speicherdauer (Tage):</source>
         <translation>Log Retention (Days):</translation>
+    </message>
+    <message>
+        <source>Erweitert</source>
+        <translation>Advanced</translation>
     </message>
 </context>
 <context>
@@ -3729,6 +3869,10 @@ Please restart PokerTH so that the log files are stored there.</translation>
         <location line="+10"/>
         <source>Nickname:</source>
         <translation>Nickname:</translation>
+    </message>
+    <message>
+        <source>Spieler</source>
+        <translation>Players</translation>
     </message>
 </context>
 <context>
@@ -4915,6 +5059,18 @@ Please check your username and password.</translation>
         <source>Standardeinstellung</source>
         <translation>Default Settings</translation>
     </message>
+    <message>
+        <source>Tisch</source>
+        <translation>Table</translation>
+    </message>
+    <message>
+        <source>Spieler</source>
+        <translation>Players</translation>
+    </message>
+    <message>
+        <source>Erweitert</source>
+        <translation>Advanced</translation>
+    </message>
 </context>
 <context>
     <name>SideMenu</name>
@@ -5031,6 +5187,10 @@ Please check your username and password.</translation>
         <location line="+13"/>
         <source>Logs</source>
         <translation>Logs</translation>
+    </message>
+    <message>
+        <source>Turniere</source>
+        <translation>Tournaments</translation>
     </message>
 </context>
 <context>
@@ -5452,6 +5612,220 @@ and go back to the lobby?</translation>
 and disconnect from the server?</source>
         <translation>Attention! Do you really want to leave the lobby
 and disconnect from the server?</translation>
+    </message>
+    <message>
+        <source>Wallet</source>
+        <translation>Wallet</translation>
+    </message>
+</context>
+<context>
+    <name>CurrentHandBadge</name>
+    <message>
+        <source>Höchste Karte</source>
+        <translation>High Card</translation>
+    </message>
+    <message>
+        <source>Paar</source>
+        <translation>Pair</translation>
+    </message>
+    <message>
+        <source>Zwei Paare</source>
+        <translation>Two Pair</translation>
+    </message>
+    <message>
+        <source>Drilling</source>
+        <translation>Three of a Kind</translation>
+    </message>
+    <message>
+        <source>Straße</source>
+        <translation>Straight</translation>
+    </message>
+    <message>
+        <source>Flush</source>
+        <translation>Flush</translation>
+    </message>
+    <message>
+        <source>Full House</source>
+        <translation>Full House</translation>
+    </message>
+    <message>
+        <source>Vierling</source>
+        <translation>Four of a Kind</translation>
+    </message>
+    <message>
+        <source>Straight Flush</source>
+        <translation>Straight Flush</translation>
+    </message>
+    <message>
+        <source>Royal Flush</source>
+        <translation>Royal Flush</translation>
+    </message>
+</context>
+<context>
+    <name>GameTournamentPanel</name>
+    <message>
+        <source>Blinds: %1 / %2</source>
+        <translation>Blinds: %1 / %2</translation>
+    </message>
+    <message>
+        <source>Next: %1 / %2 · in %3 hands</source>
+        <translation>Next: %1 / %2 · in %3 hands</translation>
+    </message>
+    <message>
+        <source>Level: %1</source>
+        <translation>Level: %1</translation>
+    </message>
+    <message>
+        <source>Place: %1 of %2 left · %3 total</source>
+        <translation>Place: %1 of %2 left · %3 total</translation>
+    </message>
+    <message>
+        <source>Paid: %1 of %2</source>
+        <translation>Paid: %1 of %2</translation>
+    </message>
+    <message>
+        <source>Hand: %1</source>
+        <translation>Hand: %1</translation>
+    </message>
+</context>
+<context>
+    <name>TournamentsPage</name>
+    <message>
+        <source>Platz %1: %2</source>
+        <translation>Place %1: %2</translation>
+    </message>
+    <message>
+        <source>Turniere</source>
+        <translation>Tournaments</translation>
+    </message>
+    <message>
+        <source>Guthaben</source>
+        <translation>Balance</translation>
+    </message>
+    <message>
+        <source>Plätze</source>
+        <translation>seats</translation>
+    </message>
+    <message>
+        <source>Spielen</source>
+        <translation>Play</translation>
+    </message>
+    <message>
+        <source>Der Platz konnte nicht gekauft werden.</source>
+        <translation>The seat could not be bought.</translation>
+    </message>
+    <message>
+        <source>Buy-in %1  ·  %2 BB  ·  Level alle %3 Hände  ·  Feld: %4</source>
+        <translation>Buy-in %1  ·  %2 BB  ·  level every %3 hands  ·  field: %4</translation>
+    </message>
+    <message>
+        <source>Nicht genug Guthaben: nötig sind %1.</source>
+        <translation>Not enough balance: %1 is needed.</translation>
+    </message>
+    <message>
+        <source>Zurück</source>
+        <translation>Back</translation>
+    </message>
+</context>
+<context>
+    <name>WalletPage</name>
+    <message>
+        <source>jetzt</source>
+        <translation>now</translation>
+    </message>
+    <message>
+        <source>Geldbeutel</source>
+        <translation>Wallet</translation>
+    </message>
+    <message>
+        <source>Guthaben</source>
+        <translation>Balance</translation>
+    </message>
+    <message>
+        <source>Hände gespielt</source>
+        <translation>Hands played</translation>
+    </message>
+    <message>
+        <source>Hände gewonnen</source>
+        <translation>Hands won</translation>
+    </message>
+    <message>
+        <source>Spieler</source>
+        <translation>Player</translation>
+    </message>
+    <message>
+        <source>Rebuy</source>
+        <translation>Rebuy</translation>
+    </message>
+    <message>
+        <source>Rebuy bis %1 aufstocken</source>
+        <translation>Rebuy up to %1</translation>
+    </message>
+    <message>
+        <source>Das Guthaben liegt unter %1 – der Rebuy füllt es wieder auf.</source>
+        <translation>Your balance is below %1 — the rebuy fills it up again.</translation>
+    </message>
+    <message>
+        <source>Nicht am Tisch möglich – verlasse zuerst das Spiel.</source>
+        <translation>Not possible at the table — leave the game first.</translation>
+    </message>
+    <message>
+        <source>Nächster Rebuy in %1.</source>
+        <translation>Next rebuy in %1.</translation>
+    </message>
+    <message>
+        <source>Der Rebuy wird angeboten, wenn das Guthaben unter %1 liegt.</source>
+        <translation>A rebuy is offered when your balance is below %1.</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>OK</translation>
+    </message>
+    <message>
+        <source>Der Spielstand kann nicht gespeichert werden: %1</source>
+        <translation>The game state cannot be saved: %1</translation>
+    </message>
+    <message>
+        <source>Statusdatei: %1</source>
+        <translation>State file: %1</translation>
+    </message>
+    <message>
+        <source>Zurück</source>
+        <translation>Back</translation>
+    </message>
+</context>
+<context>
+    <name>TournamentEvent</name>
+    <message>
+        <source>Schule</source>
+        <translation>School</translation>
+    </message>
+    <message>
+        <source>18 Plätze an zwei Tischen, fünf werden bezahlt: der erste Schritt hinauf</source>
+        <translation>18 seats at two tables, five get paid: the first step up</translation>
+    </message>
+    <message>
+        <source>Sechser</source>
+        <translation>Six-Handed</translation>
+    </message>
+    <message>
+        <source>6 Plätze, zwei werden bezahlt: das Geld ist nah, die Blinds warten nicht</source>
+        <translation>6 seats, two get paid: the money is close and the blinds wait for no one</translation>
+    </message>
+    <message>
+        <source>Neuner</source>
+        <translation>Nine-Handed</translation>
+    </message>
+    <message>
+        <source>9 Plätze, drei werden bezahlt: voller Tisch und eine echte Bubble</source>
+        <translation>9 seats, three get paid: a full table and a real bubble</translation>
+    </message>
+</context>
+<context>
+    <name>WalletHandler</name>
+    <message>
+        <source>Interrupted cash table session: %1 of the %2 buy-in went back into your balance.</source>
+        <translation>Interrupted cash table session: %1 of the %2 buy-in went back into your balance.</translation>
     </message>
 </context>
 </TS>
