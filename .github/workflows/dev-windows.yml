@@ -74,16 +74,42 @@ jobs:
                       /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
           df -h /
 
+      # apt на раннере GitHub периодически отдаёт пакеты минутами, и шаг
+      # «Install cross toolchain» висел 10–30 минут на скачивании 291 МБ.
+      # Поэтому .deb кладём в каталог кэша: первый прогон качает как раньше,
+      # следующие ставятся из кэша за ~минуту. Ключ фиксированный (не hash
+      # файла), чтобы правка комментариев не сбрасывала кэш; при смене списка
+      # пакетов поднять версию в ключе. Кэш сохраняется на ветке, где прогон
+      # дошёл до шага сохранения; ветки видят кэш транка (stable), поэтому
+      # первый прогон на новой ветке может быть медленным — это нормально.
+      - name: Restore apt cache
+        id: apt-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/apt-debs
+          key: apt-debs-ubuntu2404-v1
+
       - name: Install cross toolchain
+        timeout-minutes: 15
+        env:
+          APT_OPTS: >-
+            -o Acquire::Retries=3 -o Acquire::http::Timeout=20
+            -o Acquire::https::Timeout=20 -o Acquire::ForceIPv4=true
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            mingw-w64 ninja-build \
-            cmake git wget curl \
-            zip unzip p7zip-full \
-            build-essential pkg-config \
-            autoconf automake libtool \
+          set -euo pipefail
+          CACHE="$HOME/apt-debs"
+          mkdir -p "$CACHE/partial"
+          sudo apt-get update $APT_OPTS
+          # Только x86_64: полный metapackage mingw-w64 тянет ещё и i686
+          # (~90 МБ впустую). Набор вариантов тот же, что был.
+          sudo apt-get install -y $APT_OPTS --no-install-recommends \
+            -o Dir::Cache::archives="$CACHE" \
+            g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 \
+            binutils-mingw-w64-x86-64 mingw-w64-x86-64-dev \
+            ninja-build cmake git wget curl zip unzip p7zip-full \
+            build-essential pkg-config autoconf automake libtool \
             python3 python3-pip python3-venv
+          sudo chown -R "$(id -u):$(id -g)" "$CACHE"
           # Qt нужен std::thread -> только POSIX-вариант MinGW.
           for tool in gcc g++; do
             if [ -e "/usr/bin/x86_64-w64-mingw32-${tool}-posix" ]; then
@@ -92,6 +118,14 @@ jobs:
             fi
           done
           x86_64-w64-mingw32-g++ -v 2>&1 | tail -3
+          du -sh "$CACHE" || true
+
+      - name: Save apt cache
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/apt-debs
+          key: apt-debs-ubuntu2404-v1
 
       # build_windows.sh работает в ${ROOT}/pokerth и выводит все пути из ${ROOT}.
       - name: Set up build root
