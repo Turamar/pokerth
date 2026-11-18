@@ -253,6 +253,10 @@ bool Wallet::canEnterTournament(const TournamentEvent &event, QString *reason) c
 		why = QStringLiteral("the buy-in has to be positive");
 	} else if(event.buyIn > m_document.profile.balance) {
 		why = QStringLiteral("the balance does not cover this buy-in");
+	} else if(event.gate > m_document.profile.balance) {
+		// The event is shown but not offered: the buy-in would fit, the
+		// bankroll the event starts from does not (PLAN.md section 2).
+		why = QStringLiteral("the balance is below this event's gate");
 	} else {
 		ok = true;
 	}

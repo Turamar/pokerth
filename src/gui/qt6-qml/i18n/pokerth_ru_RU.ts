@@ -2104,6 +2104,10 @@ and disconnect from the server?</source>
         <translation>Бай-ин %1  ·  %2 BB  ·  уровень каждые %3 раздач  ·  поле: %4</translation>
     </message>
     <message>
+        <source>Guthaben ab %1</source>
+        <translation>Баланс от %1</translation>
+    </message>
+    <message>
         <source>Nicht genug Guthaben: nötig sind %1.</source>
         <translation>Не хватает баланса: нужно %1.</translation>
     </message>
@@ -2137,6 +2141,22 @@ and disconnect from the server?</source>
     <message>
         <source>18 Plätze an zwei Tischen, fünf werden bezahlt: der erste Schritt hinauf</source>
         <translation>18 мест за двумя столами, платят пятерым: первая ступень вверх</translation>
+    </message>
+    <message>
+        <source>Tagesturnier</source>
+        <translation>Дневной</translation>
+    </message>
+    <message>
+        <source>45 Plätze an fünf Tischen, sieben werden bezahlt: das erste große Feld</source>
+        <translation>45 мест за пятью столами, платят семерым: первое большое поле</translation>
+    </message>
+    <message>
+        <source>Doppelt oder nichts</source>
+        <translation>Двойное или ничего</translation>
+    </message>
+    <message>
+        <source>8 Plätze, vier verdoppeln: überleben statt Finaltisch</source>
+        <translation>8 мест, четверым удваивают: выживание вместо финального стола</translation>
     </message>
 </context>
 <context>

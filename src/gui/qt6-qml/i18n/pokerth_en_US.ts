@@ -2039,6 +2039,10 @@ and disconnect from the server?</translation>
         <translation>Buy-in %1  ·  %2 BB  ·  level every %3 hands  ·  field: %4</translation>
     </message>
     <message>
+        <source>Guthaben ab %1</source>
+        <translation>Balance from %1</translation>
+    </message>
+    <message>
         <source>Nicht genug Guthaben: nötig sind %1.</source>
         <translation>Not enough balance: %1 is needed.</translation>
     </message>
@@ -2123,6 +2127,22 @@ and disconnect from the server?</translation>
     <message>
         <source>18 Plätze an zwei Tischen, fünf werden bezahlt: der erste Schritt hinauf</source>
         <translation>18 seats at two tables, five get paid: the first step up</translation>
+    </message>
+    <message>
+        <source>Tagesturnier</source>
+        <translation>Daily</translation>
+    </message>
+    <message>
+        <source>45 Plätze an fünf Tischen, sieben werden bezahlt: das erste große Feld</source>
+        <translation>45 seats at five tables, seven get paid: the first big field</translation>
+    </message>
+    <message>
+        <source>Doppelt oder nichts</source>
+        <translation>Double or Nothing</translation>
+    </message>
+    <message>
+        <source>8 Plätze, vier verdoppeln: überleben statt Finaltisch</source>
+        <translation>8 seats, four double up: survival instead of the final table</translation>
     </message>
     <message>
         <source>Sechser</source>

@@ -26,7 +26,10 @@
 namespace PlayerState
 {
 
-const int MaxTournamentPayouts = 5;
+/* The largest payout grid in the catalogue. The "Daily" pays seven places
+ * (D-048), so the array holds seven; the 180-seat events would need 27-36 and
+ * will raise it when they arrive (PLAN.md section 9). */
+const int MaxTournamentPayouts = 7;
 
 /* Nine seats at a tournament table - the common table limit (MAX_TABLE_SEATS in
  * game_defs.h), not the engine's ten (MAX_NUMBER_OF_PLAYERS). Decision 2026-11-10:
@@ -48,10 +51,16 @@ struct TournamentEvent
 	const char *label;    // what the player sees
 	const char *note;     // one line: the question this event asks
 	qint64 buyIn;         // cents
+	/* The bankroll the event asks for before the seat is offered, in cents;
+	 * 0 = the buy-in is the only condition. The same idea as the gate of a
+	 * cash limit (PLAN.md section 2): the event is not "too expensive", it is
+	 * "too expensive for the bankroll". The first event with a gate is the
+	 * double-or-nothing (D-049). */
+	qint64 gate;
 	int seats;
 	/* The field (botprofile.h): "micro", "rookie", "low", "mid", "high".
 	 * For the bottom events it follows the price, not the size: the field is
-	 * the second dial and moves one step at a time. */
+	 * the second dial and moves one step at a time; "low" starts at 2.00. */
 	const char *field;
 	int levelHands;       // hands per blind level
 	int startStack;       // chips every seat starts with
@@ -62,6 +71,12 @@ struct TournamentEvent
 	qint64 pool() const
 	{
 		return buyIn * seats;
+	}
+	// What the balance has to reach before the seat can be bought: the gate if
+	// there is one, the buy-in otherwise.
+	qint64 requiredBalance() const
+	{
+		return gate > buyIn ? gate : buyIn;
 	}
 	// What a place pays, 0 for an unpaid one.
 	qint64 prizeForPlace(int place) const;

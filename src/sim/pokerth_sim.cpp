@@ -843,6 +843,29 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 			}
 			check(paidOut == event.pool(),
 				  QStringLiteral("tournament %1 pays out exactly its pool").arg(key));
+			check(event.gate == 0 || event.gate > event.buyIn,
+				  QStringLiteral("tournament %1 asks for a bankroll above its buy-in")
+				  .arg(key));
+		}
+
+		// ── The gate of an event (PLAN.md section 2) ────────────────────────
+		{
+			// A closed event still takes the whole buy-in out of the balance; the
+			// gate is a bankroll, not a fee, so the check is "the balance is at
+			// least requiredBalance()" and not "the balance covers the buy-in".
+			const PlayerState::TournamentEvent &gated =
+					PlayerState::tournamentEventByKey(QStringLiteral("don"));
+			check(gated.gate > gated.buyIn,
+				  QStringLiteral("the gated event carries a gate at all"));
+			PlayerState::Wallet poor(
+					PlayerState::StateStore::newDocument(QStringLiteral("SelfTest")));
+			check(poor.balance() < gated.gate,
+				  QStringLiteral("the test wallet starts below the gate"));
+			check(!poor.canEnterTournament(gated),
+				  QStringLiteral("below the gate the event is closed"));
+			poor.document().profile.balance = gated.gate;
+			check(poor.canEnterTournament(gated),
+				  QStringLiteral("the gate itself opens the event"));
 		}
 
 		// ── The roster of a tournament (PLAN.md section 3, "Ростер") ────────

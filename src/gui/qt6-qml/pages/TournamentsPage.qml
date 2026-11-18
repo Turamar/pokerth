@@ -10,9 +10,11 @@ import "../components"
 //
 // A tournament is not a cash table with bigger blinds: the buy-in buys chips
 // that never come back as chips, the blinds rise, and only the first places are
-// paid. Two events are single tables; "Schule" sits on two tables of nine.
-// What differs is the size, the payout and the shape of the field - the
-// question they ask, not just bigger blinds.
+// paid. Three events are single tables; "Schule" sits on two tables of nine and
+// "Tagesturnier" on five. What differs is the size, the payout and the shape of
+// the field - the question they ask, not just bigger blinds. An event may also
+// ask for a bankroll (the gate): below it the card is shown but the button is
+// closed.
 Rectangle {
     id: tournamentsPage
     objectName: "tournamentsPage"
@@ -158,6 +160,10 @@ Rectangle {
                                   .arg(modelData.stackInBB)
                                   .arg(modelData.levelHands)
                                   .arg(modelData.field)
+                                  + (modelData.gate > 0
+                                     ? "  ·  " + qsTr("Guthaben ab %1")
+                                                    .arg(Wallet.money(modelData.gate))
+                                     : "")
                             color: Config.StaticData.palette.secondary.col400
                             font.pixelSize: Config.Theme.fontSizeCaption
                             wrapMode: Text.WordWrap
@@ -175,7 +181,7 @@ Rectangle {
                             Layout.fillWidth: true
                             visible: !modelData.unlocked
                             text: qsTr("Nicht genug Guthaben: nötig sind %1.")
-                                  .arg(Wallet.money(modelData.buyIn))
+                                  .arg(Wallet.money(modelData.required))
                             color: Config.Theme.colorDanger
                             font.pixelSize: Config.Theme.fontSizeCaption
                             wrapMode: Text.WordWrap

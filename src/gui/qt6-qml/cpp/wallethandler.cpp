@@ -135,7 +135,9 @@ int WalletHandler::unlockedLimits() const
 // The tournament catalogue for the page: one map per event. The prize of every
 // paid place is computed here (from the pool, no rake), so that QML never does
 // money arithmetic. Label and note are QT_TRANSLATE_NOOP sources in the
-// catalogue (state/tournament.cpp) and get their words here.
+// catalogue (state/tournament.cpp) and get their words here. The balance opens
+// an event only once it reaches requiredBalance() - the gate of an event with a
+// gate, the buy-in otherwise.
 QVariantList WalletHandler::tournaments() const
 {
 	QVariantList list;
@@ -150,11 +152,13 @@ QVariantList WalletHandler::tournaments() const
 			QCoreApplication::translate("TournamentEvent", event.note);
 		entry[QStringLiteral("seats")] = event.seats;
 		entry[QStringLiteral("buyIn")] = static_cast<int>(event.buyIn);
+		entry[QStringLiteral("gate")] = static_cast<int>(event.gate);
+		entry[QStringLiteral("required")] = static_cast<int>(event.requiredBalance());
 		entry[QStringLiteral("field")] = QString::fromLatin1(event.field);
 		entry[QStringLiteral("levelHands")] = event.levelHands;
 		entry[QStringLiteral("stackInBB")] = event.stackInBB();
 		entry[QStringLiteral("firstPrize")] = static_cast<int>(event.prizeForPlace(1));
-		entry[QStringLiteral("unlocked")] = balanceNow >= event.buyIn;
+		entry[QStringLiteral("unlocked")] = balanceNow >= event.requiredBalance();
 		QVariantList prizes;
 		for(int p = 0; p < event.payoutCount; ++p) {
 			QVariantMap prize;
