@@ -86,7 +86,6 @@ set(POKERTH_LIB_SRC
     src/engine/playerinterface.cpp 
     src/engine/berointerface.cpp 
     src/gui/guiinterface.cpp 
-    src/core/thread.cpp 
     src/core/crypthelper.cpp 
     src/core/avatarmanager.cpp 
     src/core/pokerthexception.cpp 

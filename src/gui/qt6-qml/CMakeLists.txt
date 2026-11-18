@@ -19,7 +19,6 @@ set(POKERTH_QML_CLIENT_SRC ../../pokerth.cpp
 
 qt_add_resources(POKERTH_QML_CLIENT_SRC qml.qrc)
 qt_add_resources(POKERTH_QML_CLIENT_SRC cflags.qrc)
-qt_add_resources(POKERTH_QML_CLIENT_SRC emotes.qrc)
 
 # SvgIcon: a version dependent SVG wrapper. Qt >= 6.8 uses the real
 # QtQuick.VectorImage (vectorial, sharp); older Qt (e.g. 6.7 for the

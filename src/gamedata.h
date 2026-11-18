@@ -36,17 +36,7 @@
 #include <list>
 #include <string>
 #include <vector>
-#ifndef Q_MOC_RUN
-#include <third_party/boost/timers.hpp>
-#endif
-
 typedef std::list<unsigned> PlayerIdList;
-
-enum GameMode {
-	GAME_MODE_CREATED = 1,
-	GAME_MODE_STARTED,
-	GAME_MODE_CLOSED
-};
 
 enum GameType {
 	GAME_TYPE_NORMAL = 1,
@@ -107,37 +97,10 @@ struct GameData {
 	std::vector<int> seatStacks;
 };
 
-struct GameInfo {
-	GameInfo() : mode(GAME_MODE_CREATED), adminPlayerId(0), isPasswordProtected(false) {}
-	std::string name;
-	GameData data;
-	GameMode mode;
-	unsigned adminPlayerId;
-	PlayerIdList players;
-	PlayerIdList spectators;
-	PlayerIdList spectatorsDuringGame;
-	bool isPasswordProtected;
-};
-
 struct StartData {
 	StartData() : startDealerPlayerId(0), numberOfPlayers(0) {}
 	unsigned startDealerPlayerId;
 	int numberOfPlayers;
-};
-
-struct VoteKickData {
-	VoteKickData()
-		: petitionId(0), kickPlayerId(0), numVotesToKick(0),
-		  numVotesInFavourOfKicking(0), numVotesAgainstKicking(0), timeLimitSec(0),
-		  voteTimer(boost::posix_time::time_duration(0, 0, 0), boost::timers::portable::microsec_timer::auto_start) {}
-	unsigned petitionId;
-	unsigned kickPlayerId;
-	int numVotesToKick;
-	int numVotesInFavourOfKicking;
-	int numVotesAgainstKicking;
-	int timeLimitSec;
-	boost::timers::portable::microsec_timer voteTimer;
-	PlayerIdList votedPlayerIds;
 };
 
 #endif

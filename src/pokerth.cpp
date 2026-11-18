@@ -319,8 +319,8 @@ int main(int argc, char *argv[])
 	// QtQuick reads the env variable itself. NO more QSettings on config.xml:
 	// the earlier XML handler (settingsxmlhandler) only read the value
 	// attributes and discarded all list entries when writing back
-	// (PlayerTooltips = player notes/ratings, PlayerIgnoreList,
-	// ManualBlindsList, ...). Only ConfigFile writes to config.xml.
+	// (PlayerTooltips = player notes/ratings, ...). Only ConfigFile writes to
+	// config.xml.
 
 	// Startup translator: the C++ side needs the configured language before the
 	// QML engine runs - the wallet composes its "interrupted cash table session"

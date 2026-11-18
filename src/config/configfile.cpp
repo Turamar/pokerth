@@ -87,6 +87,9 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	// !!!! Revision number of the config defaults !!!!!
 	// 109: ServerTlsCertFile / ServerTlsKeyFile were added.
 	// 110: FlipsideStyle / FlipsideStyleFile were added (widget card back styles).
+	// 2026-11-18: all network/server/chat-cleaner keys, the widget-card-back keys and
+	// the widget-window keys were removed together with the network and the widget
+	// client (PLAN.md §8). Old config.xml values for them are simply ignored.
 	// 112: QmlCardDeckStyle defaults to nobus_4c_classic, configs that still
 	//      carry the old default ("default") are switched over (see the
 	//      version hack section in updateConfig).
@@ -168,8 +171,7 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	// iOS: the sandbox container root ($HOME) is not reliably writable –
 	// a "mkdir($HOME/.pokerth)" fails silently. As a consequence neither the
 	// log nor the cache directory exists, which shows up as a crash in Log::init()
-	// (opendir==NULL) or as error 25 (ERR_SOCK_TRANSFER_OPEN_FAILED) during the
-	// server list download. That is why the application support directory intended
+	// (opendir==NULL). That is why the application support directory intended
 	// by Apple, which is guaranteed to be writable, is used. It already contains
 	// the app name (QGuiApplication::setApplicationName/OrganizationName
 	// are set before the ConfigFile is constructed), so no additional
@@ -226,8 +228,7 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 		cacheDir += "cache/";
 		// create directories on first start of app. mkdir() returns -1 with
 		// errno==EEXIST if the directory already exists, which is fine; any
-		// other failure means we will not be able to store config/cache (and
-		// the server list download later fails as "Network error (25)"), so it
+		// other failure means we will not be able to store config/cache, so it
 		// is worth surfacing in the log instead of failing silently.
 		if (mkdir(configFileName.c_str(), MODUS) != 0 && errno != EEXIST)
 			LOG_ERROR("Could not create config directory '" << configFileName << "' (errno " << errno << ")");
@@ -247,15 +248,10 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	configList.push_back(ConfigInfo("AppDataDir", CONFIG_TYPE_STRING, myQtToolsInterface->getDataPathStdString(myArgv0)));
 #endif
 	configList.push_back(ConfigInfo("Language", CONFIG_TYPE_INT, myQtToolsInterface->getDefaultLanguage()));
-	configList.push_back(ConfigInfo("ShowLeftToolBox", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("ShowCountryFlagInAvatar", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("ShowPingStateInAvatar", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("ShowRightToolBox", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("ShowFadeOutCardsAnimation", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("ShowFlipCardsAnimation", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("ShowBlindButtons", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("ShowPotPercentButtons", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("ShowCardsChanceMonitor", CONFIG_TYPE_INT, "1"));
 	// QML table: always show the player's own current hand ("Paar", "Straße", …)
 	// on the flop/turn/river as a calm dark pill. Off by default: it is a hint,
 	// not a part of the table, and the player asked for a switch (PLAN.md §6,
@@ -265,15 +261,9 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	configList.push_back(ConfigInfo("DontTranslateInternationalPokerStringsFromStyle", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("DisableSplashScreenOnStartup", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("AccidentallyCallBlocker", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("DontHideAvatarsOfIgnored", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("DisableEmojiReactions", CONFIG_TYPE_INT, "0"));
 	// The page of the reaction picker used last (0..2, three thematic pages).
 	configList.push_back(ConfigInfo("ReactionPickerPage", CONFIG_TYPE_INT, "0"));
-	// Offer the chat translation (globe symbol next to incoming messages).
-	// Kept for config compatibility; the local client has no translation
-	// service any more (see docs/third_party_services.md).
-
-	configList.push_back(ConfigInfo("AllowChatTranslation", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("ShowChatTimestamp", CONFIG_TYPE_INT, "1")); // Timestamp [HH:mm:ss] in front of chat lines
 	configList.push_back(ConfigInfo("DarkMode", CONFIG_TYPE_INT, "2")); // 0=light, 1=dark, 2=auto/system
 	configList.push_back(ConfigInfo("AntiPeekMode", CONFIG_TYPE_INT, "0"));
@@ -287,18 +277,6 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	configList.push_back(ConfigInfo("EngineVersion", CONFIG_TYPE_INT, "4"));
 	configList.push_back(ConfigInfo("AlternateFKeysUserActionMode", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("EnableBetInputFocusSwitch", CONFIG_TYPE_INT, "0"));
-	// Widget client, card back: either the flipside.png of the selected
-	// card deck (FlipsideTux, the default), a bundled card back style
-	// (FlipsideStyle + FlipsideStyleFile, a full XML path as with Current*Style)
-	// or an arbitrary image file of your own (FlipsideOwn + FlipsideOwnFile).
-	configList.push_back(ConfigInfo("FlipsideTux", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("FlipsideStyle", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("FlipsideStyleFile", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("FlipsideOwn", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("FlipsideOwnFile", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("GameTableStylesList", CONFIG_TYPE_STRING_LIST, "GameTableStyles"));
-	configList.push_back(ConfigInfo("CurrentGameTableStyle", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("CardDeckStylesList", CONFIG_TYPE_STRING_LIST, "CardDeckStyles"));
 	configList.push_back(ConfigInfo("PlayerTooltips", CONFIG_TYPE_STRING_LIST, "PlayerTooltips"));
 	configList.push_back(ConfigInfo("CurrentCardDeckStyle", CONFIG_TYPE_STRING, ""));
 	configList.push_back(ConfigInfo("LastGameTableStyleDir", CONFIG_TYPE_STRING, ""));
@@ -306,8 +284,8 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	// QML client: card backs are a style category of their own there.
 	configList.push_back(ConfigInfo("LastCardBackStyleDir", CONFIG_TYPE_STRING, ""));
 	// QML client: the name of the selected style subfolder in
-	// <AppDataDir>/gfx/qml/<table|cards>/<name>. Keys of its own, so that the
-	// widget client (Current*Style stores full XML paths) stays untouched.
+	// <AppDataDir>/gfx/qml/<table|cards>/<name>. Keys of its own, separate from
+	// the Current*Style keys (which store full XML paths).
 	configList.push_back(ConfigInfo("QmlGameTableStyle", CONFIG_TYPE_STRING, "default"));
 	// The shipped card deck: the four colour "Nobus 4 colours classic" set
 	// (blue diamonds, red hearts, black spades, green clubs). It reads better
@@ -329,23 +307,8 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	// QtAudioPlayer, which divides by 100.0f.
 	configList.push_back(ConfigInfo("SoundVolume", CONFIG_TYPE_INT, "80"));
 	configList.push_back(ConfigInfo("PlayGameActions", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("PlayLobbyChatNotification", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("PlayNetworkGameNotification", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("PlayBlindRaiseNotification", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("NumberOfPlayers", CONFIG_TYPE_INT, "9"));
-	configList.push_back(ConfigInfo("StartCash", CONFIG_TYPE_INT, "5000"));
-	configList.push_back(ConfigInfo("FirstSmallBlind", CONFIG_TYPE_INT, "10"));
-	configList.push_back(ConfigInfo("RaiseBlindsAtHands", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("RaiseBlindsAtMinutes", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("RaiseSmallBlindEveryHands", CONFIG_TYPE_INT, "8"));
-	configList.push_back(ConfigInfo("RaiseSmallBlindEveryMinutes", CONFIG_TYPE_INT, "5"));
-	configList.push_back(ConfigInfo("AlwaysDoubleBlinds", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("ManualBlindsOrder", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("ManualBlindsList", CONFIG_TYPE_INT_LIST, "Blind"));
-	configList.push_back(ConfigInfo("AfterMBAlwaysDoubleBlinds", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("AfterMBAlwaysRaiseAbout", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("AfterMBAlwaysRaiseValue", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("AfterMBStayAtLastBlind", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("GameSpeed", CONFIG_TYPE_INT, "4"));
 	// Local game: pause before a computer player's move, in milliseconds (PLAN.md
 	// §7, the settings audit). Read by QmlGuiInterface::beRoAnimation2; 150..900,
@@ -356,90 +319,8 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	// default: the clock is part of a tournament format, and a player who only
 	// ever plays without one will not get used to it (PLAN.md, "Темп и таймер").
 	configList.push_back(ConfigInfo("ActionTimer", CONFIG_TYPE_INT, "30"));
-	configList.push_back(ConfigInfo("ShowGameSettingsDialogOnNewGame", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("NetNumberOfPlayers", CONFIG_TYPE_INT, "9"));
-	configList.push_back(ConfigInfo("NetStartCash", CONFIG_TYPE_INT, "3000"));
-	configList.push_back(ConfigInfo("NetFirstSmallBlind", CONFIG_TYPE_INT, "10"));
-	configList.push_back(ConfigInfo("NetRaiseBlindsAtHands", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("NetRaiseBlindsAtMinutes", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("NetRaiseSmallBlindEveryHands", CONFIG_TYPE_INT, "8"));
-	configList.push_back(ConfigInfo("NetRaiseSmallBlindEveryMinutes", CONFIG_TYPE_INT, "5"));
-	configList.push_back(ConfigInfo("NetAlwaysDoubleBlinds", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("NetManualBlindsOrder", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("NetManualBlindsList", CONFIG_TYPE_INT_LIST, "NetBlind"));
-	configList.push_back(ConfigInfo("NetAfterMBAlwaysDoubleBlinds", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("NetAfterMBAlwaysRaiseAbout", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("NetAfterMBAlwaysRaiseValue", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("NetAfterMBStayAtLastBlind", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("NetGameSpeed", CONFIG_TYPE_INT, "4"));
-	configList.push_back(ConfigInfo("NetDelayBetweenHands", CONFIG_TYPE_INT, "7"));
-	configList.push_back(ConfigInfo("NetTimeOutPlayerAction", CONFIG_TYPE_INT, "20"));
-	configList.push_back(ConfigInfo("NetAutoLeaveGameAfterFinish", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("ServerPassword", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("ServerUseIpv6", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("ServerUseSctp", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("ServerUseTls", CONFIG_TYPE_INT, "0"));
-	// Absolute paths to the TLS material the server presents. The default points
-	// outside the source tree on purpose: the private key must not live in the
-	// repository, and in the docker setup /etc/tls is mounted into the
-	// container. Clearing an entry selects the historic location instead, the
-	// tls/ folder next to bin/ - see GetServerTlsCertFile().
-	configList.push_back(ConfigInfo("ServerTlsCertFile", CONFIG_TYPE_STRING, "/etc/tls/server.crt"));
-	configList.push_back(ConfigInfo("ServerTlsKeyFile", CONFIG_TYPE_STRING, "/etc/tls/server.key"));
-	configList.push_back(ConfigInfo("ServerUseWebSocket", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("ServerUseWebSocketTls", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("ServerPort", CONFIG_TYPE_INT, "7234"));
-	configList.push_back(ConfigInfo("ServerWebSocketPort", CONFIG_TYPE_INT, "7233"));
-	configList.push_back(ConfigInfo("ServerWebSocketResource", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("ServerWebSocketOrigin", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("DiscordChatWebhookUrl", CONFIG_TYPE_STRING, ""));
-	// Lobby chat log in <CacheDir>/chatlog/ for moderation, rotated after this
-	// many hours (one previous file is kept). 0 = off.
-	configList.push_back(ConfigInfo("ServerChatLogRotateHours", CONFIG_TYPE_INT, "72"));
-	configList.push_back(ConfigInfo("ServerUsePutAvatars", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("ServerPutAvatarsAddress", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("ServerPutAvatarsUser", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("ServerPutAvatarsPassword", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("ServerBruteForceProtection", CONFIG_TYPE_INT, "1"));
-	// Comma separated addresses excluded from the login rate limit, for hosts
-	// that legitimately funnel many players through one address (e.g. the web
-	// client proxy). Empty by default - only set this for hosts you control.
-	configList.push_back(ConfigInfo("ServerBruteForceProtectionExempt", CONFIG_TYPE_STRING, ""));
-	// Comma separated addresses which are allowed to announce the real client
-	// address in a PROXY protocol v1 header (web client proxy). Connections from
-	// any other address are never inspected, their header would just be an
-	// invalid TLS record. Empty by default - only set this for hosts you control.
-	configList.push_back(ConfigInfo("ServerProxyProtocolTrustedIPs", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("InternetServerConfigMode", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("InternetServerListAddress", CONFIG_TYPE_STRING, "pokerth.net/serverlist.xml.z"));
-	configList.push_back(ConfigInfo("InternetServerAddress", CONFIG_TYPE_STRING, "pokerth.6dns.org"));
-	configList.push_back(ConfigInfo("InternetServerPort", CONFIG_TYPE_INT, "7234"));
-	configList.push_back(ConfigInfo("InternetServerUseIpv6", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("InternetServerUseSctp", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("InternetServerUseTls", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("UseAvatarServer", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("AvatarServerAddress", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("UseInternetGamePassword", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("InternetGamePassword", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("InternetGameType", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("InternetGameName", CONFIG_TYPE_STRING, "My Online Game"));
-	configList.push_back(ConfigInfo("InternetGameAllowSpectators", CONFIG_TYPE_INT, "1"));
-	// ONE option for the whole community tournament feature of the widget client:
-	// BBC/WEC templates in the create dialog + the "suggest players" button in the waiting room.
-	// (In the QML client showCommunityContent additionally controls the ranking pages –
-	// which do not exist in the widget, hence exactly one switch here.) Off by default:
-	// only relevant for the few BBC/WEC admins.
-	configList.push_back(ConfigInfo("ShowCommunityContent", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("UseLobbyChat", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("UseChatCleaner", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("ChatCleanerHostAddress", CONFIG_TYPE_STRING, "localhost"));
-	configList.push_back(ConfigInfo("ChatCleanerPort", CONFIG_TYPE_INT, "4327"));
-	configList.push_back(ConfigInfo("ChatCleanerClientAuth", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("ChatCleanerServerAuth", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("ChatCleanerUseIpv6", CONFIG_TYPE_INT, "0"));
 	configList.push_back(ConfigInfo("MyName", CONFIG_TYPE_STRING, "Human Player"));
 	configList.push_back(ConfigInfo("MyAvatar", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("MyRememberedNameDuringGuestLogin", CONFIG_TYPE_STRING, ""));
 	configList.push_back(ConfigInfo("Opponent1Name", CONFIG_TYPE_STRING, "Player 1"));
 	configList.push_back(ConfigInfo("Opponent1Avatar", CONFIG_TYPE_STRING, ""));
 	configList.push_back(ConfigInfo("Opponent2Name", CONFIG_TYPE_STRING, "Player 2"));
@@ -464,29 +345,6 @@ ConfigFile::ConfigFile(char *argv0, bool readonly) : noWriteAccess(readonly)
 	configList.push_back(ConfigInfo("LogInterval", CONFIG_TYPE_INT, "1"));
 	configList.push_back(ConfigInfo("UserDataDir", CONFIG_TYPE_STRING, dataDir));
 	configList.push_back(ConfigInfo("CacheDir", CONFIG_TYPE_STRING, cacheDir));
-	configList.push_back(ConfigInfo("CLA_NoWriteAccess", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("DisableBackToLobbyWarning", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("DlgGameLobbyGameListSortingSection", CONFIG_TYPE_INT, "2"));
-	configList.push_back(ConfigInfo("DlgGameLobbyGameListSortingOrder", CONFIG_TYPE_INT, "1"));
-	configList.push_back(ConfigInfo("DlgGameLobbyGameListFilterIndex", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("DlgGameLobbyNickListSortFilterIndex", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("GameTableFullScreenSave", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("GameTableHeightSave", CONFIG_TYPE_INT, "621"));
-	configList.push_back(ConfigInfo("GameTableWidthSave", CONFIG_TYPE_INT, "1024"));
-	configList.push_back(ConfigInfo("InternetLoginMode", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("InternetLoginPassword", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("InternetSavePassword", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("IfInfoMessageShowList", CONFIG_TYPE_STRING_LIST, "Msg"));
-	configList.push_back(ConfigInfo("PlayerIgnoreList", CONFIG_TYPE_STRING_LIST, "Player"));
-	configList.push_back(ConfigInfo("DBServerAddress", CONFIG_TYPE_STRING, "127.0.0.1"));
-	configList.push_back(ConfigInfo("DBServerUser", CONFIG_TYPE_STRING, "pokerth"));
-	configList.push_back(ConfigInfo("DBServerPassword", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("DBServerDatabaseName", CONFIG_TYPE_STRING, "pokerth"));
-	configList.push_back(ConfigInfo("DBServerEncryptionKey", CONFIG_TYPE_STRING, ""));
-	configList.push_back(ConfigInfo("GameNameBadWordList", CONFIG_TYPE_STRING_LIST, "Regex"));
-	configList.push_back(ConfigInfo("ServerRestrictGuestLogin", CONFIG_TYPE_INT, "0"));
-	configList.push_back(ConfigInfo("ServerLimitRankNum", CONFIG_TYPE_INT, "4"));
-	configList.push_back(ConfigInfo("ServerLimitRankPeriod", CONFIG_TYPE_INT, "60"));
 	configList.push_back(ConfigInfo("AndroidUiScalePercent", CONFIG_TYPE_INT, "0")); // 0 = auto (fit to screen), >0 = manual override
 
 	// fill tempList firstTime
@@ -554,9 +412,9 @@ ConfigFile::~ConfigFile()
 
 bool ConfigFile::remapAppDataPaths(QDomElement &config, const QString &oldPath, const QString &newPath)
 {
-	// Some settings store full paths into the data directory
-	// (CurrentGameTableStyle, CurrentCardDeckStyle, FlipsideStyleFile, MyAvatar,
-	// Opponent*Avatar, ...). If that directory moves, they point nowhere and
+	// Some settings store full paths into the data directory (MyAvatar,
+	// Opponent*Avatar, the last style folders, ...). If that directory moves,
+	// they point nowhere and
 	// the client falls back to its defaults silently. With the AppImage
 	// that happens on every start, because it is mounted under a new mount point
 	// (/tmp/.mount_PokerTH<random>/); likewise after a change of the
