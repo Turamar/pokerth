@@ -177,6 +177,51 @@ static QString stateDirectoryFor(const std::string &configFileName)
 	return QFileInfo(path).absolutePath();
 }
 
+// The QML translations are named after locales (:/i18n/pokerth_ru_RU.qm), while
+// ConfigFile keeps the language in the form the widgets client writes it: a
+// short code ("en", "ptbr", "zhcn") or a locale name ("ru_RU" - that is the
+// default, the system locale). This table mirrors
+// config/StaticData.qml::languageConfigCodes for the short codes; a value that
+// already looks like a locale is passed through unchanged.
+static QString qmlTranslationFile(const QString &language)
+{
+	static const QHash<QString, QString> shortCodes = {
+		{QStringLiteral("de"), QStringLiteral("de_DE")},
+		{QStringLiteral("en"), QStringLiteral("en_US")},
+		{QStringLiteral("es"), QStringLiteral("es_ES")},
+		{QStringLiteral("fr"), QStringLiteral("fr_FR")},
+		{QStringLiteral("it"), QStringLiteral("it_IT")},
+		{QStringLiteral("ptbr"), QStringLiteral("pt_BR")},
+		{QStringLiteral("ptpt"), QStringLiteral("pt_PT")},
+		{QStringLiteral("ru"), QStringLiteral("ru_RU")},
+		{QStringLiteral("cz"), QStringLiteral("cs_CZ")},
+		{QStringLiteral("dk"), QStringLiteral("da_DK")},
+		{QStringLiteral("gr"), QStringLiteral("el_GR")},
+		{QStringLiteral("hu"), QStringLiteral("hu_HU")},
+		{QStringLiteral("nl"), QStringLiteral("nl_NL")},
+		{QStringLiteral("pl"), QStringLiteral("pl_PL")},
+		{QStringLiteral("sv"), QStringLiteral("sv_SE")},
+		{QStringLiteral("tr"), QStringLiteral("tr_TR")},
+		{QStringLiteral("bg"), QStringLiteral("bg_BG")},
+		{QStringLiteral("ca"), QStringLiteral("ca_ES")},
+		{QStringLiteral("fi"), QStringLiteral("fi_FI")},
+		{QStringLiteral("no"), QStringLiteral("nb_NO")},
+		{QStringLiteral("af"), QStringLiteral("af_ZA")},
+		{QStringLiteral("gd"), QStringLiteral("gd_GB")},
+		{QStringLiteral("gl"), QStringLiteral("gl_ES")},
+		{QStringLiteral("jp"), QStringLiteral("ja_JP")},
+		{QStringLiteral("lt"), QStringLiteral("lt_LT")},
+		{QStringLiteral("sk"), QStringLiteral("sk_SK")},
+		{QStringLiteral("ta"), QStringLiteral("ta_IN")},
+		{QStringLiteral("vi"), QStringLiteral("vi_VN")},
+		{QStringLiteral("zhcn"), QStringLiteral("zh_CN")},
+		{QStringLiteral("uk"), QStringLiteral("uk_UA")}
+	};
+	const QString localeCode = shortCodes.value(language, language);
+	const QString file = QStringLiteral(":/i18n/pokerth_%1.qm").arg(localeCode);
+	return QFileInfo::exists(file) ? file : QString();
+}
+
 int main(int argc, char *argv[])
 {
 	// QT_QUICK_CONTROLS_STYLE is evaluated during the early style resolve.
@@ -283,14 +328,25 @@ int main(int argc, char *argv[])
 	// (PlayerTooltips = player notes/ratings, PlayerIgnoreList,
 	// ManualBlindsList, ...). Only ConfigFile writes to config.xml.
 
-	const QLocale locale;
-	const QString baseName = "pokerth";
-	QTranslator translator;
-	if (translator.load(locale, "pokerth", "_", ":/i18n")) {
-		// qDebug() << "Locale found!";
-		app.installTranslator(&translator);
+	// Startup translator: the C++ side needs the configured language before the
+	// QML engine runs - the wallet composes its "interrupted cash table session"
+	// notice right at construction, and that string has to be in the player's
+	// language. Deliberately the CONFIGURED language, not the system locale: on a
+	// Russian Windows an English client must not show a Russian notice. The QML
+	// side takes the language over once it is running
+	// (LanguageManager::switchLanguage removes this translator), so exactly one
+	// language is in effect - two stacked translators would fall back from the
+	// chosen one to the system locale of the other, i.e. leak Russian into an
+	// English UI for every string the English side does not have.
+	QTranslator *startupTranslator = new QTranslator(&app);
+	const QString startupQm = qmlTranslationFile(
+								  QString::fromStdString(myConfig->readConfigString("Language")));
+	if (!startupQm.isEmpty() && startupTranslator->load(startupQm)) {
+		app.installTranslator(startupTranslator);
+		qInfo().noquote() << "[BOOT] startup translation:" << startupQm;
 	} else {
-		// qDebug() << "Locale not found in translations";
+		qWarning() << "[BOOT] no QML translation for the configured language,"
+				   << "showing the source strings";
 	}
 
 	// Initialize Log
@@ -365,7 +421,7 @@ int main(int argc, char *argv[])
 
 	SettingsManager settingsMgr(myConfig);
 	StyleProvider styleProvider(myConfig);
-	LanguageManager langMgr(&engine);
+	LanguageManager langMgr(&engine, startupTranslator);
 	ScreenHelper screenHelper;
 	// The player's bank: the permanent balance, the profile counters and the
 	// cash table session. It lives in state.json next to config.xml (PLAN.md
