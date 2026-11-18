@@ -693,8 +693,19 @@ private:
 	// the tournament goes on. continueTournamentHand() is the "next hand" of a
 	// tournament - it asks the controller, which also rebuilds my table if the
 	// seating changed.
+	//
+	// The step is played in slices, one silent table's hand per timer tick: a
+	// field of 180 is twenty tables, and twenty hands in one call would freeze
+	// the table the player is looking at. advanceTournament() opens the step,
+	// playTournamentSlice() deals one silent hand, finishTournamentStep()
+	// books the busts and the moves and starts the next hand here.
 	void advanceTournament();
+	void playTournamentSlice();
+	void finishTournamentStep();
 	void continueTournamentHand();
+	// The step failed: the tournament ends where it stands (the same as a step
+	// that could not be played before the slices were split out).
+	void stopTournamentOnError(const std::string &error);
 	// The tournament is over for the player: the place is paid, the popup opens.
 	void finishTournament(int place);
 	// One line of the log: the people of a table with strength and stack.
@@ -718,6 +729,16 @@ private:
 	// The local action clock (see startLocalActionTimer). One shot: it either
 	// sees my action first (then it is stopped) or it is the action.
 	QTimer *m_localActionTimer = nullptr;
+	// The silent tables of a tournament step are dealt one hand per tick of
+	// this zero-length timer (see playTournamentSlice): the step of twenty
+	// tables must not keep the interface busy.
+	QTimer *m_tournamentSliceTimer = nullptr;
+	// What the open step has played so far, for the log line of the step: the
+	// silent hands and the time they took (ms). A slice of a silent table is
+	// far below the frame time; if it is not, the log says so.
+	int m_stepSlices = 0;
+	qint64 m_stepSliceMs = 0;
+	qint64 m_stepSliceWorstMs = 0;
 	// A page of our own lies above the table (the settings): the clock does not
 	// run and does not start when a turn arrives meanwhile (see the Q_INVOKABLE
 	// suspend/resume pair above).

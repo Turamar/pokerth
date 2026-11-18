@@ -63,6 +63,13 @@ public:
  * without a clock to synchronise: the level is counted from the steps, and the
  * controller sets the blind of every table before the hand.
  *
+ * The step is played in parts: stepBegin() reads the host's table, every
+ * stepSlice() deals one silent table's hand and stepEnd() books the busts and
+ * the moves. A field of 180 is twenty tables, and twenty hands played in one
+ * call would freeze the table the player watches: the client spreads the
+ * slices over timer ticks (gamehandler.cpp). step() is the same step in one
+ * call - the headless run and the single-table tests use it.
+ *
  * A table is a Game of its own with a silent GUI (SilentGui): the engine is
  * stepped directly and nothing is drawn. That is what lets the other tables of
  * a tournament play while the player sits at one of them.
@@ -117,14 +124,29 @@ public:
 
 	// The client's way in: the table with hostId is played by the host, every
 	// other table by the controller. begin() seats the field and seats the
-	// host's table; startLocalHand() starts the first hand there; step() is
-	// called every time that hand is over and does the rest of the step
-	// (the silent tables, the busts, the moves) - it leaves the host's table
-	// ready but does not start a hand, so the caller can pause first.
+	// host's table; startLocalHand() starts the first hand there; the step
+	// after it is called every time that hand is over and does the rest of the
+	// step (the silent tables, the busts, the moves) - it leaves the host's
+	// table ready but does not start a hand, so the caller can pause first.
 	bool begin(const PlayerState::Roster &roster, LocalTableHost *host, int hostId,
 			   std::string &error);
 	bool startLocalHand(std::string &error);
+
+	// The step in one call: begin, every slice, end. The headless run and the
+	// tests use it; the client slices the step (the calls below).
 	bool step(std::string &error);
+	// Opens the step: reads the host's table (its hand must be over) and takes
+	// the list of silent tables the step has to play.
+	bool stepBegin(std::string &error);
+	// Plays one silent table's hand. Call while stepPending(); the blind stays
+	// the same for every slice, because the level is counted by stepEnd().
+	bool stepSlice(std::string &error);
+	// Closes the step: books the busts, moves the people, fills the result.
+	// The slices must all have been played.
+	bool stepEnd(std::string &error);
+	// Is a silent hand still owed by the open step? False when stepEnd() may be
+	// called (also false when no step is open at all).
+	bool stepPending() const;
 
 	// The roster after the run: the stacks are the ones the tables ended with.
 	const PlayerState::Roster &roster() const
@@ -203,7 +225,9 @@ private:
 	const Table *localTable() const;
 	void updateLocalFlags();
 	bool seatLocalTable(std::string &error);
-	bool playSilentTables(std::string &error);
+	// Plays one hand at one silent table: the body of a step slice.
+	bool playSilentTable(Table &table, std::string &error);
+	void closeStep();
 	void collectBusts();
 	void rebalance();
 	// Breaks one table if the field fits into fewer tables than there are now.
@@ -228,6 +252,12 @@ private:
 	int m_handsPlayed = 0;
 	int m_moves = 0;
 	int m_chipsInPlay = 0;
+	// The open step: the silent tables it has to play, taken once at stepBegin()
+	// (no bust or move is booked before stepEnd(), so the list cannot change
+	// under the slices) and the next one to play.
+	bool m_stepOpen = false;
+	std::vector<size_t> m_stepTables;
+	size_t m_stepCursor = 0;
 	// The client's table (see LocalTableHost), NULL in the headless run.
 	LocalTableHost *m_host = nullptr;
 	int m_hostId = -1;

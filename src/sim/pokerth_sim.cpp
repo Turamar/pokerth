@@ -64,6 +64,7 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -1062,16 +1063,41 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 				check(dealt, QStringLiteral("the first hand at my table starts (%1)")
 					  .arg(QString::fromStdString(error)));
 				int steps = 0;
+				int slices = 0;
+				int firstStepSlices = -1;
 				// How many were left when the field came together at one table:
 				// a final table, not the last two of a broken one.
 				int mergedAt = -1;
 				while(dealt && tournament.playersLeft() > 1 && tournament.hostStillIn()
 					  && steps < 2000) {
-					if(!tournament.step(error)) {
+					// The step the way the client plays it: opened, one silent
+					// hand per slice, closed. There is no timer here, so the
+					// slices run back to back - the calls are the same ones the
+					// client makes from its timer.
+					if(!tournament.stepBegin(error)) {
 						check(false, QStringLiteral("the step after hand %1 (%2)").arg(steps)
 							  .arg(QString::fromStdString(error)));
 						break;
 					}
+					int inStep = 0;
+					bool slicesOk = true;
+					while(tournament.stepPending()) {
+						if(!tournament.stepSlice(error)) {
+							check(false, QStringLiteral("a silent hand of step %1 (%2)")
+								  .arg(steps + 1).arg(QString::fromStdString(error)));
+							slicesOk = false;
+							break;
+						}
+						++inStep;
+						++slices;
+					}
+					if(!slicesOk) break;
+					if(!tournament.stepEnd(error)) {
+						check(false, QStringLiteral("the end of step %1 (%2)").arg(steps + 1)
+							  .arg(QString::fromStdString(error)));
+						break;
+					}
+					if(steps == 0) firstStepSlices = inStep;
 					++steps;
 					if(mergedAt < 0 && tournament.tableCount() == 1) {
 						mergedAt = tournament.playersLeft();
@@ -1092,6 +1118,12 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 				check(host.hands() >= steps && host.hands() <= steps + 1,
 					  QStringLiteral("every step dealt one hand at my table (%1 hands, "
 									 "%2 steps)").arg(host.hands()).arg(steps));
+				check(firstStepSlices == 1,
+					  QStringLiteral("the step of two tables is one separate silent deal "
+									 "(%1)").arg(firstStepSlices));
+				check(slices >= 1 && slices <= steps,
+					  QStringLiteral("the silent hands were dealt one slice at a time "
+									 "(%1 in %2 steps)").arg(slices).arg(steps));
 				check(result.chipsConserved,
 					  QStringLiteral("the client's tournament lost no chips"));
 				check(result.blindsAligned,
@@ -1115,11 +1147,127 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 				check(place >= 1 && place <= event.seats,
 					  QStringLiteral("the player has a place (%1 of %2)")
 					  .arg(place).arg(event.seats));
-				printf("  client-style tournament: %d steps, %d reseats, %d moves "
-					   "(%d of them mine), final table at %d, hero place %d of %d\n",
-					   steps, host.seated() - 1, result.moves, result.movesById.at(0),
+				printf("  client-style tournament: %d steps, %d silent deals, %d reseats, "
+					   "%d moves (%d of them mine), final table at %d, hero place %d of %d\n",
+					   steps, slices, host.seated() - 1, result.moves, result.movesById.at(0),
 					   mergedAt, place, event.seats);
 			}
+		}
+		// ── A step at twenty tables: the slices (PLAN.md section 3) ────────
+		// A field of 180 is twenty tables of nine - the size the slices exist
+		// for, and no catalogue event has it yet (D-046). The field is stretched
+		// out of the smallest event here; what is checked is the mechanism:
+		// twenty tables are seated, a slice is exactly one silent hand, and the
+		// player's table does not wait for all of them to be played in one call.
+		if(config) {
+			PlayerState::TournamentEvent event = PlayerState::tournamentEvent(
+				PlayerState::tournamentIndex(QStringLiteral("school")));
+			event.seats = 180;
+			std::vector<BotProfile> field;
+			check(BotProfile::dealTier(event.field, event.seats - 1, field),
+				  QStringLiteral("the 180-seat field is dealt"));
+			PlayerState::Roster roster;
+			roster.add(QStringLiteral("Hero"), QStringLiteral("pro/tag"), event.startStack);
+			for(int i = 1; i < event.seats; ++i) {
+				roster.add(QStringLiteral("Bot%1").arg(i),
+						   QString::fromStdString(field.at(static_cast<size_t>(i - 1)).label()),
+						   event.startStack);
+			}
+			for(int i = 0; i < event.seats; ++i) {
+				roster.seat(i, i / PlayerState::MaxTournamentTableSeats,
+							i % PlayerState::MaxTournamentTableSeats);
+			}
+
+			TournamentRun tournament(config, event, NULL);
+			SimLocalTable host(config, event, &tournament);
+			std::string error;
+			bool ok = tournament.begin(roster, &host, 0, error);
+			check(ok, QStringLiteral("the 180-seat field is seated (%1)")
+				  .arg(QString::fromStdString(error)));
+			check(ok && tournament.tableCount() == 20,
+				  QStringLiteral("180 seats are twenty tables (%1)")
+				  .arg(tournament.tableCount()));
+			ok = ok && tournament.startLocalHand(error);
+
+			// Twenty-five steps are enough to see the slices work and keep the
+			// build's self test short: the shape of a 180-seat tournament is not
+			// checked here - the mechanism is.
+			int steps = 0;
+			int slices = 0;
+			int firstStepSlices = -1;
+			qint64 worstSliceMs = 0;
+			qint64 totalSliceMs = 0;
+			QElapsedTimer stepClock;
+			while(ok && steps < 25 && tournament.playersLeft() > 1
+				  && tournament.hostStillIn()) {
+				// The silent tables of this step: every one of them, but mine.
+				const int tablesBefore = tournament.tableCount();
+				if(!tournament.stepBegin(error)) {
+					check(false, QStringLiteral("a 180-seat step begins (%1)")
+						  .arg(QString::fromStdString(error)));
+					break;
+				}
+				int inStep = 0;
+				while(tournament.stepPending()) {
+					stepClock.start();
+					if(!tournament.stepSlice(error)) {
+						check(false, QStringLiteral("a silent hand of the 180-seat step (%1)")
+							  .arg(QString::fromStdString(error)));
+						ok = false;
+						break;
+					}
+					const qint64 took = stepClock.elapsed();
+					if(took > worstSliceMs) worstSliceMs = took;
+					totalSliceMs += took;
+					++inStep;
+					++slices;
+				}
+				if(!ok) break;
+				if(!tournament.stepEnd(error)) {
+					check(false, QStringLiteral("a 180-seat step ends (%1)")
+						  .arg(QString::fromStdString(error)));
+					break;
+				}
+				// One slice, one silent table - never two hands of the same
+				// table in a step, never a table skipped while it has people.
+				check(inStep <= tablesBefore - 1,
+					  QStringLiteral("a 180-seat step deals every other table once "
+									 "(%1 silent hands for %2 tables)").arg(inStep)
+					  .arg(tablesBefore));
+				check(inStep >= tablesBefore - 3,
+					  QStringLiteral("a 180-seat step deals nearly all other tables "
+									 "(%1 silent hands for %2 tables)").arg(inStep)
+					  .arg(tablesBefore));
+				if(steps == 0) firstStepSlices = inStep;
+				++steps;
+				if(tournament.playersLeft() <= 1 || !tournament.hostStillIn()) break;
+				if(!tournament.startLocalHand(error)) {
+					check(false, QStringLiteral("the next hand at my 180-seat table (%1)")
+						  .arg(QString::fromStdString(error)));
+					break;
+				}
+			}
+			check(ok && (steps == 25 || !tournament.hostStillIn()),
+				  QStringLiteral("the 180-seat field plays its steps (%1)").arg(steps));
+			check(firstStepSlices == 19,
+				  QStringLiteral("the first 180-seat step is nineteen separate deals (%1)")
+				  .arg(firstStepSlices));
+			check(slices >= steps * 10,
+				  QStringLiteral("the silent hands are dealt one at a time (%1 in %2 steps)")
+				  .arg(slices).arg(steps));
+			const TournamentRun::Result &result = tournament.result();
+			check(result.chipsConserved,
+				  QStringLiteral("the 180-seat field lost no chips"));
+			check(result.blindsAligned,
+				  QStringLiteral("all twenty tables played the same blind"));
+			check(result.biggestTable <= PlayerState::MaxTournamentTableSeats,
+				  QStringLiteral("no 180-seat table ever seated more than nine (%1)")
+				  .arg(result.biggestTable));
+			printf("  sliced step at 180 seats: %d tables, %d steps, %d silent hands, "
+				   "%lld ms total, worst slice %lld ms\n",
+				   tournament.tableCount(), steps, slices,
+				   static_cast<long long>(totalSliceMs),
+				   static_cast<long long>(worstSliceMs));
 		}
 		{
 			const PlayerState::TournamentEvent &event = PlayerState::tournamentEvent(0);

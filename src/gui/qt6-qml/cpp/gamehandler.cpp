@@ -21,6 +21,7 @@
 #include <soundevents.h>
 #include <QString>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QDebug>
 #include <QUrl>
 #include <QFileInfo>
@@ -147,6 +148,14 @@ GameHandler::GameHandler(QObject *parent)
 	m_localActionTimer = new QTimer(this);
 	m_localActionTimer->setSingleShot(true);
 	connect(m_localActionTimer, &QTimer::timeout, this, &GameHandler::onLocalActionTimeout);
+
+	// The silent tables of a tournament step, one hand per tick (see
+	// playTournamentSlice). Zero length: the slice is the unit of work, not a
+	// pause - the timer only hands the event loop back between the hands.
+	m_tournamentSliceTimer = new QTimer(this);
+	m_tournamentSliceTimer->setSingleShot(true);
+	m_tournamentSliceTimer->setInterval(0);
+	connect(m_tournamentSliceTimer, &QTimer::timeout, this, &GameHandler::playTournamentSlice);
 }
 
 GameHandler::~GameHandler() = default;
@@ -204,6 +213,9 @@ void GameHandler::setGame(boost::shared_ptr<Game> game)
 	m_localGameExitRequested = false;
 	m_localGameOver = false;
 	setWaitingForNextHand(false);
+	// A new game: a slice of a tournament that is being replaced must not fire.
+	if (m_tournamentSliceTimer)
+		m_tournamentSliceTimer->stop();
 	m_game = game;
 	m_leftPlayers.clear();
 	// Discard pending busted player timers from the previous game.
@@ -2130,6 +2142,8 @@ bool GameHandler::startTournament(const QString &key)
 	m_tournamentSeats = event.seats;
 	m_tournamentPrize = 0;
 	m_tournamentStartSmallBlind = event.smallBlind;
+	if (m_tournamentSliceTimer)
+		m_tournamentSliceTimer->stop();
 	emit tournamentStateChanged();
 
 	// The field of the event (botprofile.h) is dealt into the roster, not into
@@ -2370,6 +2384,11 @@ LocalTableHost::Snapshot GameHandler::snapshot() const
 // around if the tables drifted apart - and it may rebuild my table before the
 // next hand, because somebody at it busted or the balancing moved somebody in or
 // out. Only then does the next hand start here.
+//
+// The other tables are not played in this call any more: playTournamentSlice()
+// deals one silent hand per timer tick, so that a step of twenty tables (a field
+// of 180) does not freeze the table the player is watching. The step is over
+// when the slices are, and finishTournamentStep() books them like before.
 void GameHandler::advanceTournament()
 {
 	if (!m_tournament || m_localGameOver)
@@ -2378,18 +2397,58 @@ void GameHandler::advanceTournament()
 	qInfo().noquote() << "[MTT] advance: step" << (m_tournament->result().handsPlayed + 1)
 					  << "of" << m_tournament->tableCount() << "table(s),"
 					  << m_tournament->playersLeft() << "players left";
+	m_stepSlices = 0;
+	m_stepSliceMs = 0;
+	m_stepSliceWorstMs = 0;
 	std::string error;
-	if (!m_tournament->step(error)) {
-		qWarning().noquote() << "tournament" << m_tournamentKey
-							 << "stopped:" << QString::fromStdString(error);
-		const int place = m_tournament->placeOf(0) > 0 ? m_tournament->placeOf(0)
-													  : m_tournamentSeats;
-		finishTournament(place);
+	if (!m_tournament->stepBegin(error)) {
+		stopTournamentOnError(error);
+		return;
+	}
+	playTournamentSlice();
+}
+
+void GameHandler::playTournamentSlice()
+{
+	if (!m_tournament || m_localGameOver)
+		return;
+	if (m_tournament->stepPending()) {
+		QElapsedTimer clock;
+		clock.start();
+		std::string error;
+		if (!m_tournament->stepSlice(error)) {
+			stopTournamentOnError(error);
+			return;
+		}
+		const qint64 took = clock.elapsed();
+		++m_stepSlices;
+		m_stepSliceMs += took;
+		if (took > m_stepSliceWorstMs)
+			m_stepSliceWorstMs = took;
+	}
+	// Another silent hand is owed: the event loop gets the thread back, the
+	// next slice follows at once - a zero-length timer, not a busy loop.
+	if (m_tournament->stepPending()) {
+		m_tournamentSliceTimer->start();
+		return;
+	}
+	finishTournamentStep();
+}
+
+void GameHandler::finishTournamentStep()
+{
+	if (!m_tournament)
+		return;
+	std::string error;
+	if (!m_tournament->stepEnd(error)) {
+		stopTournamentOnError(error);
 		return;
 	}
 	qInfo().noquote() << "[MTT] advance: step done, hand" << m_tournament->result().handsPlayed
 					  << "level" << m_tournament->result().level
-					  << "blind" << m_tournament->blind();
+					  << "blind" << m_tournament->blind()
+					  << "silent hands" << m_stepSlices << "in" << m_stepSliceMs
+					  << "ms (worst" << m_stepSliceWorstMs << "ms)";
 	// The seating of my table may have changed, but the table itself is rebuilt
 	// when the next hand starts (the hand is what the drawn table is read from),
 	// so the seat map stays as the engine has it until then.
@@ -2412,6 +2471,18 @@ void GameHandler::advanceTournament()
 		return;
 	}
 	continueTournamentHand();
+}
+
+void GameHandler::stopTournamentOnError(const std::string &error)
+{
+	if (m_tournamentSliceTimer)
+		m_tournamentSliceTimer->stop();
+	qWarning().noquote() << "tournament" << m_tournamentKey
+						 << "stopped:" << QString::fromStdString(error);
+	const int place = m_tournament && m_tournament->placeOf(0) > 0
+						  ? m_tournament->placeOf(0)
+						  : m_tournamentSeats;
+	finishTournament(place);
 }
 
 void GameHandler::continueTournamentHand()
@@ -2626,6 +2697,8 @@ void GameHandler::endLocalGame()
 		m_roster.clear();
 		// And so do the other tables: leaving is a forfeit (PLAN.md section 3 -
 		// no save, no resume), so nothing of the tournament survives the table.
+		if (m_tournamentSliceTimer)
+			m_tournamentSliceTimer->stop();
 		m_tournament.reset();
 		m_localSeatIds.clear();
 		emit tournamentStateChanged();

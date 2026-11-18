@@ -374,6 +374,20 @@ bool TournamentRun::startLocalHand(string &error)
 bool TournamentRun::step(string &error)
 {
 	error.clear();
+	if(!stepBegin(error)) return false;
+	while(stepPending()) {
+		if(!stepSlice(error)) return false;
+	}
+	return stepEnd(error);
+}
+
+bool TournamentRun::stepBegin(string &error)
+{
+	error.clear();
+	if(m_stepOpen) {
+		error = "the step has already begun";
+		return false;
+	}
 
 	// 1. What the finished hand did to the host's table: the stacks, the button
 	// and the big blind come back before anything is rebuilt from the roster.
@@ -392,8 +406,50 @@ bool TournamentRun::step(string &error)
 		local->lastBigBlind = snap.lastBigBlind;
 	}
 
-	// 2. Every other table plays the same hand: same blind, same step.
-	if(!playSilentTables(error)) return false;
+	// 2. The silent tables of this step, taken once and in table order: the
+	// slices play exactly these hands, and the busts and the moves of the step
+	// are booked by stepEnd(), so the list cannot change halfway through.
+	m_stepTables.clear();
+	for(size_t i = 0; i < m_tables.size(); ++i) {
+		const Table &table = m_tables[i];
+		if(table.local) continue;
+		if(table.ids.size() < 2) continue;
+		m_stepTables.push_back(i);
+	}
+	m_stepCursor = 0;
+	m_stepOpen = true;
+	return true;
+}
+
+bool TournamentRun::stepSlice(string &error)
+{
+	error.clear();
+	if(!m_stepOpen) {
+		error = "no step has begun";
+		return false;
+	}
+	if(m_stepCursor >= m_stepTables.size()) return true;
+
+	Table &table = m_tables[m_stepTables[m_stepCursor++]];
+	if(!playSilentTable(table, error)) {
+		closeStep();
+		return false;
+	}
+	return true;
+}
+
+bool TournamentRun::stepEnd(string &error)
+{
+	error.clear();
+	if(!m_stepOpen) {
+		error = "no step has begun";
+		return false;
+	}
+	if(m_stepCursor < m_stepTables.size()) {
+		error = "the step still has silent tables to play";
+		return false;
+	}
+	closeStep();
 
 	++m_handsPlayed;
 	collectBusts();
@@ -409,75 +465,81 @@ bool TournamentRun::step(string &error)
 	return true;
 }
 
-bool TournamentRun::playSilentTables(string &error)
+bool TournamentRun::stepPending() const
+{
+	return m_stepOpen && m_stepCursor < m_stepTables.size();
+}
+
+void TournamentRun::closeStep()
+{
+	m_stepOpen = false;
+	m_stepTables.clear();
+	m_stepCursor = 0;
+}
+
+bool TournamentRun::playSilentTable(Table &table, string &error)
 {
 	const int stepBlind = blind();
+	if(table.ids.size() < 2) return true;
+	if(table.dirty && !buildTable(table, error)) return false;
 
-	for(size_t i = 0; i < m_tables.size(); ++i) {
-		Table &table = m_tables[i];
-		if(table.local) continue;
-		if(table.ids.size() < 2) continue;
-		if(table.dirty && !buildTable(table, error)) return false;
-
-		table.game->setCurrentSmallBlind(stepBlind);
-		if(table.game->getCurrentSmallBlind() != stepBlind) {
-			m_result.blindsAligned = false;
-		}
-		try {
-			table.game->initHand();
-			table.game->startHand();
-		} catch(const exception &e) {
-			ostringstream oss;
-			oss << "table " << table.number << ", hand " << (m_handsPlayed + 1)
-				<< ": starting the hand failed: " << e.what();
-			error = oss.str();
-			return false;
-		}
-
-		bool handFinished = false;
-		table.gui->onHandFinished = [&handFinished]() {
-			handFinished = true;
-		};
-		long long steps = 0;
-		try {
-			while(table.gui->pump()) {
-				if(++steps > MaxStepsPerHand) {
-					ostringstream oss;
-					oss << "table " << table.number << ", hand " << (m_handsPlayed + 1)
-						<< ": more than " << MaxStepsPerHand << " engine steps";
-					error = oss.str();
-					return false;
-				}
-			}
-		} catch(const exception &e) {
-			ostringstream oss;
-			oss << "table " << table.number << ", hand " << (m_handsPlayed + 1)
-				<< ": engine error: " << e.what();
-			error = oss.str();
-			return false;
-		}
-		if(!handFinished) {
-			ostringstream oss;
-			oss << "table " << table.number << ", hand " << (m_handsPlayed + 1)
-				<< ": the engine went idle before the pot was distributed";
-			error = oss.str();
-			return false;
-		}
-
-		// The engine moved the button on at the start of the hand: what it holds
-		// now is the button of the next hand, and a rebuild keeps it.
-		table.button = table.game->getDealerPosition();
-		boost::shared_ptr<HandInterface> hand = table.game->getCurrentHand();
-		if(hand) table.lastBigBlind = static_cast<int>(hand->getBigBlindPositionId());
-
-		// The stacks go back into the roster: it is what a rebuild seats from.
-		for(size_t seat = 0; seat < table.ids.size(); ++seat) {
-			boost::shared_ptr<PlayerInterface> player =
-					table.game->getPlayerByUniqueId(static_cast<unsigned>(table.ids[seat]));
-			if(player) m_roster.setStack(table.ids[seat], player->getMyCash());
-		}
+	table.game->setCurrentSmallBlind(stepBlind);
+	if(table.game->getCurrentSmallBlind() != stepBlind) {
+		m_result.blindsAligned = false;
+	}
+	try {
+		table.game->initHand();
+		table.game->startHand();
+	} catch(const exception &e) {
+		ostringstream oss;
+		oss << "table " << table.number << ", hand " << (m_handsPlayed + 1)
+			<< ": starting the hand failed: " << e.what();
+		error = oss.str();
+		return false;
 	}
 
+	bool handFinished = false;
+	table.gui->onHandFinished = [&handFinished]() {
+		handFinished = true;
+	};
+	long long steps = 0;
+	try {
+		while(table.gui->pump()) {
+			if(++steps > MaxStepsPerHand) {
+				ostringstream oss;
+				oss << "table " << table.number << ", hand " << (m_handsPlayed + 1)
+					<< ": more than " << MaxStepsPerHand << " engine steps";
+				error = oss.str();
+				return false;
+			}
+		}
+	} catch(const exception &e) {
+		ostringstream oss;
+		oss << "table " << table.number << ", hand " << (m_handsPlayed + 1)
+			<< ": engine error: " << e.what();
+		error = oss.str();
+		return false;
+	}
+	if(!handFinished) {
+		ostringstream oss;
+		oss << "table " << table.number << ", hand " << (m_handsPlayed + 1)
+			<< ": the engine went idle before the pot was distributed";
+		error = oss.str();
+		return false;
+	}
+
+	// The engine moved the button on at the start of the hand: what it holds
+	// now is the button of the next hand, and a rebuild keeps it.
+	table.button = table.game->getDealerPosition();
+	boost::shared_ptr<HandInterface> hand = table.game->getCurrentHand();
+	if(hand) table.lastBigBlind = static_cast<int>(hand->getBigBlindPositionId());
+
+	// The stacks go back into the roster: it is what a rebuild seats from.
+	for(size_t seat = 0; seat < table.ids.size(); ++seat) {
+		boost::shared_ptr<PlayerInterface> player =
+				table.game->getPlayerByUniqueId(static_cast<unsigned>(table.ids[seat]));
+		if(player) m_roster.setStack(table.ids[seat], player->getMyCash());
+	}
 	return true;
 }
 
