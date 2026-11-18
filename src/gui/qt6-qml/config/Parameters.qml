@@ -26,21 +26,6 @@ Settings {
     // without the free seat (the boxes move up).
     property bool keepEmptySeats: true
 
-    // Community/ranking and forum news are network features; this fork is a
-    // single-player build (PLAN.md, section 1), so both are off. The UI entries
-    // are gone as well (start page, top bar, settings).
-    property bool showCommunityContent: false
-
-    // Optional admin feature: creators of a BBC step/WEC invite game can
-    // suggest matching idle players in the chat of the waiting room
-    // (Config.BotSuggest). Only effective with community content enabled.
-    property bool showCommunitySuggest: false
-
-    // Preselected ranking source ("pokerth" | "bbc" | "wec") for table info and
-    // player stats when community content is active. For the selection see
-    // Config.Community.entries.
-    property string defaultCommunity: "pokerth"
-
     // Tooltips on icon buttons (desktop only – on touch there is no hover).
     property bool showTooltips: true
 
@@ -51,9 +36,6 @@ Settings {
     function resetToDefaults() {
         tableZoomEnabled = true
         keepEmptySeats = true
-        showCommunityContent = false
-        showCommunitySuggest = false
-        defaultCommunity = "pokerth"
         showTooltips = true
     }
 }

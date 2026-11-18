@@ -12,10 +12,8 @@
         <file>components/ChipImage.qml</file>
         <file>components/PotPile.qml</file>
         <file>components/BlindButtonImage.qml</file>
-        <file>components/PlayerActionBadge.qml</file>
         <file>components/PlayerTimeoutBar.qml</file>
         <file>components/PlayerBetStrip.qml</file>
-        <file>components/PlayerNoteBadge.qml</file>
         <file>components/PlayerNoteDialog.qml</file>
         <file>components/PlayerRatingStars.qml</file>
         <file>components/PlayerBoxBackground.qml</file>
@@ -24,11 +22,8 @@
         <file>components/SettingsHeader.qml</file>
         <file>components/AppCheckBox.qml</file>
         <file>components/ConfigCheckBox.qml</file>
-        <file>components/RankingFilterField.qml</file>
         <file>components/CustomButton.qml</file>
-        <file>components/CustomCheckBox.qml</file>
         <file>components/CustomSpinBox.qml</file>
-        <file>components/CustomComboBox.qml</file>
         <file>components/CustomTabBar.qml</file>
         <file>components/CustomToggle.qml</file>
         <file>components/GamePlayerBox.qml</file>
@@ -37,28 +32,12 @@
         <file>components/GameReactionFx.qml</file>
         <file>components/EmojiPicker.qml</file>
         <file>components/ChatBox.qml</file>
-        <file>components/ResizeHandle.qml</file>
         <file>components/PanelShadow.qml</file>
         <file>components/SectionDivider.qml</file>
-        <file>components/SegmentedSwitch.qml</file>
-        <file>components/CommunityRankingView.qml</file>
-        <file>components/RankingHeaderCell.qml</file>
-        <file>components/SeasonStatsSection.qml</file>
-        <file>components/PlayerSeasonCard.qml</file>
         <file>components/StatTile.qml</file>
-        <file>components/PlacementPieChart.qml</file>
-        <file>components/PlacementResult.qml</file>
-        <file>components/CommunityPlayerView.qml</file>
-        <file>components/CommunitySwitch.qml</file>
-        <file>components/PlayerActionIcon.qml</file>
-        <file>components/PlayerListItem.qml</file>
-        <file>components/GameListItem.qml</file>
-        <file>components/GameAdminBadge.qml</file>
         <file>components/GuiSettings.qml</file>
-        <file>components/InternetGameSettings.qml</file>
         <file>components/LocalGameSettings.qml</file>
         <file>components/LogsSettings.qml</file>
-        <file>components/NetworkGameSettings.qml</file>
         <file>components/NicknameAvatarSettings.qml</file>
         <file>components/ResetSettings.qml</file>
         <file>components/SideMenu.qml</file>
@@ -72,8 +51,6 @@
         <file>components/BrandHeader.qml</file>
         <file>components/CardImage.qml</file>
         <file>components/ConfirmPopup.qml</file>
-        <file>components/GlobalNoticePopup.qml</file>
-        <file>components/PrivateMessageDialog.qml</file>
         <file>components/ExampleAvatarPicker.qml</file>
         <file>components/CommunityCards.qml</file>
         <file>components/WinningHandBadge.qml</file>
@@ -84,13 +61,7 @@
         <file>components/GameRoundIconButton.qml</file>
         <file>components/ReactionPicker.qml</file>
         <file>components/GameActionBar.qml</file>
-        <file>components/LobbyStatsBar.qml</file>
-        <file>components/ForumBadge.qml</file>
         <file>config/qmldir</file>
-        <file>config/BbcGameDates.qml</file>
-        <file>config/BotSuggest.qml</file>
-        <file>config/Community.qml</file>
-        <file>config/ForumNews.qml</file>
         <file>config/Parameters.qml</file>
         <file>config/ReactionCatalog.qml</file>
         <file>config/Responsive.qml</file>
@@ -130,28 +101,12 @@
         <file>pages/AboutPage.qml</file>
         <file>pages/GamePage.qml</file>
         <file>pages/seatlayout.js</file>
-        <file>pages/GameTableStatsPage.qml</file>
-        <file>pages/InternetGamePage.qml</file>
         <file>pages/LocalGamePage.qml</file>
         <file>pages/TournamentsPage.qml</file>
-        <file>pages/LogsPage.qml</file>
-        <file>pages/NetworkGameCreatePage.qml</file>
-        <file>pages/NetworkGameEnterPage.qml</file>
         <file>pages/PreLoader.qml</file>
-        <file>pages/RankingPage.qml</file>
-        <file>pages/CommunityRankingPage.qml</file>
-        <file>pages/BbcRankingPage.qml</file>
-        <file>pages/WecRankingPage.qml</file>
-        <file>pages/PokerthPlayerPage.qml</file>
         <file>pages/SettingsPage.qml</file>
         <file>pages/StartPage.qml</file>
         <file>pages/WalletPage.qml</file>
-        <file>pages/ServerConnectionDialog.qml</file>
-        <file>pages/LobbyCreateGamePage.qml</file>
-        <file>pages/GameWaitPage.qml</file>
-        <file>pages/LobbyPage.qml</file>
-        <file>pages/ForumNewsPage.qml</file>
-        <file>pages/ForumPostPage.qml</file>
         <file>resources/addReaction.svg</file>
         <file>resources/arrowUpLeft.svg</file>
         <file>resources/barChart.svg</file>

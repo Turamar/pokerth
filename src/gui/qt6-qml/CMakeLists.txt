@@ -109,24 +109,16 @@ set(QML_FILES
     components/CardImage.qml
     components/ChatBox.qml
     components/CommunityCards.qml
-    components/CommunityPlayerView.qml
-    components/CommunityRankingView.qml
-    components/CommunitySwitch.qml
     components/ConfigCheckBox.qml
     components/ConfirmPopup.qml
     components/CustomButton.qml
-    components/CustomCheckBox.qml
-    components/CustomComboBox.qml
     components/CustomSpinBox.qml
     components/CustomTabBar.qml
     components/CustomToggle.qml
     components/EmojiPicker.qml
     components/ExampleAvatarPicker.qml
-    components/ForumBadge.qml
     components/GameActionBar.qml
-    components/GameAdminBadge.qml
     components/GameInfoPanel.qml
-    components/GameListItem.qml
     components/GamePlayerBox.qml
     components/GamePlayerSelfBox.qml
     components/SeatBox.qml
@@ -134,41 +126,23 @@ set(QML_FILES
     components/GameRoundIconButton.qml
     components/GameSidePanel.qml
     components/GameTournamentPanel.qml
-    components/GlobalNoticePopup.qml
-    components/GuideOverlay.qml
     components/GuiSettings.qml
     components/HoleCards.qml
-    components/InternetGameSettings.qml
-    components/LobbyStatsBar.qml
     components/LocalGameSettings.qml
     components/LogsSettings.qml
-    components/NetworkGameSettings.qml
     components/NicknameAvatarSettings.qml
     components/PanelShadow.qml
-    components/PlacementPieChart.qml
-    components/PlacementResult.qml
-    components/PlayerActionBadge.qml
-    components/PlayerActionIcon.qml
     components/PlayerAvatar.qml
     components/PlayerBetStrip.qml
     components/PlayerBoxBackground.qml
-    components/PlayerListItem.qml
-    components/PlayerNoteBadge.qml
     components/PlayerNoteDialog.qml
     components/PlayerRatingStars.qml
-    components/PlayerSeasonCard.qml
     components/PlayerTimeoutBar.qml
     components/PlayerTurnGlow.qml
     components/PlayerWinnerOverlay.qml
-    components/PrivateMessageDialog.qml
-    components/RankingFilterField.qml
-    components/RankingHeaderCell.qml
     components/ReactionPicker.qml
     components/ResetSettings.qml
-    components/ResizeHandle.qml
-    components/SeasonStatsSection.qml
     components/SectionDivider.qml
-    components/SegmentedSwitch.qml
     components/SettingsHeader.qml
     components/SideMenu.qml
     components/SoundSettings.qml
@@ -181,33 +155,13 @@ set(QML_FILES
     components/WinningHandBadge.qml
     components/CurrentHandBadge.qml
     pages/AboutPage.qml
-    pages/BbcRankingPage.qml
-    pages/CommunityRankingPage.qml
-    pages/ForumNewsPage.qml
-    pages/ForumPostPage.qml
     pages/GamePage.qml
-    pages/GameTableStatsPage.qml
-    pages/GameWaitPage.qml
-    pages/InternetGamePage.qml
-    pages/LobbyCreateGamePage.qml
-    pages/LobbyPage.qml
     pages/LocalGamePage.qml
     pages/TournamentsPage.qml
-    pages/LogsPage.qml
-    pages/NetworkGameCreatePage.qml
-    pages/NetworkGameEnterPage.qml
-    pages/PokerthPlayerPage.qml
     pages/PreLoader.qml
-    pages/RankingPage.qml
-    pages/ServerConnectionDialog.qml
     pages/SettingsPage.qml
     pages/StartPage.qml
     pages/WalletPage.qml
-    pages/WecRankingPage.qml
-    config/BbcGameDates.qml
-    config/BotSuggest.qml
-    config/Community.qml
-    config/ForumNews.qml
     config/Parameters.qml
     config/ReactionCatalog.qml
     config/Responsive.qml
