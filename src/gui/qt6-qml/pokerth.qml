@@ -59,16 +59,6 @@ ApplicationWindow {
         mainStackView.push("pages/WalletPage.qml")
     }
 
-    // Ace's Help for the game page: its header button is hidden on the table, so
-    // the page calls the same toggle itself (guideBadge = the red dot, guideActive
-    // = the bubble is up and the page is at rest).
-    function toggleGuide() {
-        guideOverlay.chipTapped()
-    }
-    readonly property bool guideBadge: guideOverlay.badge
-    readonly property bool guideActive:
-        guideOverlay.bubbleText !== "" && guideOverlay.settled
-
     // The menu/back/door button, shared by the header and the floating button on
     // the table: back out of the page first (the door asks before leaving a
     // game), otherwise toggle the side menu.
@@ -619,65 +609,6 @@ ApplicationWindow {
                     }
                 }
 
-                // Ace's Help: the A♠ button opens its menu (GuideOverlay). The red
-                // dot = a tip put off with « Later » that applies here.
-                Item {
-                    id: topBarGuideButton
-                    Layout.preferredWidth: 28
-                    Layout.preferredHeight: 22
-                    Layout.margins: Config.Responsive.landscapeCompact ? 2 : 6
-                    visible: mainWindow.topBarIconsVisible && Config.Parameters.guideOn
-
-                    readonly property color tint: guideOverlay.bubbleText !== "" && guideOverlay.settled
-                        ? Config.Theme.colorAccent
-                        : guideArea.containsMouse
-                            ? Config.StaticData.palette.secondary.col100
-                            : Config.StaticData.palette.secondary.col200
-
-                    ToolTip.visible: guideArea.containsMouse
-                                     && !Config.Responsive.isMobile && Config.Parameters.showTooltips
-                    ToolTip.delay: 600
-                    ToolTip.text: guideOverlay.t("aceLabel")
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: 5
-                        color: "transparent"
-                        border.width: 1.5
-                        border.color: topBarGuideButton.tint
-
-                        AppText {
-                            anchors.centerIn: parent
-                            text: "A♠"
-                            font.bold: true
-                            font.pixelSize: 12
-                            color: topBarGuideButton.tint
-                        }
-                    }
-
-                    Rectangle {
-                        visible: guideOverlay.badge
-                        anchors.top: parent.top
-                        anchors.right: parent.right
-                        anchors.topMargin: -4
-                        anchors.rightMargin: -4
-                        width: 10
-                        height: 10
-                        radius: 5
-                        color: Config.Theme.colorDanger
-                        border.color: Config.Theme.colorBox
-                        border.width: 1.5
-                    }
-
-                    MouseArea {
-                        id: guideArea
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        hoverEnabled: true
-                        onClicked: guideOverlay.chipTapped()
-                    }
-                }
-
                 SvgIcon {
                     id: topBarSettingsIcon
                     Layout.preferredWidth: 24
@@ -935,9 +866,6 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         onActivated: {
-            // An open bubble of Ace's Help goes first (« Later »).
-            if (guideOverlay.handleEscape())
-                return
             if (!navigateBackFromTopBar() && sideMenu.visible) {
                 sideMenu.visible = false
                 topBarMenuIcon.source = "resources/threeLines.svg"
@@ -972,15 +900,6 @@ ApplicationWindow {
     }
 
     SideMenu {}
-
-    // Ace's Help: the bubble and the outline above every page (below the popups).
-    GuideOverlay {
-        id: guideOverlay
-        anchors.fill: parent
-        z: 50
-        stack: mainStackView
-        inLobby: mainWindow.inLobbySession
-    }
 
     Connections {
         target: mainStackView

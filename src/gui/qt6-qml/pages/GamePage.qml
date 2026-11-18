@@ -439,7 +439,7 @@ Rectangle {
     // There is deliberately NO app/status bar at the table any more: the pot and the
     // bets are on the felt, and the hand number/level live in the info window. The
     // table therefore gets the whole room at the top (its own floating buttons – menu,
-    // balance, settings, Ace's Help, info windows – lie above it with a z order).
+    // balance, settings, info windows – lie above it with a z order).
     // The player slots rearrange themselves automatically depending on the table aspect
     // ratio (tall/wide) – no separate desktop layout any more.
     ColumnLayout {
@@ -2577,7 +2577,7 @@ Rectangle {
         anchors.right: parent.right
         anchors.rightMargin: 8
         anchors.bottom: parent.bottom
-        // Above the row of buttons at the lower right edge (Ace's Help + history):
+        // Above the row of buttons at the lower right edge (history):
         // 34 px button height + 6 px gap. In portrait it also moves above the action
         // bar, and above the magnifier when that is shown – like zoomToggle.
         anchors.bottomMargin: (tableZone.wide ? 8 : actionBar.height + 8)
@@ -2762,58 +2762,6 @@ Rectangle {
         active: gamePage.infoPanelOpen
         tooltipText: qsTr("Verlauf & Chancen")
         onClicked: gamePage.toggleInfoOverlay()
-    }
-
-    // Ace's Help next to it, to the left (6 px gap). The A♠ button opens its
-    // menu/tips; the red dot = a tip put off with « Later » that applies here (as
-    // on the old top bar button). A plain Rectangle instead of GameRoundIconButton:
-    // square with a hairline frame and an accent state of its own.
-    Rectangle {
-        id: guideToggle
-        z: 200
-        anchors.right: infoToggle.visible ? infoToggle.left : parent.right
-        anchors.rightMargin: infoToggle.visible ? 6 : 8
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: (tableZone.wide ? 8 : actionBar.height + 8)
-                            + (gamePage.zoomToggleShown ? 8 + 36 + 6 : 0)
-        width: 34; height: 34; radius: 8
-        color: Qt.rgba(0, 0, 0, 0.45)
-        border.width: 1.5
-        border.color: mainWindow.guideActive ? Config.Theme.colorAccent : "#FFFFFF"
-
-        AppText {
-            anchors.centerIn: parent
-            text: "A♠"
-            color: mainWindow.guideActive ? Config.Theme.colorAccent : "#FFFFFF"
-            font.pixelSize: 13
-            font.bold: true
-        }
-
-        // The red dot of a deferred tip.
-        Rectangle {
-            visible: mainWindow.guideBadge
-            anchors.top: parent.top
-            anchors.right: parent.right
-            anchors.topMargin: -3
-            anchors.rightMargin: -3
-            width: 10; height: 10; radius: 5
-            color: Config.Theme.colorDanger
-            border.color: Config.Theme.colorBox
-            border.width: 1.5
-        }
-
-        ToolTip.visible: guideMouse.containsMouse && !Config.Responsive.isMobile
-                         && Config.Parameters.showTooltips
-        ToolTip.delay: 600
-        ToolTip.text: qsTr("Ace’s Help")
-
-        MouseArea {
-            id: guideMouse
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            hoverEnabled: true
-            onClicked: mainWindow.toggleGuide()
-        }
     }
 
     // ── The end of the game in a local game ───────────────────────────────────────────

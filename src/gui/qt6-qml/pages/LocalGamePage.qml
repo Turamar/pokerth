@@ -124,17 +124,6 @@ Rectangle {
 
     onSelectedLimitChanged: buyIn.value = defaultBuyInBB()
 
-    // Ace's Help (GuideOverlay): the fields a tour step outlines (label + control).
-    function guideTarget(key) {
-        switch (key) {
-        case "players": return [numPlayersLabel, numPlayers]
-        case "stack":   return [buyInLabel, buyIn]
-        case "blinds":  return blindsNote
-        case "actions": return startGameButton.parent
-        }
-        return null
-    }
-
     Flickable {
         id: scroller
         anchors.fill: parent

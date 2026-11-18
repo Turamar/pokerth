@@ -44,12 +44,6 @@ Settings {
     // Tooltips on icon buttons (desktop only – on touch there is no hover).
     property bool showTooltips: true
 
-    // Ace's Help (components/GuideOverlay.qml): on/off, the first-launch offer
-    // already made, and the tips already seen ({"<context id>": ms} as JSON).
-    property bool guideOn: false
-    property bool guideOffered: false
-    property string guideSeen: "{}"
-
     // Back to the defaults of this store. The "Standardeinstellung" page calls
     // it together with SettingsManager.resetToDefaults(), so that the reset
     // really covers both storages (settings audit, PLAN.md §7). Money and
@@ -61,8 +55,5 @@ Settings {
         showCommunitySuggest = false
         defaultCommunity = "pokerth"
         showTooltips = true
-        guideOn = false
-        guideOffered = false
-        guideSeen = "{}"
     }
 }

@@ -115,7 +115,7 @@ public:
 	QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
 	QHash<int, QByteArray> roleNames() const override;
 	// One row as a map (the role names as keys) – for QML code that has to look
-	// at the whole list (Ace's Help picks the Ranking table it suggests).
+	// at the whole list.
 	Q_INVOKABLE QVariantMap get(int row) const;
 
 	int runningCount() const

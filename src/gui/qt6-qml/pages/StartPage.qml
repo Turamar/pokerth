@@ -20,11 +20,6 @@ Rectangle {
     // Without a focus reason there is no focus frame; it appears on the first Tab.
     StackView.onActivated: Qt.callLater(localGameButton.forceActiveFocus)
 
-    // Ace's Help (GuideOverlay): the controls a tip outlines.
-    function guideTarget(key) {
-        return key === "buttons" ? startPageMainButtons : null
-    }
-
     Image {
         id: preLoaderBackground
         anchors.fill: parent

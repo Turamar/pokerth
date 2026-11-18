@@ -133,15 +133,6 @@ Rectangle {
     property bool showingGameList: false
     property int gameListCollapseResetCounter: 0
 
-    // Ace's Help (GuideOverlay): the controls a tip outlines.
-    function guideTarget(key) {
-        if (key === "players")
-            return waitPlayersLabel
-        if (key === "start")
-            return startGameButton
-        return null
-    }
-
     function resetPlayerListDelegates() {
         playerListCollapseResetCounter += 1
         waitPagePlayerPanelList.currentIndex = -1

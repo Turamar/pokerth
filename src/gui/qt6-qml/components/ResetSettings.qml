@@ -71,7 +71,7 @@ Rectangle {
                             // Both storages (PLAN.md §7): config.xml via the
                             // SettingsManager and the QML Settings singleton
                             // (config/Parameters.qml - the platform settings store:
-                            // tooltips, Ace's Help, keepEmptySeats, table zoom).
+                            // tooltips, keepEmptySeats, table zoom).
                             SettingsManager.resetToDefaults()
                             Config.Parameters.resetToDefaults()
                             resetSettings.resetDone = true
