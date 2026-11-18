@@ -5322,12 +5322,3 @@ bool LocalPlayer::checkIfINeedToShowCards()
 	return false;
 }
 
-void LocalPlayer::markRemoteAction()
-{
-	m_lastRemoteActionTimer.restart();
-}
-
-unsigned LocalPlayer::getTimeSecSinceLastRemoteAction() const
-{
-	return m_lastRemoteActionTimer.elapsed().total_seconds();
-}

@@ -462,8 +462,6 @@ public:
 
 	bool checkIfINeedToShowCards();
 
-	void markRemoteAction();
-	unsigned getTimeSecSinceLastRemoteAction() const;
 
 private:
 
@@ -520,7 +518,6 @@ private:
 	bool m_isSessionActive;
 	bool m_isKicked;
 	bool m_isMuted;
-	boost::timers::portable::microsec_timer m_lastRemoteActionTimer;
 };
 
 #endif
