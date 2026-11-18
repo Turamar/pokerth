@@ -61,6 +61,13 @@ jobs:
       TZ: Europe/Berlin
       # deploy-дерево собираем только по запросу (package=deploy).
       SKIP_DEPLOY: ${{ inputs.package == 'deploy' && '0' || '1' }}
+      # Пакеты хоста для кросс-сборки: один список на шаги скачивания и
+      # установки, чтобы кэш .deb и установка не разъехались.
+      APT_PACKAGES: >-
+        g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64
+        mingw-w64-x86-64-dev ninja-build cmake git wget curl zip unzip
+        p7zip-full build-essential pkg-config autoconf automake libtool
+        python3 python3-pip python3-venv
 
     steps:
       - name: Checkout
@@ -74,23 +81,27 @@ jobs:
                       /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
           df -h /
 
-      # apt на раннере GitHub периодически отдаёт пакеты минутами, и шаг
-      # «Install cross toolchain» висел 10–30 минут на скачивании 291 МБ.
-      # Поэтому .deb кладём в каталог кэша: первый прогон качает как раньше,
-      # следующие ставятся из кэша за ~минуту. Ключ фиксированный (не hash
-      # файла), чтобы правка комментариев не сбрасывала кэш; при смене списка
-      # пакетов поднять версию в ключе. Кэш сохраняется на ветке, где прогон
-      # дошёл до шага сохранения; ветки видят кэш транка (stable), поэтому
-      # первый прогон на новой ветке может быть медленным — это нормально.
+      # apt на раннере GitHub отдаёт пакеты медленно и неравномерно: скачивание
+      # ~150 МБ занимало 14–30 минут (лог 2026-11-18: apt завершился на 14:36,
+      # и шаг был убит таймаутом «15 минут» уже ПОСЛЕ установки). Поэтому:
+      #   1) качаем .deb в каталог кэша отдельным шагом с щедрым таймаутом,
+      #   2) сохраняем кэш сразу после скачивания (успеем, даже если установка
+      #      потом упадёт),
+      #   3) ставим из кэша — это минута.
+      # Ключ фиксированный (не hash файла), чтобы правка комментариев не
+      # сбрасывала кэш; при смене списка пакетов поднять версию. Кэш транка
+      # (stable) виден всем веткам, поэтому первый прогон на новой ветке может
+      # быть медленным — это нормально.
       - name: Restore apt cache
         id: apt-cache
         uses: actions/cache/restore@v4
         with:
           path: ~/apt-debs
-          key: apt-debs-ubuntu2404-v1
+          key: apt-debs-ubuntu2404-v2
 
-      - name: Install cross toolchain
-        timeout-minutes: 15
+      - name: Download apt packages
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 35
         env:
           APT_OPTS: >-
             -o Acquire::Retries=3 -o Acquire::http::Timeout=20
@@ -100,16 +111,35 @@ jobs:
           CACHE="$HOME/apt-debs"
           mkdir -p "$CACHE/partial"
           sudo apt-get update $APT_OPTS
-          # Только x86_64: полный metapackage mingw-w64 тянет ещё и i686
-          # (~90 МБ впустую). Набор вариантов тот же, что был.
-          sudo apt-get install -y $APT_OPTS --no-install-recommends \
-            -o Dir::Cache::archives="$CACHE" \
-            g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 \
-            binutils-mingw-w64-x86-64 mingw-w64-x86-64-dev \
-            ninja-build cmake git wget curl zip unzip p7zip-full \
-            build-essential pkg-config autoconf automake libtool \
-            python3 python3-pip python3-venv
+          # Только x86_64: полный metapackage mingw-w64 тянет ещё и i686.
+          sudo apt-get install -y $APT_OPTS --download-only --no-install-recommends \
+            -o Dir::Cache::archives="$CACHE" $APT_PACKAGES
           sudo chown -R "$(id -u):$(id -g)" "$CACHE"
+          du -sh "$CACHE"
+
+      - name: Save apt cache
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/apt-debs
+          key: apt-debs-ubuntu2404-v2
+
+      - name: Install cross toolchain
+        timeout-minutes: 10
+        env:
+          APT_OPTS: >-
+            -o Acquire::Retries=3 -o Acquire::http::Timeout=20
+            -o Acquire::https::Timeout=20 -o Acquire::ForceIPv4=true
+        run: |
+          set -euo pipefail
+          CACHE="$HOME/apt-debs"
+          mkdir -p "$CACHE/partial"
+          sudo apt-get update $APT_OPTS
+          # Из кэша; если каких-то файлов нет — добираем обычной установкой.
+          sudo apt-get install -y $APT_OPTS --no-install-recommends --no-download \
+            -o Dir::Cache::archives="$CACHE" $APT_PACKAGES \
+          || sudo apt-get install -y $APT_OPTS --no-install-recommends \
+               -o Dir::Cache::archives="$CACHE" $APT_PACKAGES
           # Qt нужен std::thread -> только POSIX-вариант MinGW.
           for tool in gcc g++; do
             if [ -e "/usr/bin/x86_64-w64-mingw32-${tool}-posix" ]; then
@@ -118,14 +148,6 @@ jobs:
             fi
           done
           x86_64-w64-mingw32-g++ -v 2>&1 | tail -3
-          du -sh "$CACHE" || true
-
-      - name: Save apt cache
-        if: steps.apt-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ~/apt-debs
-          key: apt-debs-ubuntu2404-v1
 
       # build_windows.sh работает в ${ROOT}/pokerth и выводит все пути из ${ROOT}.
       - name: Set up build root
