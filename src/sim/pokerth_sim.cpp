@@ -71,6 +71,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QString>
+#include <QStringList>
 
 #include <botprofile.h>
 #include <configfile.h>
@@ -95,8 +96,17 @@ using namespace std;
 namespace
 {
 
+QByteArray catalogueKeys()
+{
+	QStringList keys;
+	for(int i = 0; i < PlayerState::tournamentCount(); ++i)
+		keys << QString::fromLatin1(PlayerState::tournamentEvent(i).key);
+	return keys.join(QStringLiteral(", ")).toUtf8();
+}
+
 void printUsage()
 {
+	const QByteArray keys = catalogueKeys();
 	printf(
 		"pokerth_sim - headless simulation of a PokerTH game\n"
 		"\n"
@@ -134,14 +144,15 @@ void printUsage()
 		"  --margin F        postflop calling margin in equity points, e.g. -0.05\n"
 		"                    (calibration; overrides the value of the profile)\n"
 		"  --quiet           only the summary line, no table\n"
-		"  --tournament K    play the catalogue event K (school, sng6, sng9)\n"
+		"  --tournament K    play the catalogue event K (%s)\n"
 		"                    instead of a cash table: the whole field on as many\n"
 		"                    tables as it needs, --runs tournaments, report ITM\n"
 		"                    and ROI\n"
 		"  --state-selftest DIR\n"
 		"                    check the state store in DIR instead of simulating\n"
 		"\n"
-		"One game stops earlier than --hands as soon as a seat holds all the chips.\n");
+		"One game stops earlier than --hands as soon as a seat holds all the chips.\n",
+		keys.constData());
 }
 
 bool parseNumber(const char *value, long long &out)
@@ -785,7 +796,7 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 	check(reloaded.profile.createdAt == createdBefore,
 		  QStringLiteral("the creation time is not touched by saving"));
 
-	// в”Ђв”Ђ The bank: the ladder, buy-in, stack, leaving, rebuy в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+	// ── The bank: the ladder, buy-in, stack, leaving, rebuy ─────────────────
 	{
 		// Money is cents (see StartingBalance); the test reasons in dollars.
 		const qint64 D = 100;
@@ -813,7 +824,7 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 				  .arg(QString::fromLatin1(step.key)));
 		}
 
-		// в”Ђв”Ђ The tournament catalogue (PLAN.md section 3) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+		// ── The tournament catalogue (PLAN.md section 3) ────────────────────
 		check(PlayerState::tournamentCount() >= 2,
 			  QStringLiteral("the catalogue has at least two events"));
 		for(int i = 0; i < PlayerState::tournamentCount(); ++i) {
@@ -834,7 +845,7 @@ bool runStateSelfTest(const QString &directory, ConfigFile *config)
 				  QStringLiteral("tournament %1 pays out exactly its pool").arg(key));
 		}
 
-		// в”Ђв”Ђ The roster of a tournament (PLAN.md section 3, "Р РѕСЃС‚РµСЂ") в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+		// ── The roster of a tournament (PLAN.md section 3, "Ростер") ────────
 		{
 			// The strength and the archetype are chosen when the seat is taken and
 			// live in the roster, not in the seat number: without this, a rebuilt

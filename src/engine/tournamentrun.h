@@ -153,8 +153,8 @@ public:
 		return static_cast<int>(m_tables.size());
 	}
 	// How many seats a table of this event has: the field is spread evenly, so
-	// 18 seats are two tables of nine, 45 are five of nine, 180 is eighteen of
-	// ten. The final table is formed when the field fits into fewer tables.
+	// 18 seats are two tables of nine, 45 are five of nine, 180 is twenty of
+	// nine. The final table is formed when the field fits into fewer tables.
 	int tableCapacity() const;
 	// The people at the host's table, in seat order (the host's player first).
 	std::vector<int> localIds() const;

@@ -83,7 +83,6 @@ int tournamentIndex(const QString &key);
 // The event of a stored key; the first event for anything unknown (a state
 // written by a newer version cannot be guessed, but it must not crash).
 const TournamentEvent &tournamentEventByKey(const QString &key);
-const char *tournamentList();
 
 }
 

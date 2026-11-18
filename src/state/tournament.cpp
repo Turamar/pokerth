@@ -103,9 +103,4 @@ const TournamentEvent &tournamentEventByKey(const QString &key)
 	return tournamentEvent(index < 0 ? 0 : index);
 }
 
-const char *tournamentList()
-{
-	return "school, sng6, sng9";
-}
-
 }

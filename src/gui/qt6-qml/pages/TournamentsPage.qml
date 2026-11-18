@@ -10,9 +10,9 @@ import "../components"
 //
 // A tournament is not a cash table with bigger blinds: the buy-in buys chips
 // that never come back as chips, the blinds rise, and only the first places are
-// paid. Both events here are single tables - what differs is the size and the
-// payout, i.e. the question they ask: "the money is close" or "a full table and
-// a long bubble".
+// paid. Two events are single tables; "Schule" sits on two tables of nine.
+// What differs is the size, the payout and the shape of the field - the
+// question they ask, not just bigger blinds.
 Rectangle {
     id: tournamentsPage
     objectName: "tournamentsPage"
