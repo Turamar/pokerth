@@ -23,6 +23,8 @@
 #include "ziputils.h"
 #include <QDirIterator>
 #include <QFileDialog>
+#include <QProcess>
+#include <QProcessEnvironment>
 #include <QTemporaryDir>
 #include <QTextStream>
 #include <QDir>
@@ -346,6 +348,53 @@ QString SettingsManager::pickDirectory(const QString &title, const QString &star
 	if (picked.isEmpty() || !QDir(picked).exists())
 		return QString();
 	return QDir(picked).absolutePath();
+}
+
+bool SettingsManager::openExternalUrl(const QString &url) const
+{
+	if (url.trimmed().isEmpty())
+		return false;
+
+	const QUrl target = QUrl::fromUserInput(url.trimmed());
+	if (!target.isValid())
+		return false;
+
+#ifdef Q_OS_LINUX
+	const QString targetString = target.toString();
+
+	// External host tools must not inherit bundled Qt libraries.
+	auto startDetachedHostTool = [](const QString &program, const QStringList &args) {
+		QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+
+		const QString origLdLibraryPath = QString::fromLocal8Bit(qgetenv("POKERTH_ORIG_LD_LIBRARY_PATH"));
+		if (origLdLibraryPath.isEmpty()) {
+			env.remove(QStringLiteral("LD_LIBRARY_PATH"));
+		} else {
+			env.insert(QStringLiteral("LD_LIBRARY_PATH"), origLdLibraryPath);
+		}
+		env.remove(QStringLiteral("LD_PRELOAD"));
+
+		QProcess process;
+		process.setProcessEnvironment(env);
+		process.setProgram(program);
+		process.setArguments(args);
+		return process.startDetached();
+	};
+
+	if (startDetachedHostTool(QStringLiteral("xdg-open"), {targetString}))
+		return true;
+
+	if (startDetachedHostTool(QStringLiteral("gio"), {QStringLiteral("open"), targetString}))
+		return true;
+
+	if (startDetachedHostTool(QStringLiteral("kde-open"), {targetString}))
+		return true;
+#endif
+
+	if (AppImageUtils::openUrlSafe(target))
+		return true;
+
+	return false;
 }
 
 bool SettingsManager::isAvatarUsable(const QString &path) const

@@ -26,7 +26,6 @@ class Session;
 class Game;
 class SoundEvents;
 class QTimer;
-class ChatTranslator;
 class StyleProvider;
 class WalletHandler;
 
@@ -42,8 +41,8 @@ class GameLogModel : public QAbstractListModel
 	Q_OBJECT
 
 	// The whole history as ONE rich text document (the lines concatenated with <br>) –
-	// for the TextEdit based display (continuous selection + copying,
-	// analogous to the ChatBox). It changes on every append()/clear().
+	// for the TextEdit based display (continuous selection + copying). It
+	// changes on every append()/clear().
 	Q_PROPERTY(QString html READ html NOTIFY htmlChanged)
 
 public:
@@ -183,12 +182,6 @@ class GameHandler : public QObject, public LocalTableHost
 	// The game history as an incremental model (see GameLogModel). CONSTANT, because
 	// the model pointer is fixed – updates run via the model signals.
 	Q_PROPERTY(GameLogModel* gameLog READ gameLog CONSTANT)
-	Q_PROPERTY(QStringList chatLog READ chatLog NOTIFY chatLogChanged)
-	// The translator for the game chat. The ChatBox routes taps on the globe
-	// symbol to chatTranslator.requestTranslation(id).
-	Q_PROPERTY(QObject* chatTranslator READ chatTranslator CONSTANT)
-	// true as soon as there is (at least) one other human player in the game besides me
-	Q_PROPERTY(bool hasHumanOpponents READ hasHumanOpponents NOTIFY hasHumanOpponentsChanged)
 	// true post-river, when the human player can show their cards voluntarily
 	Q_PROPERTY(bool canShowCards READ canShowCards NOTIFY canShowCardsChanged)
 	// true during the showdown/result display (post-river, until the next hand).
@@ -264,8 +257,8 @@ public:
 	// the game handler together (not owned): every SoundEvents
 	// instance holds an audio stream of its own.
 	void setSoundEvents(SoundEvents *soundEvents);
-	// Register the table theme: the chat and the game history take their text colours
-	// from there and recolour themselves on every style change.
+	// Register the table theme: the game history takes its text colours from
+	// there and recolours itself on every style change.
 	void setStyleProvider(StyleProvider *styleProvider);
 	// The bank. Not owned; the GameHandler calls it when a cash table session
 	// starts, at every hand end and when the table is left (PLAN.md section 2).
@@ -305,22 +298,13 @@ public:
 	Q_INVOKABLE QString amount(qint64 value) const;
 	// The chips in front of the player (seat 0) right now.
 	Q_INVOKABLE int myStack() const;
-	// Is an internet game running (a network client, the game type internet)? Only then
-	// does reporting an avatar make sense – as in the Qt widgets client, which shows
-	// "Report inappropriate avatar" exclusively for internet games.
-	Q_INVOKABLE bool isInternetGameRunning() const;
-	// Reports the avatar of the player at the given seat as inappropriate to
-	// the server (a port of MyAvatarLabel::reportBadAvatar). The avatar hash
-	// follows – as in the widgets client – from the base name of the avatar file.
-	Q_INVOKABLE void reportAvatar(int seatId);
-	// The URL of the table statistics overview (tableview=1 + the nicks of the active players
-	// at the table) – 1:1 like the Qt widgets client (MyNameLabel). It is built from the
-	// live seats of the running game; empty if no game is running.
-	Q_INVOKABLE QString tableStatsUrl() const;
-	// The nicks of the active players at the running network table (seat order,
-	// without players who have already dropped out) – the data basis for tableStatsUrl()
-	// and the native table ranking page (GameTableStatsPage).
-	Q_INVOKABLE QStringList tableStatsNicks() const;
+	// The running engine table (empty outside a game). The QmlGuiInterface
+	// reads the active player list from it, e.g. to name a revealed hand in the
+	// game history.
+	boost::shared_ptr<Game> game() const
+	{
+		return m_game;
+	}
 	QVariantList players() const
 	{
 		return m_players;
@@ -409,21 +393,6 @@ public:
 	GameLogModel* gameLog()
 	{
 		return &m_gameLogModel;
-	}
-	// As with the history, m_chatLog contains only colour roles; the table theme
-	// colours are only added when delivering (see chatcolors.h).
-	QStringList chatLog() const
-	{
-		QStringList out;
-		out.reserve(m_chatLog.size());
-		for (const QString &line : m_chatLog)
-			out.append(TableChatColors::expand(line, m_tableChatPalette));
-		return out;
-	}
-	QObject* chatTranslator() const;
-	bool hasHumanOpponents() const
-	{
-		return m_hasHumanOpponents;
 	}
 	bool canShowCards() const
 	{
@@ -518,9 +487,6 @@ public:
 
 	// Append a line to the in-game action log (called from QmlGuiInterface).
 	Q_INVOKABLE void appendGameLog(const QString &message, int type = LogNormal);
-	// In-game chat: append a received message / send one to the table.
-	Q_INVOKABLE void appendChat(const QString &playerName, const QString &message);
-	Q_INVOKABLE void sendChat(const QString &message);
 
 	// Called from QmlGuiInterface callbacks (must be Q_INVOKABLE for invokeMethod)
 	Q_INVOKABLE void onRefreshSet();
@@ -533,20 +499,6 @@ public:
 	Q_INVOKABLE void onDisableMyButtons();
 	Q_INVOKABLE void onStartTimeoutAnimation(int playerNum, int timeoutSec);
 	Q_INVOKABLE void onStopTimeoutAnimation(int playerNum);
-	// The network game is finished / we were removed from the game: reset the
-	// GameHandler state, so that no stale m_myTurn/m_game is left behind (otherwise
-	// a late action can run into the dead game → see ClientThread::SendPlayerAction).
-	Q_INVOKABLE void onNetworkGameEnded();
-	// Network: a player has left the game → clear the seat and note it in the
-	// log (left / kicked / disconnected – removeReason from socket_msg.h).
-	Q_INVOKABLE void onNetClientPlayerLeft(unsigned uniquePlayerId,
-										   const QString &playerName = QString(),
-										   int removeReason = 0);
-	// Network: re-read the spectator list of the running game from the session
-	// (called on a spectator join/leave/rename).
-	Q_INVOKABLE void refreshSpectators();
-	// Netzwerk: eigener Client-Ping aktualisiert → Netzwerkstatus-Ampel ableiten.
-	Q_INVOKABLE void onPingUpdate(int minPing, int avgPing, int maxPing);
 	Q_INVOKABLE void onBlindsSet(int smallBlind);
 	// Local game: check for the end of the tournament (only ONE player with chips left). It is
 	// called at the end of a hand, BEFORE the next hand is started. It returns
@@ -645,8 +597,6 @@ signals:
 	void currentHandCategoryChanged();
 	void boardCardFadeChanged();
 	void timeoutChanged();
-	void chatLogChanged();
-	void hasHumanOpponentsChanged();
 	void canShowCardsChanged();
 	void showdownActiveChanged();
 	void waitingForNextHandChanged();
@@ -674,23 +624,11 @@ signals:
 	// were re-read after a hand: the info window of the table refreshes.
 	void tournamentLiveChanged();
 
-protected:
-	// An app-wide filter: real user activity (mouse/keyboard) → a ResetTimeout
-	// to the server, so that the in-game AFK timeout (21 min) does not strike.
-	bool eventFilter(QObject *watched, QEvent *event) override;
-
 private:
-	// The only place that reports changes to the chat history. It bundles several
-	// changes of the same event loop pass into ONE chatLogChanged():
-	// every notification delivers the complete history anew to QML, where
-	// every ChatBox rebuilds its complete rich text document from it (moving
-	// the translate symbol triggered that twice per line the mouse passed
-	// over, for instance). The counterpart to LobbyHandler::notifyChatLogChanged.
-	void notifyChatLogChanged();
 	bool localGameCallbacksBlocked() const;
 	void playYourTurnTimeoutSound();
-	// Adopt the colours from the table theme into m_tableChatPalette and report the chat
-	// as well as the history as changed.
+	// Adopt the colours of the table theme into the game history model (the log
+	// overlay) and let it recolour the lines that are already there.
 	void refreshTableChatPalette();
 	void refreshPlayerData();
 	void refreshBoardCards();
@@ -784,11 +722,6 @@ private:
 	// run and does not start when a turn arrives meanwhile (see the Q_INVOKABLE
 	// suspend/resume pair above).
 	bool m_localActionClockSuspended = false;
-	// The rate limit for the AFK reset (ResetTimeoutMessage). As in the widgets
-	// client: send it at most every few minutes, on real user activity.
-	QElapsedTimer m_afkResetTimer;
-	static constexpr qint64 kAfkResetIntervalMs = 3 * 60 * 1000; // 3 min
-
 	QVariantList m_players;
 	int m_pot = 0;
 	int m_gameId = 0;
@@ -831,15 +764,9 @@ private:
 	int m_timeoutSeatId = -1;   // The seat with a running action timeout (−1 = none)
 	int m_timeoutSec = 0;       // The duration of the action timeout in seconds
 	GameLogModel m_gameLogModel; // The live action log (game history) for the overlay
-	QStringList m_chatLog;      // The in-game chat history (raw, with colour roles)
-	// The table theme that delivers the colours of the chat and the history. The StyleProvider
+	// The table theme that delivers the colours of the game history. The StyleProvider
 	// lives in main() and can die before this handler → QPointer.
 	QPointer<StyleProvider> m_styleProvider;
-	TableChatColors::Palette m_tableChatPalette;
-	// Is a bundled chatLogChanged notification already running? (notifyChatLogChanged)
-	bool m_chatLogNotifyPending = false;
-	ChatTranslator *m_chatTranslator = nullptr; // it appends the translate symbols and translates them
-	bool m_hasHumanOpponents = false;
 	bool m_canShowCards = false;
 	// The showdown is active: only then may opponent cards be revealed. It prevents the
 	// (still stale) playerNeedToShowCards list from wrongly revealing cards during the river

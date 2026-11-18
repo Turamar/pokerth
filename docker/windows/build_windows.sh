@@ -91,17 +91,9 @@ if [ -d "$BUILD_DIR/bin" ]; then
 fi
 
 echo "Copying Qt DLLs..."
-if [[ "${TARGET}" == *"qml"* ]]; then
-    # QML client: copy all Qt6 DLLs (windeployqt equivalent for the cross build)
-    echo "  QML target: copying all Qt6*.dll from ${QT_WINDOWS_DIR}/bin/"
-    cp ${QT_WINDOWS_DIR}/bin/Qt6*.dll $DEPLOY_DIR/ 2>/dev/null || true
-else
-    # Widget client: only the DLLs actually needed
-    for dll in Qt6Core Qt6Gui Qt6Widgets Qt6Network Qt6Sql Qt6Xml \
-               Qt6WebSockets Qt6Multimedia Qt6MultimediaWidgets Qt6Svg; do
-        cp ${QT_WINDOWS_DIR}/bin/${dll}.dll $DEPLOY_DIR/ 2>/dev/null || true
-    done
-fi
+# QML client: copy all Qt6 DLLs (windeployqt equivalent for the cross build)
+echo "  QML target: copying all Qt6*.dll from ${QT_WINDOWS_DIR}/bin/"
+cp ${QT_WINDOWS_DIR}/bin/Qt6*.dll $DEPLOY_DIR/ 2>/dev/null || true
 
 # QML-Client: qml/-Modul-Importe (QtQuick, Controls, Layouts, Effects …)
 if [[ "${TARGET}" == *"qml"* ]]; then
@@ -205,7 +197,7 @@ set LANG=en_US.UTF-8
 set LC_ALL=en_US.UTF-8
 set QT_QPA_PLATFORM=windows
 set QT_DEBUG_PLUGINS=0
-start "" "%~dp0pokerth_client.exe" %*
+start "" "%~dp0pokerth_qml-client.exe" %*
 EOF
 
 # Create Wine launcher with locale and Qt settings
@@ -216,7 +208,7 @@ export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 export QT_QPA_PLATFORM=windows
 export WINEDEBUG=-all
-wine pokerth_client.exe "$@"
+wine pokerth_qml-client.exe "$@"
 EOF
 chmod +x $DEPLOY_DIR/run_pokerth.sh
 
@@ -351,7 +343,7 @@ fi
 echo ""
 echo "To test the deployment package with Wine on Linux:"
 echo "  cd ${DEPLOY_DIR}"
-echo "  wine pokerth_client.exe"
+echo "  wine pokerth_qml-client.exe"
 echo ""
 echo "To test the installer with Wine:"
 echo "  wine ${SCRIPT_DIR}/PokerTH-*-Setup.exe"

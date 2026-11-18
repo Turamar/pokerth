@@ -4,18 +4,12 @@
  *****************************************************************************/
 
 #include "qmlguiinterface.h"
-#include "serverconnectionhandler.h"
-#include "lobbyhandler.h"
 #include "gamehandler.h"
-#include "androidconnectionservice.h"
-#include "iosbackgroundsession.h"
 #include "configfile.h"
-#include <session.h>
 #include <game.h>
 #include <gamedata.h>
 #include <game_defs.h>
 #include <cardsvalue.h>
-#include "net/socket_msg.h"
 #include <QString>
 #include <QChar>
 #include <QMetaObject>
@@ -35,432 +29,13 @@ QString fmtCard(int code)
 }
 } // namespace
 
-QmlGuiInterface::QmlGuiInterface(ConfigFile *config, ServerConnectionHandler *handler, LobbyHandler *lobbyHandler)
-	: m_config(config), m_session(), m_handler(handler), m_lobbyHandler(lobbyHandler)
+QmlGuiInterface::QmlGuiInterface(ConfigFile *config)
+	: m_config(config)
 {
 }
 
 QmlGuiInterface::~QmlGuiInterface()
 {
-}
-
-void QmlGuiInterface::SignalNetClientConnect(int actionID)
-{
-	if (m_handler) {
-		QMetaObject::invokeMethod(m_handler, [this, actionID]() {
-			m_handler->onNetClientConnect(actionID);
-		}, Qt::QueuedConnection);
-	}
-
-	if (m_lobbyHandler && m_session && actionID == 1) {
-		QMetaObject::invokeMethod(m_lobbyHandler, [this]() {
-			// New client initialization: force lobby model reset/sync.
-			m_lobbyHandler->setSession(m_session);
-		}, Qt::QueuedConnection);
-	}
-
-	// Client start (actionID 1 = MSG_SOCK_INIT_DONE, all kinds of connection:
-	// internet, LAN join, own host): start the Android foreground service,
-	// so that the connection survives background phases (doze/app freezer).
-	// It is stopped on a network error (SignalNetClientError) and when
-	// leaving the server (LobbyHandler::leaveServer).
-	if (actionID == 1) {
-		AndroidConnectionService::start();
-		// The iOS counterpart: it marks the active session, so that a background
-		// grace period is requested when switching apps (see iosbackgroundsession.h).
-		IosBackgroundSession::start();
-	}
-}
-
-void QmlGuiInterface::SignalNetClientGameInfo(int actionID)
-{
-	// MSG_NET_GAME_CLIENT_SYNCREJOIN: we have rejoined a running game;
-	// the server, however, only puts us at the table at the beginning of the next hand.
-	// Until then the waiting room stays - without a notice that
-	// would be indistinguishable from normally waiting for fellow players.
-	// The counterpart to the widgets client (waitRejoinStartGameMsgBox).
-	if (m_lobbyHandler && actionID == MSG_NET_GAME_CLIENT_SYNCREJOIN) {
-		QMetaObject::invokeMethod(m_lobbyHandler, [this]() {
-			m_lobbyHandler->onRejoinSyncWait();
-		}, Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalNetServerError(int errorID, int osErrorID)
-{
-	// Errors of the embedded server (hosting your own network game), e.g. an
-	// occupied port. Report it the same way as in the widgets client (signalNetServerError -> the same
-	// networkError slot) - it was swallowed before.
-	if (m_handler) {
-		QMetaObject::invokeMethod(m_handler, [this, errorID, osErrorID]() {
-			m_handler->onNetServerError(errorID, osErrorID);
-		}, Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalNetClientError(int errorID, int osErrorID)
-{
-	if (m_handler) {
-		QMetaObject::invokeMethod(m_handler, [this, errorID, osErrorID]() {
-			m_handler->onNetClientError(errorID, osErrorID);
-		}, Qt::QueuedConnection);
-	}
-	// A network error also ends a running network game → reset the game state
-	// (m_myTurn/m_game), as with SignalNetClientRemovedFromGame,
-	// so that no late action runs into the dead game.
-	if (m_gameHandler) {
-		QMetaObject::invokeMethod(m_gameHandler, "onNetworkGameEnded", Qt::QueuedConnection);
-	}
-	// The connection is gone → the foreground service has nothing left to protect.
-	AndroidConnectionService::stop();
-	IosBackgroundSession::stop();
-}
-
-void QmlGuiInterface::SignalNetClientLoginShow()
-{
-	if (m_handler) {
-		QMetaObject::invokeMethod(m_handler, [this]() {
-			m_handler->onNetClientLoginShow();
-		}, Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalNetClientGameListNew(unsigned gameId)
-{
-	if (m_lobbyHandler && m_session) {
-		GameInfo gameInfo = m_session->getClientGameInfo(gameId);
-		QString gameName = QString::fromStdString(gameInfo.name);
-		QMetaObject::invokeMethod(m_lobbyHandler, "onGameListNew", Qt::QueuedConnection,
-								  Q_ARG(unsigned, gameId), Q_ARG(QString, gameName));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientGameListRemove(unsigned gameId)
-{
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onGameListRemove", Qt::QueuedConnection,
-								  Q_ARG(unsigned, gameId));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientGameListUpdateMode(unsigned gameId, GameMode mode)
-{
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onGameListUpdateMode", Qt::QueuedConnection,
-								  Q_ARG(unsigned, gameId), Q_ARG(int, static_cast<int>(mode)));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientGameListUpdateAdmin(unsigned gameId, unsigned adminPlayerId)
-{
-	Q_UNUSED(adminPlayerId)
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onGameListChanged", Qt::QueuedConnection,
-								  Q_ARG(unsigned, gameId));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientGameListPlayerJoined(unsigned gameId, unsigned playerId)
-{
-	Q_UNUSED(playerId)
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onGameListChanged", Qt::QueuedConnection,
-								  Q_ARG(unsigned, gameId));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientGameListPlayerLeft(unsigned gameId, unsigned playerId)
-{
-	Q_UNUSED(playerId)
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onGameListChanged", Qt::QueuedConnection,
-								  Q_ARG(unsigned, gameId));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientGameListSpectatorJoined(unsigned gameId, unsigned playerId)
-{
-	Q_UNUSED(playerId)
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onGameListChanged", Qt::QueuedConnection,
-								  Q_ARG(unsigned, gameId));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientGameListSpectatorLeft(unsigned gameId, unsigned playerId)
-{
-	Q_UNUSED(playerId)
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onGameListChanged", Qt::QueuedConnection,
-								  Q_ARG(unsigned, gameId));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientLobbyChatMsg(const std::string &playerName, const std::string &msg)
-{
-	if (m_lobbyHandler) {
-		const QString qPlayerName = QString::fromStdString(playerName);
-		const QString qMsg = QString::fromStdString(msg);
-		QMetaObject::invokeMethod(m_lobbyHandler, "onLobbyChatMessage", Qt::QueuedConnection,
-								  Q_ARG(QString, qPlayerName), Q_ARG(QString, qMsg));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientGameChatMsg(const std::string &playerName, const std::string &msg)
-{
-	if (m_gameHandler) {
-		QMetaObject::invokeMethod(m_gameHandler, "appendChat", Qt::QueuedConnection,
-								  Q_ARG(QString, QString::fromStdString(playerName)),
-								  Q_ARG(QString, QString::fromStdString(msg)));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientPingUpdate(unsigned minPing, unsigned avgPing, unsigned maxPing)
-{
-	// Our own client ping → to the GameHandler, which derives the network status (the light)
-	// for our own avatar corner from it (the setting ShowPingStateInAvatar) and
-	// provides the raw values (min/avg/max ms) for the mouseover overlay.
-	// The call comes from the network thread → QueuedConnection.
-	if (m_gameHandler) {
-		QMetaObject::invokeMethod(m_gameHandler, "onPingUpdate", Qt::QueuedConnection,
-								  Q_ARG(int, static_cast<int>(minPing)),
-								  Q_ARG(int, static_cast<int>(avgPing)),
-								  Q_ARG(int, static_cast<int>(maxPing)));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientConnectionStalled(bool stalled)
-{
-	// The connection watchdog of the network thread: the server has been silent
-	// for a while (or is sending again) → the notice in pokerth.qml.
-	if (m_handler) {
-		QMetaObject::invokeMethod(m_handler, [this, stalled]() {
-			m_handler->onConnectionStalled(stalled);
-		}, Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalNetClientPrivateChatMsg(const std::string &playerName, const std::string &msg)
-{
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onPrivateChatMessage", Qt::QueuedConnection,
-								  Q_ARG(QString, QString::fromStdString(playerName)),
-								  Q_ARG(QString, QString::fromStdString(msg)));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientPrivateChatLimitReached(const std::string &playerName, const std::string &msg)
-{
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onPrivateChatLimitReached", Qt::QueuedConnection,
-								  Q_ARG(QString, QString::fromStdString(playerName)),
-								  Q_ARG(QString, QString::fromStdString(msg)));
-	}
-}
-
-void QmlGuiInterface::SignalLobbyPlayerJoined(unsigned playerId, const std::string &nickName)
-{
-	if (m_lobbyHandler) {
-		const QString qNickName = QString::fromStdString(nickName);
-		QMetaObject::invokeMethod(m_lobbyHandler, "onLobbyPlayerJoined", Qt::QueuedConnection,
-								  Q_ARG(unsigned, playerId), Q_ARG(QString, qNickName));
-	}
-}
-
-void QmlGuiInterface::SignalLobbyPlayerLeft(unsigned playerId)
-{
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onLobbyPlayerLeft", Qt::QueuedConnection,
-								  Q_ARG(unsigned, playerId));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientShowTimeoutDialog(NetTimeoutReason reason, unsigned remainingSec)
-{
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onTimeoutWarning", Qt::QueuedConnection,
-								  Q_ARG(int, static_cast<int>(reason)),
-								  Q_ARG(int, static_cast<int>(remainingSec)));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientMsgBox(const std::string &msg)
-{
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onNetworkMessage", Qt::QueuedConnection,
-								  Q_ARG(QString, QString::fromUtf8(msg.c_str())));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientMsgBox(unsigned msgId)
-{
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onNetworkMessageId", Qt::QueuedConnection,
-								  Q_ARG(unsigned, msgId));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientNotification(int notificationId)
-{
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onNetworkNotification", Qt::QueuedConnection,
-								  Q_ARG(int, notificationId));
-	}
-}
-
-void QmlGuiInterface::SignalNetClientPlayerJoined(unsigned playerId, const std::string &playerName, bool isGameAdmin)
-{
-	if (m_lobbyHandler) {
-		const QString qPlayerName = QString::fromStdString(playerName);
-		QMetaObject::invokeMethod(m_lobbyHandler, "updatePlayerName", Qt::QueuedConnection,
-								  Q_ARG(unsigned, playerId), Q_ARG(QString, qPlayerName), Q_ARG(bool, isGameAdmin));
-		// Notification sound (playerconnected / onlinegameready) – queued after
-		// updatePlayerName, so that the player list is up to date.
-		QMetaObject::invokeMethod(m_lobbyHandler, "onGamePlayerJoined", Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalNetClientPlayerChanged(unsigned playerId, const std::string &newPlayerName)
-{
-	if (m_lobbyHandler) {
-		const QString qPlayerName = QString::fromStdString(newPlayerName);
-		// Read isAdmin from session — same as Qt widgets GUI does on demand
-		const bool isAdmin = m_session ? m_session->getClientPlayerInfo(playerId).isAdmin : false;
-		QMetaObject::invokeMethod(m_lobbyHandler, "updatePlayerName", Qt::QueuedConnection,
-								  Q_ARG(unsigned, playerId), Q_ARG(QString, qPlayerName), Q_ARG(bool, isAdmin));
-	}
-	// Update the spectator display (a renamed player can be a spectator
-	// – as in the widgets client, which triggers refreshSpectatorsDisplay here).
-	if (m_gameHandler) {
-		QMetaObject::invokeMethod(m_gameHandler, "refreshSpectators", Qt::QueuedConnection);
-		// The PlayerInfo arrives asynchronously (it is requested when joining the
-		// running game). Rebuild the seat data, so that the name, the country flag and
-		// the guest status at the table are correct immediately instead of only at the next action.
-		QMetaObject::invokeMethod(m_gameHandler, "onRefreshPlayerName", Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalNetClientSpectatorJoined(unsigned /*playerId*/, const std::string & /*playerName*/)
-{
-	if (m_gameHandler)
-		QMetaObject::invokeMethod(m_gameHandler, "refreshSpectators", Qt::QueuedConnection);
-}
-
-void QmlGuiInterface::SignalNetClientSpectatorLeft(unsigned /*playerId*/, const std::string & /*playerName*/, int /*removeReason*/)
-{
-	if (m_gameHandler)
-		QMetaObject::invokeMethod(m_gameHandler, "refreshSpectators", Qt::QueuedConnection);
-}
-
-void QmlGuiInterface::SignalNetClientSelfJoined(unsigned playerId, const std::string &playerName, bool isGameAdmin)
-{
-	if (m_lobbyHandler) {
-		const QString qPlayerName = QString::fromStdString(playerName);
-		QMetaObject::invokeMethod(m_lobbyHandler, [this, playerId, qPlayerName, isGameAdmin]() {
-			m_lobbyHandler->setMyPlayerInfo(playerId, qPlayerName);
-			// On a self join (e.g. as the host of your own game) adopt the
-			// game admin status → the start button in the waiting room becomes visible.
-			// Strictly separate from the server admin (kickban / close the game).
-			m_lobbyHandler->setCurrentGameAdmin(isGameAdmin);
-			m_lobbyHandler->onSelfJoinedGame();
-		}, Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalNetClientRemovedFromGame(int notificationId)
-{
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, [this, notificationId]() {
-			m_lobbyHandler->onRemovedFromGame(notificationId);
-		}, Qt::QueuedConnection);
-	}
-	// Reset the GameHandler state (m_myTurn/m_game), so that no late
-	// action runs into the finished game.
-	if (m_gameHandler) {
-		QMetaObject::invokeMethod(m_gameHandler, "onNetworkGameEnded", Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalNetClientWaitDialog()
-{
-	// The network game is finished (Type_EndOfGameMessage) or we have been
-	// removed – the engine requests here (like showClientDialog() in the widgets
-	// client) that the game table be closed and that we return to the waiting room
-	// or the lobby. Without this the game table stayed open after the end of the game.
-	// With auto-leave active, SignalNetClientRemovedFromGame follows immediately,
-	// which pops on from there into the lobby list.
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, "onWaitGameDialog", Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalNetClientPlayerLeft(unsigned playerId, const std::string &playerName, int removeReason)
-{
-	// Clear the seat of the player in the game view and note it in the log
-	// (left / kicked / disconnected – removeReason).
-	if (m_gameHandler) {
-		QMetaObject::invokeMethod(m_gameHandler, "onNetClientPlayerLeft", Qt::QueuedConnection,
-								  Q_ARG(unsigned, playerId),
-								  Q_ARG(QString, QString::fromStdString(playerName)),
-								  Q_ARG(int, removeReason));
-	}
-}
-
-void QmlGuiInterface::SignalSelfGameInvitation(unsigned gameId, unsigned playerIdFrom)
-{
-	qDebug() << "[INVITE] SignalSelfGameInvitation received: gameId=" << gameId << "fromPlayerId=" << playerIdFrom
-			 << "lobbyHandler=" << (m_lobbyHandler ? "ok" : "NULL");
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, [this, gameId, playerIdFrom]() {
-			m_lobbyHandler->onSelfGameInvitation(gameId, playerIdFrom);
-		}, Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalPlayerGameInvitation(unsigned gameId, unsigned playerIdWho, unsigned playerIdFrom)
-{
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, [this, gameId, playerIdWho, playerIdFrom]() {
-			m_lobbyHandler->onPlayerGameInvitation(gameId, playerIdWho, playerIdFrom);
-		}, Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalRejectedGameInvitation(unsigned gameId, unsigned playerIdWho, DenyGameInvitationReason reason)
-{
-	if (m_lobbyHandler) {
-		const int r = static_cast<int>(reason);
-		QMetaObject::invokeMethod(m_lobbyHandler, [this, gameId, playerIdWho, r]() {
-			m_lobbyHandler->onRejectedGameInvitation(gameId, playerIdWho, r);
-		}, Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalNetClientRejoinPossible(unsigned gameId)
-{
-	// After a connection loss the server offers to continue the old
-	// game session (InitAck.rejoinGameId). It comes from the network thread.
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, [this, gameId]() {
-			m_lobbyHandler->onRejoinPossible(gameId);
-		}, Qt::QueuedConnection);
-	}
-}
-
-void QmlGuiInterface::SignalNetClientGameStart(boost::shared_ptr<Game> game)
-{
-	if (m_lobbyHandler) {
-		QMetaObject::invokeMethod(m_lobbyHandler, [this]() {
-			m_lobbyHandler->onGameStarted();
-		}, Qt::QueuedConnection);
-	}
-	if (m_gameHandler && game) {
-		QMetaObject::invokeMethod(m_gameHandler, [this, game]() {
-			m_gameHandler->setGame(game);
-		}, Qt::QueuedConnection);
-		// Adopt players who are already spectating into the eye display initially.
-		QMetaObject::invokeMethod(m_gameHandler, "refreshSpectators", Qt::QueuedConnection);
-	}
 }
 
 void QmlGuiInterface::refreshSet() const
@@ -686,9 +261,10 @@ void QmlGuiInterface::logFlipHoleCardsMsg(std::string playerName, int card1, int
 		QString msg = QString::fromStdString(playerName) + " " + QString::fromStdString(showHas)
 					  + " [" + fmtCard(card1) + ", " + fmtCard(card2) + "]";
 		// Append the hand name (as in guiLog::logFlipHoleCardsMsg), e.g. - "Straight, six high".
-		if (cardsValueInt != -1 && m_session && m_session->getCurrentGame()) {
+		const boost::shared_ptr<Game> game = m_gameHandler->game();
+		if (cardsValueInt != -1 && game) {
 			const std::string handName =
-				CardsValue::determineHandName(cardsValueInt, m_session->getCurrentGame()->getActivePlayerList());
+				CardsValue::determineHandName(cardsValueInt, game->getActivePlayerList());
 			if (!handName.empty())
 				msg += " - \"" + QString::fromStdString(handName) + "\"";
 		}
@@ -818,16 +394,6 @@ void QmlGuiInterface::flipHolecardsAllIn()
 	QMetaObject::invokeMethod(m_gameHandler, "onFlipHolecardsAllIn", Qt::QueuedConnection);
 }
 
-void QmlGuiInterface::SignalNetClientPostRiverShowCards(unsigned playerId)
-{
-	// Another player voluntarily shows their cards after the hand. In the
-	// widgets client that triggers gameTableImpl::showHoleCards (reveal the cards +
-	// log it). Pass it on to the GameHandler here instead of swallowing it.
-	if (!m_gameHandler) return;
-	QMetaObject::invokeMethod(m_gameHandler, "onPlayerShowCards", Qt::QueuedConnection,
-							  Q_ARG(unsigned, playerId));
-}
-
 void QmlGuiInterface::postRiverAnimation1()
 {
 	// Show-down: call BeRo::postRiverRun() which distributes the pot
@@ -843,18 +409,11 @@ void QmlGuiInterface::postRiverRunAnimation1()
 	// Pot already distributed. Show showdown: reveal cards + mark winner.
 	if (!m_gameHandler) return;
 	GameHandler *gh = m_gameHandler;
-	boost::shared_ptr<Session> session = m_session;
 
 	// Freeze the fold/reveal state IMMEDIATELY, while the engine data of the
-	// hand that has just finished is still valid. We run here synchronously on the
-	// network thread (clientstate.cpp calls us directly from the
-	// EndOfHandShowCards handler – the SQL log relies there on the
-	// FOLD flags still being intact as well). onShowdown() below, by contrast, runs QUEUED, and in a
-	// network game the SERVER starts the next hand: its initHand() sets
-	// all actions to NONE and would clear away the fold state before that. The
-	// widgets client does not have the problem, because it blocks the network thread here with a
-	// semaphore (waitForGuiUpdateDone) – in the QML client that is a
-	// no-op. Without this snapshot, folded players appear with a rated
+	// hand that has just finished is still valid. onShowdown() below runs
+	// QUEUED and the next hand may already have reset the actions by then;
+	// without this snapshot, folded players would appear with a rated
 	// hand in the showdown/game history.
 	QMetaObject::invokeMethod(gh, "captureShowdownSnapshot", Qt::DirectConnection);
 
@@ -862,25 +421,6 @@ void QmlGuiInterface::postRiverRunAnimation1()
 
 	// Start the next hand after a pause so the user can see the result
 	// (show the winner + the revealed cards + the winning hand a bit longer).
-	//
-	// ATTENTION: in a NETWORK game the SERVER starts the next hand via
-	// `Type_HandStartMessage` (see clientstate.cpp:initHand/startHand).
-	// If we additionally call `onNextRoundCleanGui` + initHand +
-	// startHand here after 5.5s, we duplicate the hand setup. Worse:
-	// `onNextRoundCleanGui` calls `onDisableMyButtons()` synchronously
-	// (gamehandler.cpp:1040). If the server starts the new hand faster
-	// than the timer expires (a UTG spot → our own action lies almost
-	// always within 5.5s after the showdown), this timer fires IN THE MIDDLE of
-	// our own turn, sets `m_myTurn = false` and kills the action
-	// buttons. The result: the user cannot click, the server timeout
-	// leads to an auto-fold ("the hand before my BB does not react to
-	// actions"). Therefore: in network games the client leaves the
-	// hand transition entirely to the server.
-	boost::shared_ptr<Session> sessionForTimer = session;
-	const bool isNetwork = sessionForTimer && sessionForTimer->isNetworkClientRunning();
-	if (isNetwork) {
-		return;
-	}
 	QTimer::singleShot(5500, gh, [gh]() {
 		QMetaObject::invokeMethod(gh, "onLocalHandFinished", Qt::DirectConnection);
 	});

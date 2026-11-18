@@ -1,14 +1,14 @@
 FROM ubuntu:25.10
-# Build-Umgebung für PokerTH Combined-Installer (Widget + QML in einem Setup).
+# Build-Umgebung für den PokerTH-Windows-Installer (QML-Client).
 #
 # Ablauf (identische Basis-Schichten wie Dockerfile.windows-qml):
 #   1. Werkzeuge (MinGW, NSIS, ImageMagick, Python)
-#   2. vcpkg  →  Boost / Protobuf / OpenSSL (Windows + Linux-Host)
+#   2. vcpkg  →  Boost / OpenSSL (Windows)
 #   3. Qt via aqtinstall  →  win64_mingw + linux_gcc_64 (Host)
 #   4. Quellcode wird via COPY eingebracht (kein git clone)
-#   5. CMake-Build BEIDER Targets (pokerth_client + pokerth_qml-client)
+#   5. CMake-Build des Clients (pokerth_qml-client)
 #      + DLL-/QML-/Daten-Sammlung (build_windows.sh, SKIP_NSIS=1)
-#   6. NSIS-Installer (installer_combined.nsi) mit beiden Clients
+#   6. NSIS-Installer (installer_combined.nsi)
 #   7. Installer → /output/
 #
 # Docker Build Context = Projekt-Root:
@@ -19,12 +19,9 @@ ARG ROOT=/opt/pokerth-windows
 
 ENV QT_VERSION=${QT_VERSION}
 ENV ROOT=${ROOT}
-# Beide GUI-Targets werden in einem einzigen CMake-Configure gebaut.
-# build_windows.sh reicht ${TARGET} unquotiert an `cmake --build --target` durch,
-# sodass die Wortliste zu zwei Targets expandiert. Da der String "qml" enthält,
-# sammelt build_windows.sh automatisch die Obermenge (alle Qt6-DLLs + qml/-Module),
-# die beide Clients gemeinsam nutzen.
-ENV TARGET="pokerth_client pokerth_qml-client"
+# Der QML-Client wird gebaut. Da der String "qml" enthält, sammelt
+# build_windows.sh automatisch die Obermenge (alle Qt6-DLLs + qml/-Module).
+ENV TARGET="pokerth_qml-client"
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Berlin
 
@@ -69,9 +66,7 @@ RUN vcpkg install --triplet=x64-mingw-static \
         boost-lambda \
         boost-foreach \
         boost-uuid \
-        protobuf \
-        openssl \
-    && vcpkg install protobuf:x64-linux
+        openssl
 
 # ── Qt via aqtinstall ─────────────────────────────────────────────────────────
 RUN python3 -m venv ${ROOT}/venv
@@ -109,7 +104,7 @@ ENV Qt6_DIR=${QT_WINDOWS_DIR}/lib/cmake/Qt6
 # ── Quellcode (Build-Kontext = Projekt-Root) ──────────────────────────────────
 COPY . ${ROOT}/pokerth/
 
-# ── Build: beide Clients kompilieren + DLLs/QML/Daten sammeln ────────────────
+# ── Build: Client kompilieren + DLLs/QML/Daten sammeln ───────────────────────
 # SKIP_NSIS=1 überspringt die Einzel-Installer-Erstellung; den kombinierten
 # Installer bauen wir unten selbst mit installer_combined.nsi.
 RUN cd ${ROOT}/pokerth && SKIP_NSIS=1 bash docker/windows/build_windows.sh
@@ -127,13 +122,12 @@ RUN cd ${ROOT}/pokerth \
        fi \
     && cp -f docker/windows/pokerth.ico build/deploy/ 2>/dev/null || true
 
-# ── Verifizieren, dass beide Exes im Deploy liegen ────────────────────────────
-RUN test -f ${ROOT}/pokerth/build/deploy/pokerth_client.exe \
-    && test -f ${ROOT}/pokerth/build/deploy/pokerth_qml-client.exe \
-    || (echo "FEHLER: Es fehlt mindestens ein Client-Exe im Deploy-Verzeichnis!"; \
+# ── Verifizieren, dass das Client-Exe im Deploy liegt ────────────────────────
+RUN test -f ${ROOT}/pokerth/build/deploy/pokerth_qml-client.exe \
+    || (echo "FEHLER: Das Client-Exe fehlt im Deploy-Verzeichnis!"; \
         ls -l ${ROOT}/pokerth/build/deploy/ || true; exit 1)
 
-# ── NSIS-Installer für kombiniertes Paket ─────────────────────────────────────
+# ── NSIS-Installer ───────────────────────────────────────────────────────────
 RUN cd ${ROOT}/pokerth/docker/windows \
     && VERSION=$(grep -oP '(?<=PRODUCT_VERSION ")[^"]+' installer_combined.nsi | head -1) \
     && BUILD_TIMESTAMP=$(date +%Y%m%d_%H%M%S) \

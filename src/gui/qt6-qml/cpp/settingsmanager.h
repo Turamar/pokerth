@@ -42,7 +42,7 @@ class SettingsManager : public QObject
 	// Incremented on every write of a config value. QML bindings that read
 	// generic values via readConfigInt()/readConfigString() reference
 	// this property in order to re-evaluate immediately on changes (without a
-	// client restart) – analogous to the revision counter of the LobbyHandler.
+	// client restart) – analogous to the revision counters of the other handlers.
 	Q_PROPERTY(int configRevision READ configRevision NOTIFY configRevisionChanged)
 	// The light/dark state reported by the operating system. Only relevant for the
 	// setting "automatic" (DarkMode = 2), which follows it – see
@@ -125,6 +125,14 @@ public:
 	// existing local directory.
 	Q_INVOKABLE QString pickDirectory(const QString &title, const QString &startDir) const;
 
+	// Opens a link in the external browser. NOT Qt.openUrlExternally/QDesktopServices
+	// directly: in the AppImage/bundle those inherit the bundled LD_LIBRARY_PATH/
+	// LD_PRELOAD → xdg-open crashes and nothing opens. This starts the host tools
+	// (xdg-open/gio/kde-open) with a cleaned environment, exactly as the old
+	// network-client handler did; QML keeps Qt.openUrlExternally as the
+	// fallback. false if the URL is empty/invalid or nothing could be started.
+	Q_INVOKABLE bool openExternalUrl(const QString &url) const;
+
 	// Avatar path from the config → a displayable image URL (file:// or qrc:/ for
 	// old entries from the resource bundle). Empty if no path is set
 	// or the file does not exist. It encapsulates building the URL in C++, so that QML
@@ -144,8 +152,8 @@ public:
 	// in your own preview, but other players do not get it
 	// any more (the server rejects it when serving it). Affected are above all
 	// large flat graphics: small in kilobytes, but above the permitted
-	// pixel count. The lobby asks for it when entering; remembering it prevents
-	// the warning from opening again after every return from a game.
+	// pixel count. The client asks for it when entering a game; remembering it
+	// prevents the warning from opening again after every return from a game.
 	Q_INVOKABLE bool takeMyAvatarWarning();
 
 	// Scales the configured own avatar down to a permitted format

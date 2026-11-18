@@ -16,28 +16,18 @@ Rectangle {
     height: parent ? parent.height : 0
     color: "transparent"
 
-    // ── Table theme colours for the chat/log box ──────────────────────────────
+    // ── Table theme colours for the info panel ────────────────────────────────
     // Independent of the light/dark mode of the rest of the app: the source is solely the
     // table theme (StyleProvider.chatLog*, overridable via XML); the
     // fallback only applies if the context property is not set at some point.
     readonly property color tblChatBackground:
         (typeof StyleProvider !== "undefined" && StyleProvider) ? StyleProvider.chatLogBackground : "#1d222b"
-    readonly property color tblChatSurface:
-        (typeof StyleProvider !== "undefined" && StyleProvider) ? StyleProvider.chatLogSurface : "#394150"
     readonly property color tblChatBorder:
         (typeof StyleProvider !== "undefined" && StyleProvider) ? StyleProvider.chatLogBorder : "#576378"
-    readonly property color tblChatText:
-        (typeof StyleProvider !== "undefined" && StyleProvider) ? StyleProvider.chatLogText : "#eff1f5"
-    readonly property color tblChatTextSecondary:
-        (typeof StyleProvider !== "undefined" && StyleProvider) ? StyleProvider.chatLogTextSecondary : "#cdd3e0"
     readonly property color tblChatTextMuted:
         (typeof StyleProvider !== "undefined" && StyleProvider) ? StyleProvider.chatLogTextMuted : "#7787a3"
     readonly property color tblChatAccent:
         (typeof StyleProvider !== "undefined" && StyleProvider) ? StyleProvider.chatLogAccent : "#E3C800"
-    readonly property color tblChatAccentText:
-        (typeof StyleProvider !== "undefined" && StyleProvider) ? StyleProvider.chatLogAccentText : "#101010"
-    readonly property color tblChatSend:
-        (typeof StyleProvider !== "undefined" && StyleProvider) ? StyleProvider.chatLogSend : "#4ade80"
 
     // Switch the game mode – the actual logic (incl. the deferred
     // auto action) lives in the GameActionBar; here only as a forwarding for
@@ -47,8 +37,8 @@ Rectangle {
             actionBar.applyPlayingMode(index)
     }
 
-    // A spectator: neither a table chat nor a history/odds. The keyboard shortcuts
-    // have to be off as well – otherwise Alt+C/Alt+L/Alt+I would open an overlay whose
+    // A spectator: no history/odds panel. The keyboard shortcuts
+    // have to be off as well – otherwise Alt+L/Alt+I would open an overlay whose
     // close button (the toggle) is not there at all any more.
     readonly property bool spectating: tableZone ? tableZone.spectating : false
 
@@ -60,7 +50,7 @@ Rectangle {
     readonly property bool chipsFlying: tableZone
         ? (tableZone._potCollecting || tableZone._potPaying) : false
 
-    // Docked chat/info panels: desktop, and on mobile only tablets (shorter screen
+    // Docked info panel: desktop, and on mobile only tablets (shorter screen
     // side >= 600 dp, the Android "sw600dp" criterion). Based on the screen, not the
     // window: an opening soft keyboard must not undock a panel while typing.
     readonly property bool dockingAllowed:
@@ -102,7 +92,7 @@ Rectangle {
     }
 
     // ── The info panel (history/odds/hand) ────────────────────────────────────
-    // Desktop: permanently docked at the bottom RIGHT (mirrored to the chat at the bottom left),
+    // Desktop: permanently docked at the bottom RIGHT,
     // floating ABOVE the table (it reserves no room). If the width is not enough
     // (or on mobile), it stays the floating overlay with a toggle. Both modes share
     // the one saved state (TableInfoOpen): the toggle folds the docked panel in/out
@@ -119,8 +109,6 @@ Rectangle {
             infoPanelDock.currentIndex = idx
         } else {
             infoPanelOverlay.currentIndex = idx
-            if (tableZone && !tableZone.wide)
-                tableZone.showChat = false
         }
     }
 
@@ -128,8 +116,6 @@ Rectangle {
     function toggleInfoOverlay() {
         var open = !gamePage.tableInfoOpen
         gamePage.setTableInfoOpen(open)
-        if (open && !gamePage.infoDocked && tableZone && !tableZone.wide)
-            tableZone.showChat = false
     }
 
     // Alt+L (the history tab) – the name for compatibility with the previous assignment.
@@ -149,30 +135,10 @@ Rectangle {
             showInfoTab(0)
     }
 
-    // The chat analogous to the info panel: desktop → permanently docked at the bottom left
-    // (chatDocked), foldable in via a toggle; otherwise a floating overlay.
-    readonly property bool chatDocked: tableZone ? tableZone.dockedChatFits : false
-    readonly property bool chatPanelOpen:
-        chatDocked ? !tableZone.dockedChatCollapsed
-                   : (tableZone ? tableZone.showChat : false)
-
-    function toggleChatOverlay() {
-        if (!tableZone)
-            return
-        if (gamePage.chatDocked) {
-            tableZone.dockedChatCollapsed = !tableZone.dockedChatCollapsed
-            return
-        }
-        tableZone.showChat = !tableZone.showChat
-        if (tableZone.showChat && !tableZone.wide)
-            gamePage.setTableInfoOpen(false)
-    }
-
     // ── Emoji reactions (a port from the web client) ─────────────────────────
-    // Sending goes through the game chat with the web client convention
-    // "/emoji 🎉"; received reactions are intercepted by GameHandler::appendChat and
-    // reported via reactionReceived. Our own reactions are played locally right away
-    // – the server echo is deduplicated by a time window.
+    // Received reactions are delivered by GameHandler::reactionReceived; our own
+    // reactions are played locally right away. There is no chat message behind
+    // them any more – the network client is gone, so nothing is sent anywhere.
     property string _lastOwnReactionEmoji: ""
     property double _lastOwnReactionTime: 0
 
@@ -208,8 +174,6 @@ Rectangle {
         _lastOwnReactionEmoji = emoji
         _lastOwnReactionTime = Date.now()
         playReactionAtSeat(0, emoji)
-        if (GameTable)
-            GameTable.sendChat("/emoji " + emoji)
     }
 
     function playReactionAtSeat(seatIdx, emoji) {
@@ -231,16 +195,6 @@ Rectangle {
         // edge start lower, otherwise it is cut off at the top.
         py = Math.max(py, 205)
         reactionFx.play(emoji, px, py)
-    }
-
-    // All occupied seat names (for the Tab nickname completion in the chat).
-    function gameNickList() {
-        var nicks = []
-        if (typeof GameTable !== "undefined" && GameTable)
-            for (var i = 0; i < GameTable.players.length; i++)
-                if (GameTable.players[i].name !== "")
-                    nicks.push(GameTable.players[i].name)
-        return nicks
     }
 
     Connections {
@@ -301,8 +255,8 @@ Rectangle {
     // turn timer of the server keeps running. The action keys have to stay
     // reachable then, otherwise they are – for no reason from the player's point of view –
     // mute until they happen to navigate back to the table.
-    // It is re-evaluated on every navigation via depth/currentItem (the pattern of
-    // mainWindow.inLobbySession); find() searches from the top and thus delivers the
+    // It is re-evaluated on every navigation via depth/currentItem; find() searches
+    // from the top and thus delivers the
     // GamePage that was pushed last. That way only ONE set of shortcuts is ever
     // active even with a second GamePage in the stack (which the push guards
     // actually prevent) – two active shortcuts with the same sequence do not fire
@@ -329,12 +283,6 @@ Rectangle {
         context: Qt.ApplicationShortcut
         enabled: gamePage.visible && !gamePage.spectating
         onActivated: gamePage.toggleLogOverlay()
-    }
-    Shortcut {
-        sequence: "Alt+C"
-        context: Qt.ApplicationShortcut
-        enabled: gamePage.visible && !gamePage.spectating
-        onActivated: gamePage.toggleChatOverlay()
     }
     Shortcut {
         sequence: "Alt+I"
@@ -1076,7 +1024,7 @@ Rectangle {
             // INSIDE the box – the box gets higher by betStripH for that. This
             // additional height deliberately sits in oppBaseHeight/selfBaseHeight, so that
             // the complete space bisection below (boxScale, the ellipse radii,
-            // the community scale, the chat/info dock) automatically computes with the larger box
+            // the community scale, the info dock) automatically computes with the larger box
             // and no new overlaps arise.
             readonly property int betStripH: Config.SeatStyle.betStripExtra
             readonly property int oppBaseHeight: 70 + betStripH
@@ -2096,31 +2044,15 @@ Rectangle {
                 }
             } // zoomLayer
 
-            // ── Spielverlauf (Log) + Chat – Umschalt-Icons + Overlays ──────────
-            property bool showChat: false
-            // The emoji reaction picker (a panel below the toggle next to the chat icon)
+            // ── The emoji reaction picker (a panel below the reaction toggle) ───
             property bool showReactions: false
-
-            // ── The permanent game chat at the bottom left (desktop and tablets) ───
-            // The chat is docked permanently to the left of the action box (the same
-            // height, the same vertical position) – provided there is enough free width
-            // there. If the room is not enough, it stays the overlay chat (the chat icon).
-            readonly property real dockedChatW: {
-                if (!gamePage.dockingAllowed) return 0
-                if (spectating) return 0
-                if (typeof GameTable === "undefined" || !GameTable || !GameTable.hasHumanOpponents) return 0
-                return Math.min(280, (width - actionBar.panelWidth) / 2 - 24)
-            }
-            readonly property bool dockedChatFits: dockedChatW >= 170
-            // If the chat is docked, the overlay is superfluous.
-            onDockedChatFitsChanged: if (dockedChatFits) showChat = false
 
             // The slot names behind which there really is a VISIBLE player box.
             // Reserved placeholders (keepEmptySeats) do keep their slot in the
-            // ring but draw nothing – the chat and the info panel may therefore be pulled up
+            // ring but draw nothing – the info panel may therefore be pulled up
             // across them to the next visible box. Without
-            // this distinction an invisible placeholder would limit the two
-            // boxes just like a real opponent.
+            // this distinction an invisible placeholder would limit the panel
+            // just like a real opponent.
             readonly property var visibleSlotNames: {
                 var set = {}
                 if (typeof GameTable === "undefined" || !GameTable) return set
@@ -2136,92 +2068,10 @@ Rectangle {
                 return set
             }
 
-            // The minimum height of the docked chat (= the action bar height minus the outer margin).
-            readonly property real dockedChatMinH: actionBar.height - 8
-            // The maximum height: it can be pulled up until the lower edge
-            // of the lowest opponent box that overlaps the chat horizontally
-            // (+ 8 px of distance) is reached – no overlap guaranteed.
-            readonly property real dockedChatMaxH: {
-                if (!wide || !dockedChatFits) return dockedChatMinH
-                var s = oppScale
-                var visualW = oppBaseWidth  * s
-                var visualH = oppBaseHeight * s
-                // The horizontal area of the chat in tableZone coordinates
-                // (the chat is anchored on the left with an 8 px distance, the width = dockedChatW).
-                var chatLeft  = 8
-                var chatRight = 8 + dockedChatW
-                // The puck/button dimensions (base pixels, they scale with s) – see
-                // GamePlayerBox.betGroup. Since the bet lies on the felt
-                // (GamePlayerBox.betAt) only the dealer/blind puck still sticks out
-                // sideways from the edge seats – towards the screen edge, i.e. into
-                // the chat area. So only its width counts towards the overlap; the
-                // chip in the middle of the table can no longer be covered here.
-                var betSideExt   = (8 + 32) * s
-                var betBottomExt = 44 * s
-                // Search through all landscape slots: which boxes overlap horizontally?
-                var slots = slotPosLandscape
-                var maxH = height + actionBar.height - 8   // no limit → full
-                for (var name in slots) {
-                    // An invisible placeholder of a seat that was left → it does not limit
-                    // the chat; it may go up to the next visible box.
-                    if (!visibleSlotNames[name]) continue
-                    var pos     = slots[name]
-                    // Mirror seatNudge/seatNudgeX from the repeater delegate: the
-                    // two bottom seats flanking the self box (opp1/oppN)
-                    // are moved lower AND further outwards (towards the screen edge = into
-                    // the chat area) than their raw slot position. Without
-                    // this correction the check underestimates how deep/far out
-                    // they reach → maxH too large → an overlap with the chat.
-                    var nudgeY  = 0, nudgeX = 0
-                    if (!Config.Responsive.landscapeCompact && !spectating
-                            && (name === "opp1" || name === "opp" + (seatCount - 1))
-                            && pos[1] > 0.5) {
-                        nudgeY = oppBaseHeight * boxScale * 0.6
-                        var dir = pos[0] < 0.5 ? -1 : 1
-                        var wantCX = width / 2 + dir *
-                            (selfBaseWidth * boxScale / 2 + 40 * boxScale
-                             + oppBaseWidth * oppScale / 2 + 18)
-                        var dCX = wantCX - width * pos[0]
-                        nudgeX = dir < 0 ? Math.min(0, dCX) : Math.max(0, dCX)
-                    }
-                    var boxCX   = width  * pos[0] + nudgeX
-                    var boxCY   = height * pos[1] + nudgeY
-                    var boxL    = boxCX - visualW / 2
-                    var boxR    = boxCX + visualW / 2
-                    var boxBot  = boxCY + visualH / 2
-                    // Count in the bet/puck area depending on betSide (cf. the repeater
-                    // delegate): the left seats to the left, the right ones to the right, the central ones
-                    // downwards; in landscapeCompact the central box points split
-                    // to both sides.
-                    if (Config.Responsive.landscapeCompact && pos[0] >= 0.45 && pos[0] <= 0.55) {
-                        boxL -= betSideExt
-                        boxR += betSideExt
-                    } else if (pos[0] < 0.45) {
-                        boxL -= betSideExt
-                    } else if (pos[0] > 0.55) {
-                        boxR += betSideExt
-                    } else {
-                        boxBot += betBottomExt
-                    }
-                    // Only check the overlap when the box (incl. the bet) lies in the chat area.
-                    if (boxR <= chatLeft || boxL >= chatRight) continue
-                    // The lower edge of the box/the bet + an 8 px safety distance:
-                    var boxBottom = boxBot + 8
-                    // the chat may reach at most to the lower edge of this box.
-                    var limit = height - boxBottom + actionBar.height - 8
-                    if (limit < maxH) maxH = limit
-                }
-                return Math.max(dockedChatMinH, maxH - gamePage.resizeGrabOverhang)
-            }
-            // The height set by the user via the drag handle; -1 = the default.
-            property real dockedChatUserH: -1
-            // Folded in (hidden via the toggle)? The default: folded in (the toggle off).
-            property bool dockedChatCollapsed: true
-
-            // ── The permanent info panel at the bottom RIGHT – the mirror image of the docked chat ──
-            // The same layout as the chat (at the bottom left): it floats ABOVE the table,
-            // can be pulled up and reserves no room. Only on the desktop/tablets with
-            // enough free width; otherwise an overlay + a toggle.
+            // ── The permanent info panel at the bottom RIGHT ──────────────────────
+            // It floats ABOVE the table, can be pulled up and reserves no room.
+            // Only on the desktop/tablets with enough free width; otherwise an
+            // overlay + a toggle.
             readonly property real dockedInfoW: {
                 if (!gamePage.dockingAllowed) return 0
                 if (spectating) return 0
@@ -2234,7 +2084,7 @@ Rectangle {
 
             readonly property real dockedInfoMinH: actionBar.height - 8
             // The maximum height: up to the lower edge of the lowest opponent box that
-            // overlaps the panel (the right edge) horizontally – as with the chat.
+            // overlaps the panel (the right edge) horizontally.
             readonly property real dockedInfoMaxH: {
                 if (!wide || !dockedInfoFits) return dockedInfoMinH
                 var s = oppScale
@@ -2242,9 +2092,10 @@ Rectangle {
                 var visualH = oppBaseHeight * s
                 var infoRight = width - 8
                 var infoLeft  = width - 8 - dockedInfoW
-                // The puck/button dimensions as with the chat (see dockedChatMaxH):
-                // since the bet lies on the felt only the puck still sticks out
-                // sideways – on the right seats into the info area.
+                // The puck/button dimensions (base pixels, they scale with s) – see
+                // GamePlayerBox.betGroup. Since the bet lies on the felt only the
+                // dealer/blind puck still sticks out sideways – on the right seats
+                // into the info area.
                 var betSideExt   = (8 + 32) * s
                 var betBottomExt = 44 * s
                 var slots = slotPosLandscape
@@ -2253,10 +2104,10 @@ Rectangle {
                     // A placeholder slot (no visible player) → no limitation.
                     if (!visibleSlotNames[name]) continue
                     var pos   = slots[name]
-                    // Mirror seatNudge/seatNudgeX from the repeater delegate (cf.
-                    // dockedChatMaxH): the bottom seats flanking the self box
-                    // (opp1/oppN) sit lower and further out (here: the right
-                    // seat into the info area) than their raw slot position.
+                    // Mirror seatNudge/seatNudgeX from the repeater delegate: the
+                    // bottom seats flanking the self box (opp1/oppN) sit lower and
+                    // further out (here: the right seat into the info area) than
+                    // their raw slot position.
                     var nudgeY = 0, nudgeX = 0
                     if (!Config.Responsive.landscapeCompact && !spectating
                             && (name === "opp1" || name === "opp" + (seatCount - 1))
@@ -2294,38 +2145,6 @@ Rectangle {
             // The height set by the user via the drag handle; -1 = the default.
             property real dockedInfoUserH: -1
 
-            // Unread chat messages: everything above chatReadCount counts as
-            // unread. It is marked as read as soon as the chat has been open for 2 s
-            // (chatReadTimer); after that further messages count as read
-            // immediately while the chat is open.
-            property int chatReadCount: 0
-            readonly property int chatUnread: {
-                var n = (typeof GameTable !== "undefined" && GameTable) ? GameTable.chatLog.length : 0
-                return Math.max(0, n - chatReadCount)
-            }
-            onShowChatChanged: {
-                if (showChat) chatReadTimer.restart()
-                else chatReadTimer.stop()
-            }
-            Timer {
-                id: chatReadTimer
-                interval: 2000
-                onTriggered: tableZone.chatReadCount =
-                    (typeof GameTable !== "undefined" && GameTable) ? GameTable.chatLog.length : 0
-            }
-            Connections {
-                target: (typeof GameTable !== "undefined") ? GameTable : null
-                // With an open chat that has already been read (the 2s timer has expired)
-                // new messages count as read immediately.
-                function onChatLogChanged() {
-                    // The chat was cleared (a new game) → update the counter.
-                    if (GameTable.chatLog.length < tableZone.chatReadCount)
-                        tableZone.chatReadCount = GameTable.chatLog.length
-                    if (tableZone.showChat && !chatReadTimer.running)
-                        tableZone.chatReadCount = GameTable.chatLog.length
-                }
-            }
-
             // ── The info panel overlay (history/odds/hand) ────────────────────
             // Only in the NOT docked mode (portrait/mobile). In desktop
             // landscape the panel lies docked permanently on the right (infoDock,
@@ -2348,64 +2167,7 @@ Rectangle {
                 }
             }
 
-            // ── The chat overlay (only with human fellow players) ────────────────
-            GameSidePanel {
-                id: chatOverlay
-                z: 150
-                edge: Qt.LeftEdge
-                wide: tableZone.wide
-                // No heading – it is closed via the toggle button at the top.
-                showHeader: false
-                visible: tableZone.showChat
-                onCloseRequested: gamePage.toggleChatOverlay()
-                // The chat was closed → close the emoji picker along with it.
-                onVisibleChanged: if (!visible) overlayChat.closeEmojiPicker()
-
-                ChatBox {
-                    id: overlayChat
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    // The colours of the table theme (independent of the app mode).
-                    colText: gamePage.tblChatText
-                    colTextSecondary: gamePage.tblChatTextSecondary
-                    colTextMuted: gamePage.tblChatTextMuted
-                    colBorder: gamePage.tblChatBorder
-                    colSurface: gamePage.tblChatSurface
-                    colBackground: gamePage.tblChatBackground
-                    colAccent: gamePage.tblChatAccent
-                    colAccentText: gamePage.tblChatAccentText
-                    colSend: gamePage.tblChatSend
-                    chatModel: (typeof GameTable !== "undefined" && GameTable) ? GameTable.chatLog : []
-                    chatTranslator: (typeof GameTable !== "undefined" && GameTable) ? GameTable.chatTranslator : null
-                    nickList: gamePage.gameNickList()
-                    onSendRequested: (text) => {
-                        if (typeof GameTable !== "undefined" && GameTable)
-                            GameTable.sendChat(text)
-                    }
-                }
-            }
-
-            GameRoundIconButton {
-                id: chatToggle
-                z: 200
-                // Always visible (provided there are human fellow players) – even when the
-                // chat is docked permanently, so that it can be hidden.
-                // Spectators do not take part in the table chat.
-                visible: !tableZone.spectating
-                         && ((typeof GameTable !== "undefined" && GameTable) ? GameTable.hasHumanOpponents : false)
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.margins: 8
-                // One row lower: the menu floats in the upper left corner now.
-                anchors.topMargin: 48
-                iconSource: "../resources/gameChat.svg"
-                active: gamePage.chatPanelOpen
-                unread: tableZone.chatUnread
-                tooltipText: qsTr("Chat")
-                onClicked: gamePage.toggleChatOverlay()
-            }
-
-            // ── The emoji reaction picker: the toggle to the right of the chat icon ──────
+            // ── The emoji reaction picker at the top left ─────────────────────
             GameRoundIconButton {
                 id: reactionToggle
                 z: 200
@@ -2413,8 +2175,8 @@ Rectangle {
                 // could rise. Reactions of OTHERS stay visible.
                 visible: gamePage.emojiReactionsEnabled && !tableZone.spectating
                 anchors.top: parent.top
-                anchors.left: chatToggle.visible ? chatToggle.right : parent.left
-                anchors.leftMargin: chatToggle.visible ? 6 : 8
+                anchors.left: parent.left
+                anchors.leftMargin: 8
                 anchors.topMargin: 48
                 iconSource: "../resources/addReaction.svg"
                 active: tableZone.showReactions
@@ -2451,123 +2213,7 @@ Rectangle {
         }
     }
 
-    // ── The permanent game chat: to the left of the action box ───────────────────
-    // A direct child of gamePage (above the ColumnLayout), so that it can be pulled up
-    // beyond the action bar.
-    Rectangle {
-        id: dockedChat
-        visible: tableZone.dockedChatFits && !tableZone.dockedChatCollapsed
-        z: 20
-        anchors.left: parent.left
-        anchors.leftMargin: 8
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 8
-        width: tableZone.dockedChatW
-        height: {
-            var h = tableZone.dockedChatUserH >= 0
-                    ? tableZone.dockedChatUserH : tableZone.dockedChatMinH
-            return Math.max(tableZone.dockedChatMinH,
-                            Math.min(tableZone.dockedChatMaxH, h))
-        }
-        radius: 10
-        // Deliberately more transparent than the chat overlay – the table stays visible
-        // behind the permanent chat.
-        color: Config.Theme.withAlpha(gamePage.tblChatBackground, 0.7)
-        border.color: gamePage.tblChatBorder
-        border.width: 1
-
-        onVisibleChanged: {
-            if (visible && typeof GameTable !== "undefined" && GameTable)
-                tableZone.chatReadCount = GameTable.chatLog.length
-            if (!visible)
-                dockedChatBox.closeEmojiPicker()
-        }
-
-        // Permanently visible → new messages count as read immediately.
-        Connections {
-            target: GameTable
-            function onChatLogChanged() {
-                if (dockedChat.visible)
-                    tableZone.chatReadCount = GameTable.chatLog.length
-            }
-        }
-
-        // ── The resize handle (drag upwards) ────────────────────────────────
-        Item {
-            id: chatResizeHandle
-            // On touch the grab area reaches above the panel edge (a finger needs
-            // more than 10 px); the grip itself stays 5 px below the panel top.
-            y: 10 - height
-            width: parent.width
-            height: gamePage.resizeGrabHeight
-            z: 10
-
-            Rectangle {
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 5 - height / 2
-                width: 32
-                height: 3
-                radius: 2
-                color: resizeDragArea.containsMouse || resizeDragArea.pressed
-                       ? gamePage.tblChatAccent
-                       : Config.Theme.withAlpha(gamePage.tblChatTextMuted, 0.55)
-                Behavior on color { ColorAnimation { duration: 120 } }
-            }
-
-            MouseArea {
-                id: resizeDragArea
-                anchors.fill: parent
-                cursorShape: Qt.SizeVerCursor
-                hoverEnabled: true
-                property real pressGlobalY: 0
-                property real pressH: 0
-                onPressed: (mouse) => {
-                    pressGlobalY = mapToItem(gamePage, mouse.x, mouse.y).y
-                    pressH = dockedChat.height
-                }
-                onPositionChanged: (mouse) => {
-                    if (!pressed) return
-                    var curY = mapToItem(gamePage, mouse.x, mouse.y).y
-                    var delta = pressGlobalY - curY   // upwards = positive
-                    var newH = Math.max(tableZone.dockedChatMinH,
-                                       Math.min(tableZone.dockedChatMaxH,
-                                                pressH + delta))
-                    tableZone.dockedChatUserH = newH
-                }
-            }
-        }
-
-        ChatBox {
-            id: dockedChatBox
-            anchors.fill: parent
-            anchors.margins: 6
-            anchors.topMargin: 12   // Room for the resize handle
-            // The colours of the table theme (independent of the app mode).
-            colText: gamePage.tblChatText
-            colTextSecondary: gamePage.tblChatTextSecondary
-            colTextMuted: gamePage.tblChatTextMuted
-            colBorder: gamePage.tblChatBorder
-            colSurface: gamePage.tblChatSurface
-            colBackground: gamePage.tblChatBackground
-            colAccent: gamePage.tblChatAccent
-            colAccentText: gamePage.tblChatAccentText
-            colSend: gamePage.tblChatSend
-            chatModel: (typeof GameTable !== "undefined" && GameTable) ? GameTable.chatLog : []
-            chatTranslator: (typeof GameTable !== "undefined" && GameTable) ? GameTable.chatTranslator : null
-            nickList: gamePage.gameNickList()
-            messageFontSize: 13
-            inputHeight: 28
-            // Little room → the picker as a popup above the box.
-            emojiPickerAsPopup: true
-            onSendRequested: (text) => {
-                if (typeof GameTable !== "undefined" && GameTable)
-                    GameTable.sendChat(text)
-            }
-        }
-    }
-
-    // ── The permanent info panel: at the bottom right (the mirror image of the docked chat) ──────
+    // ── The permanent info panel: at the bottom right ───────────────────────────
     // A direct child of gamePage (above the ColumnLayout), so that it can be pulled up beyond
     // the action bar. It floats ABOVE the table.
     Rectangle {
@@ -2585,7 +2231,7 @@ Rectangle {
                             + 34 + 6
         width: tableZone.dockedInfoW
         height: {
-            // Initially = the height of the action button box (like the docked chat),
+            // Initially = the height of the action button box,
             // it can be pulled up via the handle. It is always clamped to the available room.
             var h = tableZone.dockedInfoUserH >= 0
                     ? tableZone.dockedInfoUserH : tableZone.dockedInfoMinH
@@ -2593,7 +2239,7 @@ Rectangle {
                             Math.min(tableZone.dockedInfoMaxH, h))
         }
         radius: 10
-        // Deliberately more transparent (like the docked chat) – the table stays visible.
+        // Deliberately more transparent – the table stays visible behind the panel.
         color: Config.Theme.withAlpha(gamePage.tblChatBackground, 0.7)
         border.color: gamePage.tblChatBorder
         border.width: 1
@@ -2603,11 +2249,11 @@ Rectangle {
             anchors.fill: parent
             anchors.margins: 8
             anchors.topMargin: 12   // Room for the resize handle
-            // The same font size as the docked chat.
+            // A slightly smaller type scale in the docked panel.
             messageFontSize: 11
         }
 
-        // ── The resize handle (drag upwards) – as with the chat ─────────
+        // ── The resize handle (drag upwards) ────────────────────────────
         Item {
             id: infoResizeHandle
             // On touch the grab area reaches above the panel edge (a finger needs

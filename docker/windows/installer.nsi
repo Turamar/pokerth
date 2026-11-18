@@ -11,7 +11,7 @@
 !define PRODUCT_VERSION "2.1.9.3"
 !define PRODUCT_PUBLISHER "PokerTH Team"
 !define PRODUCT_WEB_SITE "http://www.pokerth.net"
-!define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\pokerth_client.exe"
+!define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\pokerth_qml-client.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define PRODUCT_UNINST_ROOT_KEY "HKLM"
 
@@ -68,7 +68,7 @@ Var StartMenuFolder
 !insertmacro MUI_PAGE_INSTFILES
 
 ; Finish page
-!define MUI_FINISHPAGE_RUN "$INSTDIR\pokerth_client.exe"
+!define MUI_FINISHPAGE_RUN "$INSTDIR\pokerth_qml-client.exe"
 !define MUI_FINISHPAGE_SHOWREADME "$INSTDIR\README.txt"
 !insertmacro MUI_PAGE_FINISH
 
@@ -128,7 +128,7 @@ Section "Main Program" SecMain
   File /r "../../build/deploy\*.*"
   
   ; Store installation folder
-  WriteRegStr HKLM "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\pokerth_client.exe"
+  WriteRegStr HKLM "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\pokerth_qml-client.exe"
   
   ; Create uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -149,17 +149,15 @@ Section "Main Program" SecMain
   ; Create Start Menu shortcuts
   !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     CreateDirectory "$SMPROGRAMS\$StartMenuFolder"
-    CreateShortcut "$SMPROGRAMS\$StartMenuFolder\${PRODUCT_NAME}.lnk" "$INSTDIR\pokerth_client.exe" "" "$INSTDIR\pokerth.ico" 0
+    CreateShortcut "$SMPROGRAMS\$StartMenuFolder\${PRODUCT_NAME}.lnk" "$INSTDIR\pokerth_qml-client.exe" "" "$INSTDIR\pokerth.ico" 0
     CreateShortcut "$SMPROGRAMS\$StartMenuFolder\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
     
     ; Create shortcuts for other executables if they exist
-    IfFileExists "$INSTDIR\pokerth_dedicated_server.exe" 0 +2
-      CreateShortcut "$SMPROGRAMS\$StartMenuFolder\PokerTH Dedicated Server.lnk" "$INSTDIR\pokerth_dedicated_server.exe" "" "$INSTDIR\pokerth.ico" 0
     
   !insertmacro MUI_STARTMENU_WRITE_END
   
   ; Create Desktop shortcut
-  CreateShortcut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\pokerth_client.exe" "" "$INSTDIR\pokerth.ico" 0
+  CreateShortcut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\pokerth_qml-client.exe" "" "$INSTDIR\pokerth.ico" 0
   
   ; Create README (multilingual)
   FileOpen $0 "$INSTDIR\README.txt" w
@@ -202,8 +200,7 @@ Section "Uninstall"
   !insertmacro MUI_STARTMENU_GETFOLDER Application $StartMenuFolder
   
   Delete "$SMPROGRAMS\$StartMenuFolder\${PRODUCT_NAME}.lnk"
-  Delete "$SMPROGRAMS\$StartMenuFolder\PokerTH Dedicated Server.lnk"
-  Delete "$SMPROGRAMS\$StartMenuFolder\Uninstall.lnk"
+    Delete "$SMPROGRAMS\$StartMenuFolder\Uninstall.lnk"
   RMDir "$SMPROGRAMS\$StartMenuFolder"
   
   ; Remove Desktop shortcut

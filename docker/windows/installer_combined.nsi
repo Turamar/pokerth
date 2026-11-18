@@ -1,10 +1,10 @@
-; PokerTH Combined (Widget + QML) Windows Installer Script
+; PokerTH (QML-Client) Windows Installer Script
 ; NSIS Modern User Interface
 ;
-; Installiert BEIDE Clients in ein gemeinsames Verzeichnis:
-;   - pokerth_client.exe       (klassischer Widget-Client)
-;   - pokerth_qml-client.exe   (moderner Qt6/QML-Client)
-; Beide teilen sich data/, plugins/, qml/ und die Qt6-DLLs im Deploy-Verzeichnis.
+; Installiert den Qt6/QML-Client:
+;   - pokerth_qml-client.exe
+; zusammen mit data/, plugins/, qml/ und den Qt6-DLLs aus dem Deploy-Verzeichnis.
+; Der klassische Widget-Client und der dedizierte Server existieren nicht mehr.
 
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
@@ -16,7 +16,6 @@
 !define PRODUCT_VERSION "2.1.11"
 !define PRODUCT_PUBLISHER "PokerTH Team"
 !define PRODUCT_WEB_SITE "http://www.pokerth.net"
-!define PRODUCT_EXE_WIDGET "pokerth_client.exe"
 !define PRODUCT_EXE_QML "pokerth_qml-client.exe"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\${PRODUCT_EXE_QML}"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
@@ -117,11 +116,11 @@ VIAddVersionKey /LANG=${LANG_ENGLISH} "LegalCopyright" "Copyright (C) ${PRODUCT_
 LangString WelcomeTitle ${LANG_ENGLISH} "Welcome to ${PRODUCT_NAME} Setup"
 LangString WelcomeTitle ${LANG_GERMAN} "Willkommen beim ${PRODUCT_NAME} Setup"
 
-LangString WelcomeText ${LANG_ENGLISH} "This wizard will guide you through the installation of ${PRODUCT_NAME} ${PRODUCT_VERSION}.$\r$\n$\r$\nThis package contains BOTH clients:$\r$\n  - the classic widget client$\r$\n  - the modern Qt6/QML client$\r$\n$\r$\n${PRODUCT_NAME} is a professional Texas Hold'em Poker Simulator.$\r$\n$\r$\nClick Next to continue."
-LangString WelcomeText ${LANG_GERMAN} "Dieser Assistent wird Sie durch die Installation von ${PRODUCT_NAME} ${PRODUCT_VERSION} führen.$\r$\n$\r$\nDieses Paket enthält BEIDE Clients:$\r$\n  - den klassischen Widget-Client$\r$\n  - den modernen Qt6/QML-Client$\r$\n$\r$\n${PRODUCT_NAME} ist ein professioneller Texas Hold'em Poker Simulator.$\r$\n$\r$\nKlicken Sie auf Weiter, um fortzufahren."
+LangString WelcomeText ${LANG_ENGLISH} "This wizard will guide you through the installation of ${PRODUCT_NAME} ${PRODUCT_VERSION}.$\r$\n$\r$\nThis package contains the modern Qt6/QML client.$\r$\n$\r$\n${PRODUCT_NAME} is a professional Texas Hold'em Poker Simulator.$\r$\n$\r$\nClick Next to continue."
+LangString WelcomeText ${LANG_GERMAN} "Dieser Assistent wird Sie durch die Installation von ${PRODUCT_NAME} ${PRODUCT_VERSION} führen.$\r$\n$\r$\nDieses Paket enthält den modernen Qt6/QML-Client.$\r$\n$\r$\n${PRODUCT_NAME} ist ein professioneller Texas Hold'em Poker Simulator.$\r$\n$\r$\nKlicken Sie auf Weiter, um fortzufahren."
 
-LangString SecMainName ${LANG_ENGLISH} "Main Program (Widget + QML)"
-LangString SecMainName ${LANG_GERMAN} "Hauptprogramm (Widget + QML)"
+LangString SecMainName ${LANG_ENGLISH} "Main Program (QML)"
+LangString SecMainName ${LANG_GERMAN} "Hauptprogramm (QML)"
 
 LangString RunQmlText ${LANG_ENGLISH} "Run ${PRODUCT_NAME} (QML client)"
 LangString RunQmlText ${LANG_GERMAN} "${PRODUCT_NAME} starten (QML-Client)"
@@ -132,8 +131,8 @@ LangString AlreadyInstalled ${LANG_GERMAN} "${PRODUCT_NAME} ist bereits installi
 LangString ReadmeThanks ${LANG_ENGLISH} "Thank you for installing PokerTH!"
 LangString ReadmeThanks ${LANG_GERMAN} "Vielen Dank für die Installation von PokerTH!"
 
-LangString ReadmeDesc ${LANG_ENGLISH} "This package installs both the classic widget client (pokerth_client.exe) and the modern Qt6/QML client (pokerth_qml-client.exe)."
-LangString ReadmeDesc ${LANG_GERMAN} "Dieses Paket installiert sowohl den klassischen Widget-Client (pokerth_client.exe) als auch den modernen Qt6/QML-Client (pokerth_qml-client.exe)."
+LangString ReadmeDesc ${LANG_ENGLISH} "This package installs the modern Qt6/QML client (pokerth_qml-client.exe)."
+LangString ReadmeDesc ${LANG_GERMAN} "Dieses Paket installiert den modernen Qt6/QML-Client (pokerth_qml-client.exe)."
 
 LangString ReadmeStart ${LANG_ENGLISH} "To start a client, use the Start Menu entries$\r$\nor the desktop shortcuts."
 LangString ReadmeStart ${LANG_GERMAN} "Um einen Client zu starten, verwenden Sie die Startmenü-Einträge$\r$\noder die Desktop-Symbole."
@@ -149,7 +148,7 @@ Section "Main Program" SecMain
 
   SetOutPath "$INSTDIR"
 
-  ; Copy all files from deploy directory (both exes + shared DLLs/data/plugins/qml)
+  ; Copy all files from the deploy directory (exe + DLLs/data/plugins/qml)
   File /r "../../build/deploy\*.*"
 
   ; Store installation folder (points at the QML client as primary)
@@ -159,7 +158,7 @@ Section "Main Program" SecMain
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   ; Write registry keys for Add/Remove Programs
-  WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayName" "${PRODUCT_NAME} (Widget + QML)"
+  WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayName" "${PRODUCT_NAME}"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "UninstallString" "$INSTDIR\Uninstall.exe"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayIcon" "$INSTDIR\pokerth.ico"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
@@ -171,26 +170,17 @@ Section "Main Program" SecMain
   IntFmt $0 "0x%08X" $0
   WriteRegDWORD ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "EstimatedSize" "$0"
 
-  ; Create Start Menu shortcuts (one per client + uninstaller)
+  ; Create Start Menu shortcut + uninstaller
   !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     CreateDirectory "$SMPROGRAMS\$StartMenuFolder"
-    CreateShortcut "$SMPROGRAMS\$StartMenuFolder\${PRODUCT_NAME} (QML).lnk" \
+    CreateShortcut "$SMPROGRAMS\$StartMenuFolder\${PRODUCT_NAME}.lnk" \
                    "$INSTDIR\${PRODUCT_EXE_QML}" "" "$INSTDIR\pokerth.ico" 0
-    CreateShortcut "$SMPROGRAMS\$StartMenuFolder\${PRODUCT_NAME} (Widget).lnk" \
-                   "$INSTDIR\${PRODUCT_EXE_WIDGET}" "" "$INSTDIR\pokerth.ico" 0
     CreateShortcut "$SMPROGRAMS\$StartMenuFolder\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
-
-    ; Create shortcut for the dedicated server if it exists
-    IfFileExists "$INSTDIR\pokerth_dedicated_server.exe" 0 +2
-      CreateShortcut "$SMPROGRAMS\$StartMenuFolder\PokerTH Dedicated Server.lnk" "$INSTDIR\pokerth_dedicated_server.exe" "" "$INSTDIR\pokerth.ico" 0
-
   !insertmacro MUI_STARTMENU_WRITE_END
 
-  ; Create Desktop shortcuts (one per client)
-  CreateShortcut "$DESKTOP\${PRODUCT_NAME} (QML).lnk" \
+  ; Create Desktop shortcut
+  CreateShortcut "$DESKTOP\${PRODUCT_NAME}.lnk" \
                  "$INSTDIR\${PRODUCT_EXE_QML}" "" "$INSTDIR\pokerth.ico" 0
-  CreateShortcut "$DESKTOP\${PRODUCT_NAME} (Widget).lnk" \
-                 "$INSTDIR\${PRODUCT_EXE_WIDGET}" "" "$INSTDIR\pokerth.ico" 0
 
   ; Create README (multilingual)
   FileOpen $0 "$INSTDIR\README.txt" w
@@ -208,8 +198,8 @@ SectionEnd
 ; --------------------------------
 ; Descriptions
 
-LangString DESC_SecMain ${LANG_GERMAN} "Installiert beide ${PRODUCT_NAME}-Clients (Widget + QML) mit allen Abhängigkeiten."
-LangString DESC_SecMain ${LANG_ENGLISH} "Installs both ${PRODUCT_NAME} clients (widget + QML) with all dependencies."
+LangString DESC_SecMain ${LANG_GERMAN} "Installiert den ${PRODUCT_NAME}-Client (QML) mit allen Abhängigkeiten."
+LangString DESC_SecMain ${LANG_ENGLISH} "Installs the ${PRODUCT_NAME} client (QML) with all dependencies."
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
   !insertmacro MUI_DESCRIPTION_TEXT ${SecMain} $(DESC_SecMain)
@@ -223,15 +213,12 @@ Section "Uninstall"
   ; Remove Start Menu items
   !insertmacro MUI_STARTMENU_GETFOLDER Application $StartMenuFolder
 
-  Delete "$SMPROGRAMS\$StartMenuFolder\${PRODUCT_NAME} (QML).lnk"
-  Delete "$SMPROGRAMS\$StartMenuFolder\${PRODUCT_NAME} (Widget).lnk"
-  Delete "$SMPROGRAMS\$StartMenuFolder\PokerTH Dedicated Server.lnk"
+  Delete "$SMPROGRAMS\$StartMenuFolder\${PRODUCT_NAME}.lnk"
   Delete "$SMPROGRAMS\$StartMenuFolder\Uninstall.lnk"
   RMDir "$SMPROGRAMS\$StartMenuFolder"
 
-  ; Remove Desktop shortcuts
-  Delete "$DESKTOP\${PRODUCT_NAME} (QML).lnk"
-  Delete "$DESKTOP\${PRODUCT_NAME} (Widget).lnk"
+  ; Remove Desktop shortcut
+  Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
 
   ; Remove installation directory
   RMDir /r "$INSTDIR\data"

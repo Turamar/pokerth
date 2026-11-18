@@ -10,9 +10,8 @@
 #include "chat_emote_shortcode_table.h"
 
 // Converts ASCII emoticon shortcuts (":-)", "8-)", "<3", ">_<", …) into the
-// corresponding Unicode emojis. Shared by the Qt widgets client
-// (chattools.cpp) and the QML client (gamehandler.cpp / lobbyhandler.cpp),
-// so that both know the same, as comprehensive as possible set of shortcuts.
+// corresponding Unicode emojis. Used by the QML client (gamehandler.cpp) - the
+// game and the chat history share the same, as comprehensive as possible set.
 //
 // IMPORTANT:
 //  * The function expects text that is already HTML escaped and is applied BEFORE
@@ -29,9 +28,9 @@
 // Discord/GitHub style shortcodes (":smile:", ":moon:", ":fire:", …) →
 // Unicode emoji. The complete GitHub shortcode list
 // (https://gist.github.com/rxaviers/7360908), generated in
-// chat_emote_shortcode_table.h. Accessible separately, so that the chat
-// auto-completion (ChatBox.qml, via LobbyHandler::chatEmoteShortcodes)
-// offers EXACTLY the codes that applyChatEmoteShortcuts really replaces.
+// chat_emote_shortcode_table.h. Accessible separately (chatEmoteShortcodeMap),
+// so a caller can offer exactly the codes that applyChatEmoteShortcuts really
+// replaces.
 inline const QHash<QString, QString> &chatEmoteShortcodeMap()
 {
 	static const QHash<QString, QString> shortcodes = buildChatEmoteShortcodeMap();

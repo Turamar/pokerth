@@ -50,16 +50,10 @@
 #include <retranslate.h>
 #include <settingsmanager.h>
 #include "gui/qt6-qml/cpp/styleprovider.h"
-#include "gui/qt6-qml/cpp/serverconnectionhandler.h"
-#include "gui/qt6-qml/cpp/lobbyhandler.h"
 #include "gui/qt6-qml/cpp/gamehandler.h"
-#include "gui/qt6-qml/cpp/loghandler.h"
-#include "gui/qt6-qml/cpp/networkgamehandler.h"
 #include "gui/qt6-qml/cpp/qmlguiinterface.h"
 #include "gui/qt6-qml/cpp/screenhelper.h"
-#include "gui/qt6-qml/cpp/texttranslator.h"
 #include "gui/qt6-qml/cpp/wallethandler.h"
-#include "gui/qt6-qml/cpp/webnetworkfactory.h"
 #include <soundevents.h>
 #include <memory>
 #include <core/loghelper.h>
@@ -349,12 +343,9 @@ int main(int argc, char *argv[])
 				   << "showing the source strings";
 	}
 
-	// Initialize Log
-	Log *log = new Log(myConfig.get());
-
-	// Create handlers
-	ServerConnectionHandler *connectionHandler = new ServerConnectionHandler(&app);
-	connectionHandler->setConfig(myConfig.get());
+	// Initialize the log. main() owns it and closes it after the Session is
+	// gone (see the teardown order at the end of main).
+	std::unique_ptr<Log> log(new Log(myConfig.get()));
 
 	// Exactly one sound handler for the whole app: every SoundEvents instance
 	// opens an audio stream of its own – on Android an OpenSL ES player of
@@ -363,46 +354,24 @@ int main(int argc, char *argv[])
 	// this instance (they do not own it).
 	std::unique_ptr<SoundEvents> soundEvents(new SoundEvents(myConfig.get()));
 
-	LobbyHandler *lobbyHandler = new LobbyHandler(&app);
-	lobbyHandler->setConfig(myConfig.get());
-	lobbyHandler->setSoundEvents(soundEvents.get());
-
-	// Automatic reconnect: the ServerConnectionHandler arms the
-	// rejoin in the LobbyHandler, so that the offer of the server (InitAck) is
-	// accepted without a question and the player lands at their table again
-	// instead of on the login page.
-	QObject::connect(connectionHandler, &ServerConnectionHandler::autoRejoinArmed,
-					 lobbyHandler, &LobbyHandler::setAutoRejoin);
-
 	GameHandler *gameHandler = new GameHandler(&app);
 	gameHandler->setSoundEvents(soundEvents.get());
 
-	LogHandler *logHandler = new LogHandler(myConfig.get(), &app);
-
-	NetworkGameHandler *networkGameHandler = new NetworkGameHandler(&app);
-
-	// Create GUI Interface with handlers
-	QmlGuiInterface *guiInterface = new QmlGuiInterface(myConfig.get(), connectionHandler, lobbyHandler);
+	// The GUI interface of the local engine: every callback it gets is
+	// forwarded to the GameHandler (or, for the silent tables, not shown).
+	QmlGuiInterface *guiInterface = new QmlGuiInterface(myConfig.get());
 	guiInterface->setGameHandler(gameHandler);
 
 	// Create and initialize Session
 	boost::shared_ptr<Session> session;
 	try {
-		session.reset(new Session(guiInterface, myConfig.get(), log));
+		session.reset(new Session(guiInterface, myConfig.get(), log.get()));
 		bool initResult = session->init();
 		if (!initResult) {
 			qWarning() << "Session initialization failed";
 		}
 		log->init();
-		logHandler->setLog(log);
-		logHandler->refresh();
 
-		networkGameHandler->setSession(session);
-		networkGameHandler->setConfig(myConfig.get());
-
-		guiInterface->setSession(session);
-		connectionHandler->setSession(session);
-		lobbyHandler->setSession(session);
 		gameHandler->setSession(session);
 		gameHandler->setConfig(myConfig.get());
 
@@ -411,13 +380,7 @@ int main(int argc, char *argv[])
 		qWarning() << "Exception during session init:" << e.what();
 	}
 
-	// Declared before the engine so it outlives it (the engine uses the factory
-	// during its own destruction). Injects the allowlisted PokerTH User-Agent on
-	// all QML network requests (rankings & player pages behind Cloudflare).
-	WebNetworkAccessManagerFactory webNamFactory;
-
 	QQmlApplicationEngine engine;
-	engine.setNetworkAccessManagerFactory(&webNamFactory);
 
 	SettingsManager settingsMgr(myConfig);
 	StyleProvider styleProvider(myConfig);
@@ -434,12 +397,6 @@ int main(int argc, char *argv[])
 		walletHandler.setPlayerName(playerName);
 	}
 	gameHandler->setWallet(&walletHandler);
-	// Translation of arbitrary texts (the globe on the forum post page) – it uses
-	// the same service/switch as the chat translation, but is not bound to
-	// a chat line list.
-	TextTranslator textTranslator(myConfig.get());
-	// The same translator serves the bubbles in the private message dialog.
-	lobbyHandler->setTextTranslator(&textTranslator);
 	engine.rootContext()->setContextProperty("SettingsManager", &settingsMgr);
 	engine.rootContext()->setContextProperty("StyleProvider", &styleProvider);
 	// The chat and the game history at the table take their text colours from the
@@ -448,13 +405,8 @@ int main(int argc, char *argv[])
 	gameHandler->setStyleProvider(&styleProvider);
 	engine.rootContext()->setContextProperty("LanguageManager", &langMgr);
 	engine.rootContext()->setContextProperty("ScreenHelper", &screenHelper);
-	engine.rootContext()->setContextProperty("Translator", &textTranslator);
-	engine.rootContext()->setContextProperty("ServerConnection", connectionHandler);
-	engine.rootContext()->setContextProperty("Lobby", lobbyHandler);
 	engine.rootContext()->setContextProperty("GameTable", gameHandler);
 	engine.rootContext()->setContextProperty("Wallet", &walletHandler);
-	engine.rootContext()->setContextProperty("LogStore", logHandler);
-	engine.rootContext()->setContextProperty("NetworkGame", networkGameHandler);
 	// A development switch for the table look: with POKERTH_QML_DIR pointing at
 	// the source tree of the QML client (src/gui/qt6-qml) the interface is
 	// loaded from DISK instead of the compiled-in qrc. Then a layout change is
@@ -475,10 +427,9 @@ int main(int argc, char *argv[])
 	engine.load(qmlRoot);
 
 	if (engine.rootObjects().isEmpty()) {
-		// Session owns log – do NOT delete log here.
-		// lobbyHandler/connectionHandler are parented to &app – Qt handles them.
 		session.reset();
 		delete guiInterface;
+		log->flushLog();
 		return -1;
 	}
 
@@ -503,44 +454,24 @@ int main(int argc, char *argv[])
 	}
 
 	// Cleanup order matters:
-	// 1. Stop network thread first (before any owned objects are freed).
-	// 2. Release session references held by all handlers BEFORE session.reset().
-	//    gameHandler/lobbyHandler/connectionHandler are parented to &app, so
-	//    their destructors run inside ~QApplication – at that point
-	//    QCoreApplication::instance() is already nullptr.  If they still hold a
-	//    shared_ptr<Session> when they are destroyed, ~Session() → ~Log() would
-	//    execute SQL cleanup after QCoreApplication is gone → crash.
-	//    Clearing the refs here ensures ~Session() runs while QCoreApplication
-	//    is still fully alive.
-	// 3. Then destroy session explicitly – ~Session() deletes myLog and
-	//    myQtToolsInterface.  Do NOT delete log manually.
-	// 4. Only then delete guiInterface (session no longer holds a raw ptr to it).
-	if (session) {
-		session->terminateNetworkClient();
-	}
-	// Drop shared_ptr<Session> copies held by QObject-parented handlers.
-	connectionHandler->setSession(boost::shared_ptr<Session>());
-	lobbyHandler->setSession(boost::shared_ptr<Session>());
+	// 1. The GameHandler is parented to &app, so its destructor runs inside
+	//    ~QApplication - at that point QCoreApplication::instance() is already
+	//    nullptr. Drop the session reference it holds here, while the
+	//    application is still fully alive.
+	// 2. The bank is a plain stack object of this function and dies before the
+	//    app-parented handlers do - drop the pointer.
+	// 3. Delete the GUI interface; the Session holds a raw pointer to it.
+	// 4. Destroy the Session, then flush and close the log explicitly: the
+	//    Session does not own the Log, so the engine can write until it is
+	//    torn down, and the SQLite connection is closed only afterwards.
+	//    This matters because the Wayland path below ends the process with
+	//    std::_Exit(), which skips all destructors.
 	gameHandler->setSession(boost::shared_ptr<Session>());
-	// The bank is a plain stack object of this function and dies before the
-	// app-parented handlers do - drop the pointer.
 	gameHandler->setWallet(nullptr);
-	// Terminate + release the embedded network server (its ServerGuiWrapper
-	// references guiInterface) before guiInterface is deleted below.
-	networkGameHandler->shutdown();
-	delete guiInterface; // releases guiInterface's session ref too
-	// Commit any still-buffered SQLite log statements now, while the Session
-	// (and thus the Log) is guaranteed alive and we are on the GUI thread.
-	// flushLog() takes the Log's mutex, so if the network thread was leaked by
-	// terminateNetworkClient() (Join timeout) and is mid-flush, we block until
-	// it finishes rather than racing it. This matters because the Wayland path
-	// below ends the process with std::_Exit(), which skips ~Log() entirely.
-	if (session && session->getMyLog()) {
-		session->getMyLog()->flushLog();
-	}
-	session.reset(); // ~Session() runs here; ~Log() (SQLite close) follows once
-	// the last shared_ptr<Log> ref drops (a leaked network
-	// thread may briefly hold one – the Log stays valid for it)
+	delete guiInterface; // releases guiInterface's raw pointer into the session
+	session.reset();     // ~Session() runs here (the Log stays alive)
+	log->flushLog();
+	log.reset();         // ~Log(): the SQLite connection is closed here
 
 	// A Wayland workaround against the reproducible shutdown crash: the
 	// QQmlApplicationEngine destructor (the stack unwind at the end of main) tears the
@@ -548,7 +479,7 @@ int main(int argc, char *argv[])
 	// already half destroyed window in the process → a SIGSEGV in QQuickWindowPrivate::cleanup
 	// (not reliably avoidable with a basic render loop and hide() either).
 	// Since all persistence is already done – the config XML eagerly via
-	// writeBuffer(), the log SQL via ~Session() above, and the QtQuick settings
+	// writeBuffer(), the log SQL flushed and closed above, and the QtQuick settings
 	// (Parameters.qml) we save explicitly to disk here – we end
 	// the process hard, without running the faulty QML/Qt teardown.
 	// A closing marker: if it is missing at the end of a log section, the session
@@ -569,375 +500,5 @@ int main(int argc, char *argv[])
 	return result;
 }
 
-#else
-// START OF OLD QT-WIDGETS GUI SECTION
 
-
-#include <boost/asio.hpp>
-#include <iostream>
-#include <cstdlib>
-#include <ctime>
-#include <qapplication.h>
-
-#include <QtWidgets>
-#include <QtGui>
-#include <QtCore>
-#include <QDebug>
-#include <QScreen>
-#include <QGuiApplication>
-
-#include "session.h"
-#include "startwindowimpl.h"
-#include "configfile.h"
-#include "log.h"
-#include "startsplash.h"
-#include "game_defs.h"
-#include "darkmodehelper.h"
-#include <net/socket_startup.h>
-
-
-#ifdef _MSC_VER
-#ifdef _DEBUG
-#define _CRTDBG_MAP_ALLOC
-#include <crtdbg.h>
-
-#define ENABLE_LEAK_CHECK() \
-{ \
-    int tmpFlag = _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG); \
-    tmpFlag |= _CRTDBG_LEAK_CHECK_DF; \
-    _CrtSetDbgFlag(tmpFlag); \
-    }
-#endif
-#endif
-
-#ifndef ENABLE_LEAK_CHECK
-#define ENABLE_LEAK_CHECK()
-#endif
-
-#ifdef ANDROID
-#ifndef ANDROID_TEST
-#include <QJniEnvironment>
-#include <QJniObject>
-#include <cmath>
-#endif
-#endif
-
-using namespace std;
-
-// In Qt6 HiDPI is always active. Low-resolution (1x) pixmaps are upscaled by
-// the widget paint engine. Without the SmoothPixmapTransform hint Qt uses
-// nearest-neighbor interpolation, which makes cards, avatars and action badges
-// look blocky. This proxy-style enables smooth (bilinear) interpolation for all
-// widget rendering that goes through QStyle::drawItemPixmap (i.e. every
-// QLabel::setPixmap call throughout the application).
-class SmoothPixmapStyle : public QProxyStyle
-{
-public:
-	explicit SmoothPixmapStyle(QStyle *base = nullptr) : QProxyStyle(base) {}
-	void drawItemPixmap(QPainter *p, const QRect &r, int alignment,
-						const QPixmap &pm) const override
-	{
-		p->setRenderHint(QPainter::SmoothPixmapTransform, true);
-		QProxyStyle::drawItemPixmap(p, r, alignment, pm);
-	}
-};
-
-class startWindowImpl;
-class Game;
-
-int main( int argc, char **argv )
-{
-	//ENABLE_LEAK_CHECK();
-
-	//_CrtSetBreakAlloc(49937);
-	socket_startup();
-
-	// High DPI support: Use PassThrough rounding to correctly handle fractional
-	// scale factors (e.g. 125% = 1.25x) on Windows.  Must be set before
-	// QApplication is constructed.
-	// NOTE: Do NOT enable on Android – the platform handles DPI scaling natively.
-	// PassThrough causes a non-integer devicePixelRatio on high-DPI phones
-	// (e.g. Galaxy S23 at ~425 PPI → 2.65625× instead of 3×), which can crash
-	// the EGL/SurfaceFlinger rendering pipeline on Android 16+.
-#ifndef ANDROID
-	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
-		Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
-#endif
-
-#ifdef __APPLE__
-	// The following needs to be done before the application is created, otherwise loading platforms plugin fails.
-	QDir dir(argv[0]);
-	dir.cdUp();
-	dir.cdUp();
-	dir.cd("plugins");
-	QApplication::setLibraryPaths(QStringList(dir.absolutePath()));
-#endif
-
-	/////// can be removed for non-qt-guis ////////////
-#ifdef ANDROID
-	// The 800×480 mobile layout needs ≥480 logical px on the short screen edge.
-	// Modern high-DPI phones only report ~360 logical dp, clipping dialogs.
-	// Compute QT_SCALE_FACTOR dynamically from Android display metrics so the
-	// fix works on ANY device (phones, tablets, foldables, varying densities).
-	// Must be set BEFORE QApplication is constructed.
-#ifndef ANDROID_TEST
-	{
-		QJniObject resources = QJniObject::callStaticObjectMethod(
-								   "android/content/res/Resources",
-								   "getSystem",
-								   "()Landroid/content/res/Resources;");
-		if (resources.isValid()) {
-			QJniObject dm = resources.callObjectMethod(
-								"getDisplayMetrics",
-								"()Landroid/util/DisplayMetrics;");
-			if (dm.isValid()) {
-				int wPx  = dm.getField<jint>("widthPixels");
-				int hPx  = dm.getField<jint>("heightPixels");
-				float density = dm.getField<jfloat>("density");
-				if (wPx > 0 && hPx > 0 && density > 0.0f) {
-					int shortPx  = qMin(wPx, hPx);
-					int qtDpr    = qMax(1, static_cast<int>(std::round(density)));
-					qreal logicalShort = static_cast<qreal>(shortPx) / qtDpr;
-					if (logicalShort > 0.0 && logicalShort < 480.0) {
-						qreal factor = logicalShort / 480.0;
-						qputenv("QT_SCALE_FACTOR",
-								QByteArray::number(static_cast<double>(factor), 'f', 4));
-					}
-				}
-			}
-		}
-	}
-#endif // !ANDROID_TEST
-
-	QApplication a(argc, argv);
-	a.setApplicationName("PokerTH");
-#else
-	QApplication a(argc, argv);
-	// Wrap the platform style so that all QLabel::setPixmap / drawItemPixmap
-	// calls use bilinear interpolation instead of nearest-neighbor when Qt6
-	// upscales 1x assets on HiDPI screens.
-	a.setStyle(new SmoothPixmapStyle(a.style()));
-
-	// single instance check using QLockFile
-	QString lockPath = QDir::temp().absoluteFilePath("pokerth_client.lock");
-	QLockFile lockFile(lockPath);
-	lockFile.setStaleLockTime(0);
-	if (!lockFile.tryLock()) {
-		return 0;
-	}
-#endif
-
-	//create defaultconfig
-	ConfigFile *myConfig = new ConfigFile(argv[0], false);
-	Log *myLog = new Log(myConfig);
-
-	// set PlastiqueStyle even for mac-version to prevent artefacts on styled widgets
-
-	QString	myAppDataPath = QString::fromUtf8(myConfig->readConfigString("AppDataDir").c_str());
-
-	// Set the application-wide window icon so surfaces that use the *application*
-	// icon (e.g. the desktop shell's status/indicator area) show the PokerTH logo
-	// instead of the generic default. The taskbar already gets the icon from the
-	// per-window StartWindowImpl::setWindowIcon, but that does not cover the
-	// application-level icon.
-	QApplication::setWindowIcon(QIcon(myAppDataPath + "gfx/gui/misc/windowicon.png"));
-	// On Wayland (Qt 6.8 deploy) setWindowIcon does not reach the compositor;
-	// the icon is resolved from the matching .desktop file via the surface
-	// app_id. Pin the app_id to the installed desktop-file basename so the
-	// portable launcher's ~/.local/share entry is matched by KWin.
-	QApplication::setDesktopFileName(QStringLiteral("pokerth"));
-
-	//set QApplication default font
-
-	QFontDatabase::addApplicationFont (myAppDataPath +"fonts/n019003l.pfb");
-	QFontDatabase::addApplicationFont (myAppDataPath +"fonts/DejaVuSans-Bold.ttf");
-	// The bundled colour emoji font (Noto Color Emoji, the CBDT/CBLC bitmap variant),
-	// so that emojis appear independently of the distribution and do not depend on the
-	// system FreeType version (COLRv1 only from 2.13 on).
-	QFontDatabase::addApplicationFont (myAppDataPath +"fonts/NotoColorEmoji.ttf");
-
-#ifdef _WIN32
-	QString font1String("QApplication, QWidget, QDialog { font-size: 12px; }");
-#elif __APPLE__
-	//            QString font1String("font-family: \"Lucida Grande\";");
-	QString font1String("QApplication, QWidget, QDialog { font-size: 11px; }");
-#elif ANDROID
-	// Auto-scale fonts for high-DPI Android screens.
-	// The 800×480 mobile layout was designed with 26px base font at exactly
-	// 800×480 logical resolution.  Modern phones (e.g. Galaxy S23 at ~780×360
-	// logical landscape) have less vertical space, so scale proportionally.
-	int androidBaseFontPx = 26;
-	{
-		int userScale = myConfig->readConfigInt("AndroidUiScalePercent");
-		if (userScale > 0) {
-			// Manual override: percentage of the reference 26px size.
-			androidBaseFontPx = qMax(10, 26 * userScale / 100);
-		} else {
-			// Auto: scale by min(screenW/800, screenH/480).
-			QScreen *scr = QGuiApplication::primaryScreen();
-			if (scr) {
-				QRect geo = scr->availableGeometry();
-				int sw = qMax(geo.width(), geo.height());   // landscape width
-				int sh = qMin(geo.width(), geo.height());   // landscape height
-				qreal scale = qMin(static_cast<qreal>(sw) / 800.0,
-								   static_cast<qreal>(sh) / 480.0);
-				scale = qBound(0.5, scale, 1.0);
-				androidBaseFontPx = qMax(10, static_cast<int>(26.0 * scale + 0.5));
-			}
-		}
-	}
-	QString font1String(QString("QApplication, QWidget, QDialog { font-family: \"Nimbus Sans L\"; font-size: %1px; }").arg(androidBaseFontPx));
-	QPalette p = a.palette();
-	p.setColor(QPalette::Button, QColor::fromRgb(80,80,80));
-	p.setColor(QPalette::Base, QColor::fromRgb(80,80,80));
-	p.setColor(QPalette::Window, QColor::fromRgb(50,50,50));
-	p.setColor(QPalette::ButtonText, QColor::fromRgb(255,255,255));
-	p.setColor(QPalette::Disabled, QPalette::ButtonText, QColor::fromRgb(130,130,130));
-	p.setColor(QPalette::WindowText, QColor::fromRgb(255,255,255));
-	p.setColor(QPalette::Disabled, QPalette::WindowText, QColor::fromRgb(100,100,100));
-	p.setColor(QPalette::Text, QColor::fromRgb(255,255,255));
-	p.setColor(QPalette::Disabled, QPalette::Text, QColor::fromRgb(100,100,100));
-	p.setColor(QPalette::Link, QColor::fromRgb(192,192,255));
-	p.setColor(QPalette::LinkVisited, QColor::fromRgb(192,192,255));
-	a.setPalette(p);
-#elif MAEMO
-	QString font1String("QApplication, QWidget, QDialog { font-family: \"Nimbus Sans L\"; font-size: 22px; }");
-	QPalette p = a.palette();
-	p.setColor(QPalette::Button, QColor::fromRgb(80,80,80));
-	p.setColor(QPalette::Base, QColor::fromRgb(80,80,80));
-	p.setColor(QPalette::Window, QColor::fromRgb(50,50,50));
-	p.setColor(QPalette::ButtonText, QColor::fromRgb(255,255,255));
-	p.setColor(QPalette::Disabled, QPalette::ButtonText, QColor::fromRgb(100,100,100));
-	p.setColor(QPalette::WindowText, QColor::fromRgb(255,255,255));
-	p.setColor(QPalette::Disabled, QPalette::WindowText, QColor::fromRgb(100,100,100));
-	p.setColor(QPalette::Text, QColor::fromRgb(255,255,255));
-	p.setColor(QPalette::Disabled, QPalette::Text, QColor::fromRgb(100,100,100));
-	p.setColor(QPalette::Link, QColor::fromRgb(192,192,255));
-	p.setColor(QPalette::LinkVisited, QColor::fromRgb(192,192,255));
-	a.setPalette(p);
-#else
-	QString font1String("QApplication, QWidget, QDialog { font-family: \"Nimbus Sans L\"; font-size: 12px; }");
-	// Apply dark mode palette based on config setting
-	DarkModeHelper::applyPalette(myConfig);
-#endif
-	qApp->setStyleSheet(font1String + " QDialogButtonBox, QMessageBox { dialogbuttonbox-buttons-have-icons: 1; dialog-ok-icon: url(:/gfx/dialog_ok_apply.png); dialog-cancel-icon: url(:/gfx/dialog_close.png); dialog-close-icon: url(:/gfx/dialog_close.png); dialog-yes-icon: url(:/gfx/dialog_ok_apply.png); dialog-no-icon: url(:/gfx/dialog_close.png) }");
-
-#ifdef ANDROID
-	//check if custom background pictures for the resolution are there. Otherwise create them!
-	QString UserDataDir = QString::fromUtf8(myConfig->readConfigString("UserDataDir").c_str());
-	QScreen *screen = QGuiApplication::primaryScreen();
-	QRect screenGeometry = screen->geometry();
-	int screenWidth = screenGeometry.width();
-	int screenHeight = screenGeometry.height();
-	QString customStartWindowBgFileString(UserDataDir+"/startwindowbg10_"+QString::number(screenWidth)+"x"+QString::number(screenHeight)+".png");
-	QString customWelcomePokerTHFileString(UserDataDir+"/welcomepokerth10_"+QString::number(screenWidth)+"x"+QString::number(screenHeight)+".png");
-	QFile customStartWindowBgFile(customStartWindowBgFileString);
-	QFile customWelcomePokerTHFile(customWelcomePokerTHFileString);
-
-	QSplashScreen preSplashFirstRun;
-	if(!customStartWindowBgFile.exists()) {
-
-		//load preSplashPix to show that PokerTH is already running during first time pics calculation
-		QPixmap prePixBase(":/gfx/logoChip3D.png");
-		QPixmap prePix(300, 200);
-		prePix.fill(Qt::transparent); // force alpha channel
-		{
-			QPainter painter(&prePix);
-			painter.drawPixmap(0, 0, prePixBase);
-			painter.setPen(Qt::white);
-			painter.drawText(10, 160, "loading ...");
-		}
-		preSplashFirstRun.setPixmap(prePix);
-		preSplashFirstRun.show();
-
-		QPixmap pix(":/android/android-data/gfx/gui/misc/startwindowbg10_mobile.png");
-		pix = pix.scaled(screenWidth, screenHeight, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-		pix.save(customStartWindowBgFileString);
-	}
-
-	if(!customWelcomePokerTHFile.exists()) {
-		QPixmap base(customStartWindowBgFileString);
-		//scale overlay "have a lot of fun" at first
-		QPixmap overlay(":/android/android-data/gfx/gui/misc/welcomepokerth10_mobile.png");
-		overlay = overlay.scaled(screenWidth, screenHeight, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-		QPixmap result(base.width(), base.height());
-		result.fill(Qt::transparent); // force alpha channel
-		{
-			QPainter painter(&result);
-			painter.drawPixmap(0, 0, base);
-			painter.drawPixmap(0, 0, overlay);
-		}
-		result.save(customWelcomePokerTHFileString);
-		preSplashFirstRun.hide();
-	}
-
-	QPixmap pixmap;
-	if(customWelcomePokerTHFile.exists()) {
-		pixmap.load(QFileInfo(customWelcomePokerTHFile).absoluteFilePath());
-	} else {
-		//if custom welcome pic could not be saved locally we need to scale it on the fly
-		pixmap.load(":/android/android-data/gfx/gui/misc/welcomepokerth10_mobile.png");
-		pixmap = pixmap.scaled(screenWidth, screenHeight, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-	}
-
-#else
-	QPixmap pixmap(myAppDataPath + "gfx/gui/misc/welcomepokerth10_desktop.png");
-#endif
-	StartSplash splash(pixmap);
-	if(!myConfig->readConfigInt("DisableSplashScreenOnStartup")) {
-		splash.show();
-		splash.showMessage(QString("Version %1").arg(WIDGET_RELEASE_STRING), 0x0042, QColor(255,255,255));
-	}
-
-	//Set translations
-	QTranslator qtTranslator;
-	if (qtTranslator.load(QString(myAppDataPath +"translations/qt_") + QString::fromStdString(myConfig->readConfigString("Language")))) {
-		a.installTranslator(&qtTranslator);
-	}
-	QTranslator translator;
-	if (translator.load(QString(myAppDataPath +"translations/pokerth_") + QString::fromStdString(myConfig->readConfigString("Language")))) {
-		a.installTranslator(&translator);
-	}
-
-	qRegisterMetaType<unsigned>("unsigned");
-	qRegisterMetaType<boost::shared_ptr<Game> >("boost::shared_ptr<Game>");
-	qRegisterMetaType<ServerStats>("ServerStats");
-	qRegisterMetaType<DenyGameInvitationReason>("DenyGameInvitationReason");
-	///////////////////////////////////////////////////
-
-	startWindowImpl mainWin(myConfig,myLog);
-#ifdef ANDROID
-// 	//Do not start if API is smaller than x
-// 	int api = -2;
-// #ifndef ANDROID_TEST
-// 	JavaVM *currVM = (JavaVM *)QApplication::platformNativeInterface()->nativeResourceForIntegration("JavaVM");
-// 	JNIEnv* env;
-// 	if (currVM->AttachCurrentThread(&env, NULL)<0) {
-// 		qCritical()<<"AttachCurrentThread failed";
-// 	} else {
-// 		jclass jclassApplicationClass = env->FindClass("android/os/Build$VERSION");
-// 		if (jclassApplicationClass) {
-// 			api = env->GetStaticIntField(jclassApplicationClass, env->GetStaticFieldID(jclassApplicationClass,"SDK_INT", "I"));
-// 		}
-// 		currVM->DetachCurrentThread();
-// 	}
-// #endif
-// Test api and maybe do not start for further android releases
-//	if(api < 14) {
-//		QMessageBox box(QMessageBox::Critical, "PokerTH Error", "Sorry, PokerTH needs Android version 4.0 or above to start", QMessageBox::Ok);
-//		box.show();
-//	}
-//	else {
-//		mainWin.show();
-//	}
-	mainWin.show();
-#else
-	// a.setActivationWindow(&mainWin, true);
-#endif
-	int retVal = a.exec();
-	return retVal;
-}
-
-
-// END OF OLD QT-WIDGETS GUI SECTION
 #endif

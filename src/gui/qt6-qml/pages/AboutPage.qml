@@ -23,14 +23,14 @@ Rectangle {
 
     // Opens a link in the external browser. NOT Qt.openUrlExternally directly:
     // in the AppImage/bundle QDesktopServices inherits the bundled LD_LIBRARY_PATH →
-    // xdg-open crashes. Lobby.openExternalUrl starts the host tools with a
-    // cleaned environment (same reasoning as ChatBox/LobbyStatsBar).
+    // xdg-open crashes. SettingsManager.openExternalUrl starts the host tools with a
+    // cleaned environment (same reasoning as StartFooter).
     function openLink(link) {
         if (!link || link === "")
             return
         var opened = false
-        if (typeof Lobby !== "undefined" && Lobby)
-            opened = Lobby.openExternalUrl(link)
+        if (typeof SettingsManager !== "undefined" && SettingsManager)
+            opened = SettingsManager.openExternalUrl(link)
         if (!opened)
             opened = Qt.openUrlExternally(link)
         if (!opened)
@@ -69,7 +69,7 @@ Rectangle {
 
     // Scrollable text panel in the style of the logs preview. Links are – if
     // enabled – opened via TapHandler + linkAt(): onLinkActivated does not fire
-    // reliably inside a Flickable (for details see ChatBox).
+    // reliably inside a Flickable.
     component TextPanel: Rectangle {
         id: panel
 

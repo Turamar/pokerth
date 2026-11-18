@@ -208,42 +208,6 @@ QtObject {
         return "qrc:resources/responsive-cards/" + ranks[ri] + suits[si] + ".svg"
     }
 
-    // Shared chat history of the LOBBY channel: the lobby chat (compact + wide)
-    // and the GameWait chat all send via Lobby.sendChatMessage – their
-    // ChatBoxes bind this array as the historyStore and thus share
-    // the ↑/↓ history. (The game chat has a channel of its own and keeps
-    // its instance-local history.)
-    readonly property var lobbyChatHistory: []
-
-    // Tab nickname completion – the logic as in ChatTools::nickAutoCompletition
-    // in the Qt widgets client: the first Tab collects all nicks that begin with
-    // the last word; every further Tab iterates through the matches.
-    // `state` ({counter, base, matches}) holds the calling input field and
-    // resets counter=0 on user input (onTextEdited). It returns the
-    // new input text or null (no match).
-    function nickComplete(state, text, nicks) {
-        if (state.counter === 0) {
-            var words = text.split(" ")
-            var prefix = words[words.length - 1]
-            if (prefix === "") return null
-            var matches = []
-            for (var i = 0; i < nicks.length; i++) {
-                var n = nicks[i]
-                if (n && n.toLowerCase().indexOf(prefix.toLowerCase()) === 0)
-                    matches.push(n)
-            }
-            if (matches.length === 0) return null
-            words.pop()
-            state.base = words.join(" ")
-            state.matches = matches
-        }
-        if (!state.matches || state.matches.length === 0) return null
-        if (state.counter >= state.matches.length) state.counter = 0
-        var nick = state.matches[state.counter]
-        state.counter++
-        return state.base === "" ? nick + ": " : state.base + " " + nick + " "
-    }
-
     // Returns a chart colour with proper contrast (light in dark mode, dark in light mode)
     function chartColor(index, highlighted) {
         var c = Qt.color(chartColors[index % chartColors.length])

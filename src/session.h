@@ -34,22 +34,21 @@
 #include <boost/shared_ptr.hpp>
 #include <string>
 
-#include "serverdata.h"
 #include "gamedata.h"
-#include "playerdata.h"
-#include "game_defs.h"
-#include <core/crypthelper.h>
-
 
 class GuiInterface;
 class Game;
 class ConfigFile;
 class Log;
-class ClientThread;
-class ServerManager;
 class AvatarManager;
 class QtToolsInterface;
 
+/* The local game session.
+ *
+ * It owned the network client and the embedded server before; both are gone,
+ * so what is left is the local side: the avatar manager, the running game
+ * (built by startLocalGame) and the logger the game writes to.
+ */
 class Session
 {
 public:
@@ -57,8 +56,6 @@ public:
 	Session(GuiInterface*, ConfigFile*, Log*);
 
 	~Session();
-
-	enum GameType { GAME_TYPE_NONE, GAME_TYPE_LOCAL, GAME_TYPE_NETWORK, GAME_TYPE_INTERNET };
 
 	// Only one of the two inits should be called.
 	bool init();
@@ -71,99 +68,28 @@ public:
 	// at the blind the tournament is at, not at the one the table was built with.
 	void startLocalGame(const GameData &gameData, const StartData &startData,
 						bool startFirstHand = true);
-	void startClientGame(boost::shared_ptr<Game> game);
 
 	boost::shared_ptr<Game> getCurrentGame();
 
-	GuiInterface *getGui();
 	Log* getMyLog()
 	{
-		return myLog.get();
+		return myLog;
 	}
-	GameType getGameType();
 
 	boost::shared_ptr<AvatarManager> getAvatarManager();
-
-	void startInternetClient();
-	void startNetworkClient(const std::string &serverAddress, unsigned serverPort, bool ipv6, bool sctp);
-	void startNetworkClientForLocalServer(const GameData &gameData);
-	void terminateNetworkClient();
-	void clientCreateGame(const GameData &gameData, const std::string &name, const std::string &password);
-	// spectateOnly: join the game as a spectator (no seat, no cards,
-	// never to act). The server only allows this if the game was created
-	// with allowSpectators.
-	void clientJoinGame(unsigned gameId, const std::string &password, bool spectateOnly = false);
-	void clientRejoinGame(unsigned gameId);
-
-	void startNetworkServer(bool dedicated);
-	void sendLeaveCurrentGame();
-	void sendStartEvent(bool fillUpWithCpuPlayers);
-	void terminateNetworkServer();
-	bool pollNetworkServerTerminated();
-
-	void sendClientPlayerAction();
-
-	void sendGameChatMessage(const std::string &message);
-	void sendLobbyChatMessage(const std::string &message);
-	void sendPrivateChatMessage(unsigned targetPlayerId, const std::string &message);
-	void sendPrivateChatMessageToName(const std::string &targetPlayerName, const std::string &message);
-	void kickPlayer(unsigned playerId);
-	void kickPlayer(const std::string &playerName);
-	void startVoteKickPlayer(unsigned playerId);
-	void voteKick(bool doKick);
-	void showMyCards();
-	void selectServer(unsigned serverId);
-	void setLogin(const std::string &userName, const std::string &password, bool isGuest);
-
-	void invitePlayerToCurrentGame(unsigned playerId);
-	void acceptGameInvitation(unsigned gameId);
-	void rejectGameInvitation(unsigned gameId, DenyGameInvitationReason reason);
-
-	void reportBadAvatar(unsigned reportedPlayerId, const std::string &avatarHash);
-	void reportBadGameName(unsigned gameId);
-	void adminActionBanPlayer(unsigned playerId);
-	void adminActionGlobalNotice(const std::string &noticeText);
-
-	void resetNetworkTimeout();
-
-	void adminActionCloseGame(unsigned gameId);
-
-	bool isNetworkClientRunning() const; // TODO hack
-	bool isNetworkServerRunning() const; // TODO hack
-	// true as long as we have attended the current game as a spectator.
-	bool isClientSpectating() const;
-
-	ServerInfo getClientServerInfo(unsigned serverId) const;
-	GameInfo getClientGameInfo(unsigned gameId) const;
-	PlayerInfo getClientPlayerInfo(unsigned playerId) const;
-	unsigned getGameIdOfPlayer(unsigned playerId) const;
-	ServerStats getClientStats() const;
-	unsigned getClientCurrentGameId() const;
-	unsigned getClientUniquePlayerId() const;
-
-	bool getAvatarFile(const MD5Buf &avatarMD5, std::string &fileName);
 
 private:
 
 	int currentGameNum;
-
-	boost::shared_ptr<ClientThread> myNetClient;
-	boost::shared_ptr<ServerManager> myNetServer;
 
 	boost::shared_ptr<AvatarManager> myAvatarManager;
 
 	boost::shared_ptr<Game> currentGame;
 	GuiInterface *myGui;
 	ConfigFile *myConfig;
-	// Shared ownership: the network ClientThread holds a copy of this shared_ptr
-	// (m_clientLog). On shutdown the client thread may be leaked (Join timeout in
-	// terminateNetworkClient), so the Log must outlive Session as long as that
-	// thread can still write to it. Single control block prevents the previous
-	// raw-pointer double-ownership (Session delete + ClientThread shared_ptr),
-	// which caused a use-after-free / interrupted SQLite write -> corrupt .pdb
-	// when the user quit quickly while a log flush was still in flight.
-	boost::shared_ptr<Log> myLog;
-	GameType myGameType;
+	// Not owned: main() creates the Log and keeps it alive until after the
+	// Session is gone (see src/pokerth.cpp - the destructor order there).
+	Log *myLog;
 	QtToolsInterface *myQtToolsInterface;
 };
 

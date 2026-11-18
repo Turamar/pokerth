@@ -3,7 +3,7 @@ name: Dev build (fast, no installer)
 # Быстрый цикл «правка -> сборка -> запуск» для повседневной работы.
 #
 # Чем отличается от windows.yml (релизная сборка установщика):
-#   * собирается только клиент: по умолчанию QML, виджет-клиент — по запросу;
+#   * собирается только QML-клиент (виджет-клиента и сети в дереве больше нет);
 #   * deploy-дерево (Qt-DLL + qml/ + plugins) не собирается: SKIP_DEPLOY=1;
 #   * нет NSIS, нет подписи SignPath, не нужен imagick;
 #   * артефакт маленький: обычно один exe вместо 167 МБ установщика.
@@ -30,13 +30,6 @@ name: Dev build (fast, no installer)
 on:
   workflow_dispatch:
     inputs:
-      target:
-        description: "Что собирать"
-        type: choice
-        options:
-          - qml
-          - both
-        default: qml
       package:
         description: "Что положить в артефакт"
         type: choice
@@ -46,7 +39,7 @@ on:
           - deploy
         default: exe
 
-run-name: "dev ${{ inputs.target }} / ${{ inputs.package }} @ ${{ github.ref_name }}"
+run-name: "dev ${{ inputs.package }} @ ${{ github.ref_name }}"
 
 # Новая итерация на той же ветке отменяет предыдущую: ждать нечего.
 concurrency:
@@ -127,20 +120,13 @@ jobs:
           set -euo pipefail
           INST="$ROOT/vcpkg/installed/x64-mingw-static"
           have_ports() {
-            [ -f "$INST/lib/libprotobuf.a" ] || return 1
             [ -f "$INST/lib/libssl.a" ] || return 1
             ls "$INST"/lib/libboost_thread*.a >/dev/null 2>&1 || return 1
-            # Host-protoc для кросс-сборки: путь внутри триплета — дело рук
-            # vcpkg, поэтому ищем, а не хардкодим.
-            find "$ROOT/vcpkg/installed" -maxdepth 5 -name protoc -type f \
-                | grep -q . || return 1
             return 0
           }
           echo "vcpkg tree: $(du -sh "$ROOT/vcpkg" 2>/dev/null | cut -f1 || echo 'отсутствует')"
-          echo "  libprotobuf.a : $([ -f "$INST/lib/libprotobuf.a" ] && echo yes || echo no)"
           echo "  libssl.a      : $([ -f "$INST/lib/libssl.a" ] && echo yes || echo no)"
           echo "  boost_thread  : $(ls "$INST"/lib/libboost_thread*.a 2>/dev/null | head -1 || echo no)"
-          echo "  protoc (host) : $(find "$ROOT/vcpkg/installed" -maxdepth 5 -name protoc -type f 2>/dev/null | head -1 || echo no)"
           if have_ports; then
             echo "vcpkg: порты из кэша — сборка пропущена"
             echo "VCPKG_WARM=1" >> "$GITHUB_ENV"
@@ -165,9 +151,7 @@ jobs:
               boost-lambda \
               boost-foreach \
               boost-uuid \
-              protobuf \
               openssl
-          "$ROOT/vcpkg/vcpkg" install protobuf:x64-linux
 
       - name: Save vcpkg (только если собирали порты)
         if: env.VCPKG_WARM == '0'
@@ -257,11 +241,7 @@ jobs:
           # pokerth_sim (headless simulator) comes along on every run: it is a
           # few small files, and having it in the same artifact means a bot or
           # economy change can be measured without a second build.
-          if [ "${{ inputs.target }}" = "both" ]; then
-            export TARGET="pokerth_client pokerth_qml-client pokerth_sim"
-          else
-            export TARGET="pokerth_qml-client pokerth_sim"
-          fi
+          export TARGET="pokerth_qml-client pokerth_sim"
           echo "TARGET=$TARGET  SKIP_DEPLOY=$SKIP_DEPLOY  SKIP_NSIS=$SKIP_NSIS"
           START=$(date +%s)
           bash docker/windows/build_windows.sh
@@ -273,9 +253,6 @@ jobs:
           ls -lh build/bin/*.exe
           test -f build/bin/pokerth_qml-client.exe
           test -f build/bin/pokerth_sim.exe
-          if [ "${{ inputs.target }}" = "both" ]; then
-            test -f build/bin/pokerth_client.exe
-          fi
 
       - name: Upload exe
         if: inputs.package == 'exe'
@@ -313,7 +290,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "### Dev build: ${{ inputs.target }} / ${{ inputs.package }}"
+            echo "### Dev build: ${{ inputs.package }}"
             echo ""
             echo "| | |"
             echo "|---|---|"

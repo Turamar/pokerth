@@ -1,14 +1,15 @@
-name: Build Windows Installer (combined QML + Widget)
+name: Build Windows Installer (QML)
 
-# Manual only: a cold run cross-compiles boost/openssl/protobuf for MinGW via
-# vcpkg and pulls two full Qt kits (win64_mingw plus the linux_gcc_64 host Qt
+# Manual only: a cold run cross-compiles boost/openssl for MinGW via vcpkg
+# and pulls two full Qt kits (win64_mingw plus the linux_gcc_64 host Qt
 # the cross build needs), which takes well over an hour. With the vcpkg cache
 # warm a repeat run is roughly 40-60 minutes.
 #
 # This is docker/windows/Dockerfile.windows-combined without Docker: same vcpkg
 # ports, same Qt modules, same build_windows.sh (SKIP_NSIS=1) and the same
 # installer_combined.nsi, so the artifact is the installer that build script
-# produces locally. No Docker because every other workflow here builds natively
+# produces locally. Only the QML client is built: the widget client and the
+# network layer it needed are gone. No Docker because every other workflow here builds natively
 # on the runner, and a docker build would re-do Qt and vcpkg from scratch on
 # every run — layer caching does not survive between jobs.
 #
@@ -42,11 +43,10 @@ jobs:
     env:
       # Matches the ARG in Dockerfile.windows-combined.
       QT_VERSION: "6.9.3"
-      # build_windows.sh passes ${TARGET} unquoted to `cmake --build --target`,
-      # so both GUI clients come out of one configure. The string contains
-      # "qml", which is what makes the script collect the superset (all Qt6
-      # DLLs + the qml/ import tree) both clients share.
-      TARGET: "pokerth_client pokerth_qml-client"
+      # build_windows.sh passes ${TARGET} unquoted to `cmake --build --target`.
+      # The string contains "qml", which is what makes the script collect the
+      # Qt6 DLL superset and the qml/ import tree the client needs.
+      TARGET: "pokerth_qml-client"
       # The combined installer is assembled below with installer_combined.nsi.
       SKIP_NSIS: "1"
       # Only cosmetic: the installer file name carries a build timestamp, and
@@ -102,7 +102,7 @@ jobs:
       # Only vcpkg is cached, not Qt: the two kits are several GB and would push
       # everything else out of the repository's 10 GB cache budget, while
       # aqtinstall re-downloads them in a few minutes. vcpkg is the expensive
-      # half (boost/openssl/protobuf built from source for x64-mingw-static).
+      # half (boost/openssl built from source for x64-mingw-static).
       # Keyed per run and restored from the newest matching prefix, so a run
       # that fails in the compile step still hands its vcpkg tree to the next.
       - name: Restore vcpkg
@@ -133,10 +133,8 @@ jobs:
               boost-lambda \
               boost-foreach \
               boost-uuid \
-              protobuf \
               openssl
           # Host protoc for the cross build.
-          "$ROOT/vcpkg/vcpkg" install protobuf:x64-linux
 
       # installed/ is all the next run needs; the rest is build scratch and
       # would multiply the cache entry. if: always() so an aborted port build
@@ -185,9 +183,9 @@ jobs:
           test -x "$ROOT/Qt/$QT_VERSION/gcc_64/bin/qt-cmake"
           df -h /
 
-      # Builds both clients and collects DLLs, qml/, plugins and data into
+      # Builds the QML client and collects DLLs, qml/, plugins and data into
       # build/deploy — SKIP_NSIS=1 leaves the installer to the steps below.
-      - name: Build both clients and collect the deploy tree
+      - name: Build the client and collect the deploy tree
         run: bash docker/windows/build_windows.sh
 
       # Normally produced by the NSIS section of build_windows.sh, which
@@ -207,12 +205,11 @@ jobs:
           cp -f docker/windows/pokerth.ico build/deploy/
 
       # A missing exe would otherwise turn into an installer that is quietly
-      # short one client.
-      - name: Verify both clients are in the deploy tree
+      # missing its client.
+      - name: Verify the client is in the deploy tree
         run: |
           set -euo pipefail
           ls -lh build/deploy/*.exe
-          test -f build/deploy/pokerth_client.exe
           test -f build/deploy/pokerth_qml-client.exe
 
       # Forks and repos without the SignPath secret still get an (unsigned)
@@ -250,7 +247,7 @@ jobs:
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Both exes land at the root of the artifact zip, which is what the
+      # The exe lands at the root of the artifact zip, which is what the
       # "executables" artifact configuration expects.
       - name: Upload unsigned executables for signing
         id: upload-unsigned-exes
@@ -259,7 +256,6 @@ jobs:
         with:
           name: unsigned-executables
           path: |
-            build/deploy/pokerth_client.exe
             build/deploy/pokerth_qml-client.exe
           if-no-files-found: error
           retention-days: 1
@@ -285,7 +281,7 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         run: |
           set -euo pipefail
-          for exe in pokerth_client.exe pokerth_qml-client.exe; do
+          for exe in pokerth_qml-client.exe; do
             test -f "signed/executables/$exe"
             cp -f "signed/executables/$exe" "build/deploy/$exe"
           done
@@ -349,7 +345,7 @@ jobs:
             SIGNED="**unsigned**"
           fi
           {
-            echo "### Windows installer (Widget + QML)"
+            echo "### Windows installer (QML)"
             echo ""
             echo "- \`$(basename "$INSTALLER")\` — $(du -h "$INSTALLER" | cut -f1)"
             echo "- ${SIGNED}"

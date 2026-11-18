@@ -40,9 +40,7 @@
 #include <vector>
 #include <map>
 #include <core/crypthelper.h>
-#include <db/serverdbcallback.h>
 
-class SessionData;
 
 enum PlayerType {
 	PLAYER_TYPE_COMPUTER,
@@ -121,8 +119,6 @@ public:
 	void SetGuid(const std::string &guid);
 	std::string GetOldGuid() const;
 	void SetOldGuid(const std::string &guid);
-	DB_id GetDBId() const;
-	void SetDBId(DB_id id);
 	int GetStartCash() const;
 	void SetStartCash(int cash);
 
@@ -136,7 +132,6 @@ public:
 
 private:
 	const unsigned					m_uniqueId;
-	DB_id							m_dbId;
 	int								m_number;
 	int								m_startCash; // only used if > 0
 	std::string						m_guid;

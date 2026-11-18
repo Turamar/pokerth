@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-# Builds ONE PokerTH Windows installer containing BOTH clients
-# (widget + QML) in an Ubuntu 25.10 Docker container (MinGW cross).
+# Builds the PokerTH Windows installer (QML client only) in an
+# Ubuntu 25.10 Docker container (MinGW cross).
 #
 # Why Docker?
 #   The build needs Qt 6.x for Windows (win64_mingw), vcpkg dependencies
@@ -12,8 +12,7 @@ set -e
 #
 # Result:
 #   PokerTH-Combined-<version>-<timestamp>-Setup.exe
-#   installs pokerth_client.exe AND pokerth_qml-client.exe into a
-#   shared directory (shared DLLs / data / plugins / qml).
+#   installs pokerth_qml-client.exe together with the DLLs / data / plugins / qml.
 #
 # Requirement: Docker installed and running.
 #
@@ -28,7 +27,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 IMAGE_NAME="pokerth-windows-combined-builder:latest"
 NO_CACHE="${1:-}"
 
-echo "=== PokerTH Combined-Installer (Widget + QML) – Docker-Build ==="
+echo "=== PokerTH QML-Installer – Docker-Build ==="
 echo "Projekt-Root:  $PROJECT_ROOT"
 echo "Docker-Image:  $IMAGE_NAME"
 echo ""
@@ -65,7 +64,7 @@ INSTALLER=$(ls "$SCRIPT_DIR"/PokerTH-Combined-*-Setup.exe 2>/dev/null | tail -1)
 if [ -n "$INSTALLER" ]; then
     ls -lh "$INSTALLER"
     echo ""
-    echo "Installation auf Windows (enthält beide Clients):"
+    echo "Installation auf Windows:"
     echo "  $(basename "$INSTALLER")"
     echo ""
     echo "Testen mit Wine (optional):"

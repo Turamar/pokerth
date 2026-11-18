@@ -729,7 +729,7 @@ std::string CardsValue::determineHandName(int myCardsValueInt, PlayerList active
 	std::list<int> sameHandCardsValueInt;
 	bool different = false;
 	bool equal = false;
-//	boost::shared_ptr<Game> currentGame = myW->getSession()->getCurrentGame();
+//	(historical) the session used to hand out the current game here
 	PlayerListConstIterator it_c;
 //	PlayerList activePlayerList = currentGame->getActivePlayerList();
 

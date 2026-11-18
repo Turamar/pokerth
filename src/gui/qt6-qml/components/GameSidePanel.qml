@@ -5,11 +5,11 @@ import QtQuick.Effects
 
 import "../config" as Config
 
-// Floating side panel for the game history & chat: rounded sheet with a
-// header (title + close) and a free content area below it.
+// Floating side panel for the table info (history/odds/hand): rounded sheet
+// with a header (title + close) and a free content area below it.
 //   – landscape/fullscreen: sidebar (~1/3 width) at one side.
 //   – portrait: full overlay above the table.
-// The content (ListView, ChatBox …) is passed as the default child and ends up
+// The content (the history/odds panel) is passed as the default child and ends up
 // below the header in the body layout.
 Item {
     id: root
@@ -17,7 +17,7 @@ Item {
     property string title: ""
     // Show/hide the header (title + close + separator). The info panel needs no
     // heading – the tab bar is enough there, and it is closed via the toggle
-    // button at the top. The chat still uses the header.
+    // button at the top.
     property bool showHeader: true
     property int edge: Qt.LeftEdge          // Qt.LeftEdge | Qt.RightEdge
     property bool wide: false

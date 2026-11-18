@@ -7,57 +7,31 @@
 #define QMLGUIINTERFACE_H
 
 #include <guiinterface.h>
-#include <boost/shared_ptr.hpp>
 
 class ConfigFile;
-class Session;
-class Game;
-class ServerConnectionHandler;
-class LobbyHandler;
-class GameHandler;
 class GameHandler;
 
+/* The GuiInterface of the QML client.
+ *
+ * It is local-only: every callback of the local engine is forwarded to the
+ * GameHandler through the Qt event loop (queued) or as a single-shot timer, and
+ * the GameHandler does the actual work on the QML side. The network client
+ * surface it used to implement (the network client/server callbacks, session access,
+ * lobby/connection handlers) is gone with the network layer.
+ */
 class QmlGuiInterface : public GuiInterface
 {
 public:
-	explicit QmlGuiInterface(ConfigFile *config, ServerConnectionHandler *handler = nullptr, LobbyHandler *lobbyHandler = nullptr);
+	explicit QmlGuiInterface(ConfigFile *config);
 	virtual ~QmlGuiInterface();
 
-	void setConnectionHandler(ServerConnectionHandler *handler)
-	{
-		m_handler = handler;
-	}
-	void setLobbyHandler(LobbyHandler *lobbyHandler)
-	{
-		m_lobbyHandler = lobbyHandler;
-	}
 	void setGameHandler(GameHandler *gameHandler)
 	{
 		m_gameHandler = gameHandler;
 	}
 
-	// Session management
-	virtual boost::shared_ptr<Session> getSession() override
-	{
-		return m_session;
-	}
-	virtual void setSession(boost::shared_ptr<Session> session) override
-	{
-		m_session = session;
-	}
-
 	// GuiInterface implementation - required methods
 	virtual void initGui(int speed) override {}
-	virtual gameTableImpl *getMyW() const override
-	{
-		return nullptr;
-	}
-	virtual guiLog* getMyGuiLog() const override
-	{
-		return nullptr;
-	}
-
-	// Refresh functions
 	virtual void refreshSet() const override;
 	virtual void refreshCash() const override;
 	virtual void refreshAction(int = -1, int = -1) const override;
@@ -115,69 +89,8 @@ public:
 	virtual void flushLogAtGame(int gameID) override {}
 	virtual void flushLogAtHand() override {}
 
-	// ServerCallback methods
-	virtual void SignalNetServerSuccess(int actionID) override {}
-	virtual void SignalNetServerError(int errorID, int osErrorID) override;
-
-	// ClientCallback methods - important ones implemented
-	virtual void SignalNetClientConnect(int actionID) override;
-	virtual void SignalNetClientGameInfo(int actionID) override;
-	virtual void SignalNetClientError(int errorID, int osErrorID) override;
-	virtual void SignalNetClientLoginShow() override;
-
-	virtual void SignalNetClientSelfJoined(unsigned playerId, const std::string &playerName, bool isGameAdmin) override;
-	virtual void SignalNetClientNotification(int notificationId) override;
-	virtual void SignalNetClientStatsUpdate(const ServerStats &stats) override {}
-	virtual void SignalNetClientPingUpdate(unsigned minPing, unsigned avgPing, unsigned maxPing) override;
-	virtual void SignalNetClientConnectionStalled(bool stalled) override;
-	virtual void SignalNetClientShowTimeoutDialog(NetTimeoutReason reason, unsigned remainingSec) override;
-	virtual void SignalNetClientRemovedFromGame(int notificationId) override;
-
-	virtual void SignalNetClientGameListNew(unsigned gameId) override;
-	virtual void SignalNetClientGameListRemove(unsigned gameId) override;
-	virtual void SignalNetClientGameListUpdateMode(unsigned gameId, GameMode mode) override;
-	virtual void SignalNetClientGameListUpdateAdmin(unsigned gameId, unsigned adminPlayerId) override;
-	virtual void SignalNetClientGameListPlayerJoined(unsigned gameId, unsigned playerId) override;
-	virtual void SignalNetClientGameListPlayerLeft(unsigned gameId, unsigned playerId) override;
-	virtual void SignalNetClientGameListSpectatorJoined(unsigned gameId, unsigned playerId) override;
-	virtual void SignalNetClientGameListSpectatorLeft(unsigned gameId, unsigned playerId) override;
-
-	virtual void SignalNetClientGameStart(boost::shared_ptr<Game> game) override;
-	virtual void SignalNetClientPlayerJoined(unsigned playerId, const std::string &playerName, bool isGameAdmin) override;
-	virtual void SignalNetClientPlayerChanged(unsigned playerId, const std::string &newPlayerName) override;
-	virtual void SignalNetClientPlayerLeft(unsigned playerId, const std::string &playerName, int removeReason) override;
-	virtual void SignalNetClientSpectatorJoined(unsigned playerId, const std::string &playerName) override;
-	virtual void SignalNetClientSpectatorLeft(unsigned playerId, const std::string &playerName, int removeReason) override;
-	virtual void SignalNetClientNewGameAdmin(unsigned playerId, const std::string &playerName) override {}
-
-	virtual void SignalNetClientGameChatMsg(const std::string &playerName, const std::string &msg) override;
-	virtual void SignalNetClientLobbyChatMsg(const std::string &playerName, const std::string &msg) override;
-	virtual void SignalNetClientPrivateChatMsg(const std::string &playerName, const std::string &msg) override;
-	virtual void SignalNetClientPrivateChatLimitReached(const std::string &playerName, const std::string &msg) override;
-	virtual void SignalNetClientMsgBox(const std::string &msg) override;
-	virtual void SignalNetClientMsgBox(unsigned msgId) override;
-	virtual void SignalNetClientWaitDialog() override;
-
-	virtual void SignalNetClientServerListAdd(unsigned serverId) override {}
-	virtual void SignalNetClientServerListClear() override {}
-	virtual void SignalNetClientServerListShow() override {}
-
-	virtual void SignalNetClientRejoinPossible(unsigned gameId) override;
-	virtual void SignalNetClientPostRiverShowCards(unsigned playerId) override;
-
-	virtual void SignalLobbyPlayerJoined(unsigned playerId, const std::string &nickName) override;
-	virtual void SignalLobbyPlayerKicked(const std::string &nickName, const std::string &byWhom, const std::string &reason) override {}
-	virtual void SignalLobbyPlayerLeft(unsigned playerId) override;
-
-	virtual void SignalSelfGameInvitation(unsigned gameId, unsigned playerIdFrom) override;
-	virtual void SignalPlayerGameInvitation(unsigned gameId, unsigned playerIdWho, unsigned playerIdFrom) override;
-	virtual void SignalRejectedGameInvitation(unsigned gameId, unsigned playerIdWho, DenyGameInvitationReason reason) override;
-
 private:
 	ConfigFile *m_config;
-	boost::shared_ptr<Session> m_session;
-	ServerConnectionHandler *m_handler;
-	LobbyHandler *m_lobbyHandler;
 	GameHandler *m_gameHandler = nullptr;
 };
 

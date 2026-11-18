@@ -1,20 +1,8 @@
-# POKERTH.qml-client ... unfinisihed
+# POKERTH.qml-client
 
 set(POKERTH_QML_CLIENT_SRC ../../pokerth.cpp
-    ../../session.cpp 
+    ../../session.cpp
     ../../core/loghelper_client.cpp
-    ../../net/net_helper_client.cpp
-    # Server files needed for embedded local network game server
-    ../../net/serverexception.cpp
-    ../../net/serveracceptinterface.cpp
-    ../../net/serveracceptwebhelper.cpp
-    ../../net/servertlsutil.cpp
-    ../../net/servergame.cpp
-    ../../net/servergamestate.cpp
-    ../../net/serverlobbythread.cpp
-    ../../net/serverbanmanager.cpp
-    ../../net/servermanager.cpp
-    ../../net/servermanagerfactoryclient.cpp
     ../../core/qttools/qthelper/qthelper.cpp
     ../../core/qttools/qttoolswrapper.cpp
     ../../core/qttoolsinterface.cpp
@@ -23,20 +11,11 @@ set(POKERTH_QML_CLIENT_SRC ../../pokerth.cpp
     cpp/ziputils.cpp
     cpp/styleprovider.cpp
     cpp/wallethandler.cpp
-    cpp/serverconnectionhandler.cpp
-    cpp/lobbyhandler.cpp
     cpp/gamehandler.cpp
-    cpp/chattranslator.cpp
-    cpp/texttranslator.cpp
-    ../chattranslator/chattranslatorcore.cpp
-    cpp/loghandler.cpp
-    cpp/networkgamehandler.cpp
     cpp/qmlguiinterface.cpp
     cpp/screenhelper.cpp
-    cpp/androidconnectionservice.cpp
-    cpp/webnetworkfactory.cpp
-    ../qt/sound/soundevents.cpp
-    ../qt/sound/qtaudioplayer.cpp)
+    ../sound/soundevents.cpp
+    ../sound/qtaudioplayer.cpp)
 
 qt_add_resources(POKERTH_QML_CLIENT_SRC qml.qrc)
 qt_add_resources(POKERTH_QML_CLIENT_SRC cflags.qrc)
@@ -107,7 +86,6 @@ set(QML_FILES
     components/BlindButtonImage.qml
     components/BrandHeader.qml
     components/CardImage.qml
-    components/ChatBox.qml
     components/CommunityCards.qml
     components/ConfigCheckBox.qml
     components/ConfirmPopup.qml
@@ -115,7 +93,6 @@ set(QML_FILES
     components/CustomSpinBox.qml
     components/CustomTabBar.qml
     components/CustomToggle.qml
-    components/EmojiPicker.qml
     components/ExampleAvatarPicker.qml
     components/GameActionBar.qml
     components/GameInfoPanel.qml
@@ -215,8 +192,6 @@ qt_add_translations(pokerth_qml-client
 # For Android, qt_add_executable has to be used with MANUAL_FINALIZATION
 if(ANDROID)
     qt_add_executable(pokerth_qml-client MANUAL_FINALIZATION ${POKERTH_QML_CLIENT_SRC})
-    target_include_directories(pokerth_qml-client PRIVATE "${Protobuf_INCLUDE_DIR}")
-    target_link_libraries(pokerth_qml-client PUBLIC protobuf::libprotobuf)
 elseif(IOS)
     # iOS: Qt is present as a STATIC library. A static Qt links no
     # plugins by itself – neither the QPA platform nor the QML plugins of
@@ -239,49 +214,15 @@ endif()
 target_include_directories(pokerth_qml-client PUBLIC
     ../../config
     ../../core
-    ../../core
     ../../core/qttools
     ../../core/qttools/qthelper
     ../../
     ../../engine
     ../../engine/local_engine
-    ../../engine/network_engine
-    ../../net
     ../
-    ../chattranslator
-    ../qt/sound
+    ../sound
     .
     cpp)
-
-# A fix for Android: Abseil libraries needed by protobuf
-if(ANDROID)
-    # Look for available Abseil libraries (optional)
-    find_library(ABSL_RAW_HASH_SET absl_raw_hash_set PATHS ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib NO_DEFAULT_PATH)
-    find_library(ABSL_HASHTABLEZ_SAMPLER absl_hashtablez_sampler PATHS ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib NO_DEFAULT_PATH)
-    find_library(ABSL_LOW_LEVEL_HASH absl_low_level_hash PATHS ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib NO_DEFAULT_PATH)
-    
-    # Create a list of the libraries that were found
-    set(ABSL_EXTRA_LIBS)
-    if(ABSL_RAW_HASH_SET)
-        list(APPEND ABSL_EXTRA_LIBS ${ABSL_RAW_HASH_SET})
-        message(STATUS "Found absl_raw_hash_set: ${ABSL_RAW_HASH_SET}")
-    endif()
-    if(ABSL_HASHTABLEZ_SAMPLER)
-        list(APPEND ABSL_EXTRA_LIBS ${ABSL_HASHTABLEZ_SAMPLER})
-        message(STATUS "Found absl_hashtablez_sampler: ${ABSL_HASHTABLEZ_SAMPLER}")
-    endif()
-    if(ABSL_LOW_LEVEL_HASH)
-        list(APPEND ABSL_EXTRA_LIBS ${ABSL_LOW_LEVEL_HASH})
-        message(STATUS "Found absl_low_level_hash: ${ABSL_LOW_LEVEL_HASH}")
-    endif()
-    
-    # Link the libraries that were found
-    if(ABSL_EXTRA_LIBS)
-        target_link_libraries(pokerth_qml-client PRIVATE ${ABSL_EXTRA_LIBS})
-    else()
-        message(WARNING "No additional Abseil libraries found - linking may fail")
-    endif()
-endif()
 
 # miniz: a public domain single file ZIP library for the style import/export (.zip).
 # Necessary because the Flatpak portal file dialog only passes the ONE chosen file into
@@ -298,15 +239,13 @@ target_compile_definitions(miniz PUBLIC MINIZ_NO_ZLIB_COMPATIBLE_NAMES MINIZ_NO_
 set_target_properties(miniz PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_link_libraries(pokerth_qml-client PUBLIC pokerth_lib)
-target_link_libraries(pokerth_qml-client PUBLIC pokerth_db)
 target_link_libraries(pokerth_qml-client PRIVATE miniz)
 
-target_link_libraries(pokerth_qml-client PUBLIC pokerth_protocol)
-target_link_libraries(pokerth_qml-client PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Sql Qt6::Xml Qt6::Svg Qt6::QuickControls2 Qt6::Widgets Qt6::Multimedia Qt6::Network)
+target_link_libraries(pokerth_qml-client PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Sql Qt6::Xml Qt6::Svg Qt6::QuickControls2 Qt6::Widgets Qt6::Multimedia)
 
-# Win32: WinMM (waveOut*) + Mswsock (AcceptEx via boost::asio)
+# Win32: WinMM (waveOut* output of the table sounds)
 if(WIN32)
-    target_link_libraries(pokerth_qml-client PRIVATE winmm mswsock)
+    target_link_libraries(pokerth_qml-client PRIVATE winmm)
 endif()
 
 target_compile_definitions(pokerth_qml-client PUBLIC QML_CLIENT)
@@ -341,18 +280,9 @@ endif()
 
 # iOS: configure and finalize the app bundle
 if(IOS)
-    # iosbackgroundsession.mm is Objective-C++ (UIKit access). Without
-    # enable_language(OBJCXX) CMake would compile the .mm file as pure C++
-    # and fail on the #import directives.
+    # screenhelper.cpp contains a UIKit branch on iOS and is compiled as
+    # Objective-C++, so the language has to be enabled.
     enable_language(OBJCXX)
-    target_sources(pokerth_qml-client PRIVATE cpp/iosbackgroundsession.mm)
-    # ARC (automatic reference counting) for this file: the observer objects
-    # delivered by addObserverForName: are autoreleased. Without
-    # ARC the global references to them would point nowhere as soon as the
-    # autorelease pool runs (a crash in removeObserver:). With ARC the
-    # strong global variable keeps the object alive correctly.
-    set_source_files_properties(cpp/iosbackgroundsession.mm PROPERTIES
-        COMPILE_OPTIONS "-fobjc-arc")
     # On iOS screenhelper.cpp contains a UIKit branch (idleTimerDisabled,
     # it prevents the screen lock during the game). The file stays a
     # .cpp – the Android branch and the shared class are in it –, but on

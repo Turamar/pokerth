@@ -30,8 +30,6 @@
         <file>components/GamePlayerSelfBox.qml</file>
         <file>components/SeatBox.qml</file>
         <file>components/GameReactionFx.qml</file>
-        <file>components/EmojiPicker.qml</file>
-        <file>components/ChatBox.qml</file>
         <file>components/PanelShadow.qml</file>
         <file>components/SectionDivider.qml</file>
         <file>components/StatTile.qml</file>

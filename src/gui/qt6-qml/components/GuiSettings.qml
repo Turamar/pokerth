@@ -64,12 +64,6 @@ Rectangle {
                                 SettingsManager.writeConfigInt("DarkMode", cfgVal)
                                 Config.StaticData.darkMode = cfgVal
                                 Config.Theme.darkMode = cfgVal
-                                // The lobby chat history carries its colours as
-                                // placeholders; without this signal it would stay in
-                                // the colours of the old mode (light text on a light
-                                // background).
-                                if (typeof Lobby !== "undefined" && Lobby)
-                                    Lobby.refreshChatColors()
                             }
                         }
                     }
@@ -110,7 +104,7 @@ Rectangle {
                             LanguageManager.switchLanguage(code)   // user interface right away
                             // Write the authoritative value into the ConfigFile (short
                             // code, so that the widgets client finds its .qm).
-                            // The chat translation reads the key live -> takes effect immediately.
+                            // The engine reads the key live -> takes effect immediately.
                             if (typeof SettingsManager !== "undefined" && SettingsManager)
                                 SettingsManager.language =
                                     Config.StaticData.localeToConfigLanguage(code)

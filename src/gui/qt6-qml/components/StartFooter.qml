@@ -47,14 +47,14 @@ Item {
 
     // Opens a link in the external browser. NOT Qt.openUrlExternally directly:
     // in the AppImage/bundle QDesktopServices inherits the bundled LD_LIBRARY_PATH →
-    // xdg-open crashes. Lobby.openExternalUrl starts the host tools with a
-    // cleaned environment (same reasoning as AboutPage/ChatBox).
+    // xdg-open crashes. SettingsManager.openExternalUrl starts the host tools with a
+    // cleaned environment (same reasoning as AboutPage).
     function openLink(link) {
         if (!link || link === "")
             return
         var opened = false
-        if (typeof Lobby !== "undefined" && Lobby)
-            opened = Lobby.openExternalUrl(link)
+        if (typeof SettingsManager !== "undefined" && SettingsManager)
+            opened = SettingsManager.openExternalUrl(link)
         if (!opened)
             opened = Qt.openUrlExternally(link)
         if (!opened)
@@ -110,7 +110,7 @@ Item {
 
     // ── Text line with embedded links ──────────────────────────────────────
     // onLinkActivated does not fire reliably inside a Flickable,
-    // which is why – as in AboutPage/ChatBox – TapHandler + linkAt() is used.
+    // which is why – as in AboutPage – TapHandler + linkAt() is used.
     component FooterLine: AppText {
         id: footerLine
 

@@ -7,7 +7,7 @@ SignPath to sign them, and downloads the signed files again.
 
 Signing happens in two rounds:
 
-1. `pokerth_client.exe` and `pokerth_qml-client.exe`, before `makensis`
+1. `pokerth_qml-client.exe`, before `makensis`
    packs them (artifact configuration `executables`).
 2. The finished `PokerTH-Combined-*-Setup.exe` (artifact configuration
    `installer`).

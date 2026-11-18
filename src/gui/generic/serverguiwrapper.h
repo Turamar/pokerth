@@ -34,28 +34,25 @@
 #include <guiinterface.h>
 
 class ConfigFile;
-class Session;
-class gameTableImpl;
 
+/* A GUI-less GuiInterface.
+ *
+ * Every refresh/animation/log callback is a no-op - nothing is shown and
+ * nothing is forwarded anywhere. SilentGui derives from it and replaces only
+ * the steps of the local game loop, so that a table nobody watches still plays
+ * its hands (tournament runner, headless simulator).
+ *
+ * It used to be the GUI of the dedicated server and therefore carried the
+ * network client/server callback surface; the server is gone and this
+ * class is local-only now.
+ */
 class ServerGuiWrapper : public GuiInterface
 {
 public:
-	ServerGuiWrapper(ConfigFile *config, ClientCallback *clientcb, ServerCallback *servercb);
+	explicit ServerGuiWrapper(ConfigFile *config);
 	~ServerGuiWrapper();
 
 	void initGui(int speed);
-
-	boost::shared_ptr<Session> getSession();
-	void setSession(boost::shared_ptr<Session> session);
-
-	gameTableImpl* getMyW() const
-	{
-		return NULL;
-	}
-	guiLog* getMyGuiLog() const
-	{
-		return NULL;
-	}
 
 	void refreshSet() const;
 	void refreshCash() const;
@@ -124,66 +121,9 @@ public:
 	void flushLogAtGame(int gameID);
 	void flushLogAtHand();
 
-	void SignalNetClientConnect(int actionID);
-	void SignalNetClientGameInfo(int actionID);
-	void SignalNetClientError(int errorID, int osErrorID);
-	void SignalNetClientNotification(int notificationId);
-	void SignalNetClientStatsUpdate(const ServerStats &stats);
-	void SignalNetClientPingUpdate(unsigned minPing, unsigned avgPing, unsigned maxPing);
-	void SignalNetClientShowTimeoutDialog(NetTimeoutReason reason, unsigned remainingSec);
-	void SignalNetClientRemovedFromGame(int notificationId);
-	void SignalNetClientSelfJoined(unsigned playerId, const std::string &playerName, bool isGameAdmin);
-	void SignalNetClientPlayerJoined(unsigned playerId, const std::string &playerName, bool isGameAdmin);
-	void SignalNetClientPlayerChanged(unsigned playerId, const std::string &newPlayerName);
-	void SignalNetClientPlayerLeft(unsigned playerId, const std::string &playerName, int removeReason);
-	void SignalNetClientSpectatorJoined(unsigned playerId, const std::string &playerName);
-	void SignalNetClientSpectatorLeft(unsigned playerId, const std::string &playerName, int removeReason);
-	void SignalNetClientNewGameAdmin(unsigned playerId, const std::string &playerName);
-	void SignalNetClientGameChatMsg(const std::string &playerName, const std::string &msg);
-	void SignalNetClientLobbyChatMsg(const std::string &playerName, const std::string &msg);
-	void SignalNetClientPrivateChatMsg(const std::string &playerName, const std::string &msg);
-	void SignalNetClientPrivateChatLimitReached(const std::string &playerName, const std::string &msg);
-	void SignalNetClientWaitDialog();
-
-	void SignalNetClientGameListNew(unsigned gameId);
-	void SignalNetClientGameListRemove(unsigned gameId);
-	void SignalNetClientGameListUpdateMode(unsigned gameId, GameMode mode);
-	void SignalNetClientGameListUpdateAdmin(unsigned gameId, unsigned adminPlayerId);
-	void SignalNetClientGameListPlayerJoined(unsigned gameId, unsigned playerId);
-	void SignalNetClientGameListPlayerLeft(unsigned gameId, unsigned playerId);
-	void SignalNetClientGameListSpectatorJoined(unsigned gameId, unsigned playerId);
-	void SignalNetClientGameListSpectatorLeft(unsigned gameId, unsigned playerId);
-	void SignalNetClientGameStart(boost::shared_ptr<Game> game);
-
-	void SignalNetClientServerListAdd(unsigned serverId);
-	void SignalNetClientServerListClear();
-	void SignalNetClientServerListShow();
-
-	void SignalNetClientLoginShow();
-	void SignalNetClientRejoinPossible(unsigned gameId);
-	void SignalNetClientPostRiverShowCards(unsigned playerId);
-
-	void SignalNetServerSuccess(int actionID);
-	void SignalNetServerError(int errorID, int osErrorID);
-
-	void SignalNetClientMsgBox(const std::string &msg);
-	void SignalNetClientMsgBox(unsigned msgId);
-	void SignalLobbyPlayerJoined(unsigned playerId, const std::string &nickName);
-	void SignalLobbyPlayerKicked(const std::string &nickName, const std::string &byWhom, const std::string &reason);
-	void SignalLobbyPlayerLeft(unsigned playerId);
-
-	void SignalSelfGameInvitation(unsigned gameId, unsigned playerIdFrom);
-	void SignalPlayerGameInvitation(unsigned gameId, unsigned playerIdWho, unsigned playerIdFrom);
-	void SignalRejectedGameInvitation(unsigned gameId, unsigned playerIdWho, DenyGameInvitationReason reason);
-
-
 private:
 
-	boost::shared_ptr<Session> mySession;
 	ConfigFile *myConfig;
-
-	ClientCallback *myClientcb;
-	ServerCallback *myServercb;
 };
 
 #endif

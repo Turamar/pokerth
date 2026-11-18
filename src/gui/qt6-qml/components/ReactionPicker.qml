@@ -18,8 +18,8 @@ Rectangle {
 
     readonly property var pages: Config.ReactionCatalog.pages
     readonly property int columns: 6
-    // Dimensions as in the chat emoji picker (EmojiPicker.qml): grid 38, area 34,
-    // glyph 24.
+    // Dimensions as in the web client's reaction grid: grid 38 (cell 34 +
+    // 4 spacing), glyph 24.
     readonly property int cell: 34
     readonly property int cellSpacing: 4
     readonly property int rows: Math.ceil(30 / columns)

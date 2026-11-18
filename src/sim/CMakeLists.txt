@@ -1,4 +1,4 @@
-﻿# POKERTH.sim - headless bot/game simulator.
+# POKERTH.sim - headless bot/game simulator.
 #
 # Console only, no window, no network: it links the same engine library the
 # clients use and replaces the GUI with SilentGui, which drives the game loop
@@ -29,13 +29,11 @@ target_include_directories(pokerth_sim PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine
     ${CMAKE_SOURCE_DIR}/src/engine/local_engine
     ${CMAKE_SOURCE_DIR}/src/gui
-    ${CMAKE_SOURCE_DIR}/src/net
 )
 
 target_link_libraries(pokerth_sim PRIVATE
     pokerth_lib
     Qt6::Core
-    Qt6::Network
     Qt6::Xml
     Qt6::Sql
 )

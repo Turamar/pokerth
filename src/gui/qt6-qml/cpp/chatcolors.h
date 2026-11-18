@@ -6,18 +6,17 @@
 /* Role colours of the lobby chat lines (light/dark mode).
  *
  * A chat line is built to HTML ONCE when it is received and afterwards only
- * changed selectively (the ChatTranslator appends globe anchors and swaps
- * message bodies for translations) – it is never created from scratch
+ * changed selectively (a translator used to append globe anchors and swap
+ * message bodies for translations; the local client has none any more) – it is never created from scratch
  * again. If the hex value of the text colour stood fixed in that line, the
  * whole history already received would keep the old colours after a light/dark
  * switch: light text (#cdd3e0) on a light ground (#f0f3f8) is simply
  * unreadable at ~1.3:1.
  *
  * That is why the stored line only contains a role placeholder; the
- * concrete hex value only arises when it is delivered to QML
- * (LobbyHandler::chatLog()). A theme change is thereby only a
- * chatLogChanged() – without rebuilding the history and thus without losing the
- * states of the ChatTranslator (anchor ids, shown translations).
+ * concrete hex value only arises when it is delivered (GameLogModel). A theme
+ * change is thereby only a dataChanged() over the existing lines, without
+ * rebuilding the history.
  *
  * The values correspond 1:1 to the QML palette (StaticData _dark/_light or
  * Theme.colorAccent…), so that the chat matches the rest of the user interface.

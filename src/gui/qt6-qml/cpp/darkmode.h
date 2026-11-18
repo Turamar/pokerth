@@ -10,7 +10,7 @@
  * like "dark", so that the setting had no effect on a Windows/macOS set to
  * a light theme.
  *
- * Single source of truth for C++ (SettingsManager, LobbyHandler) AND – via
+ * Single source of truth for C++ (SettingsManager) AND – via
  * SettingsManager.systemDark – for the QML singletons StaticData/Theme.
  */
 namespace DarkMode

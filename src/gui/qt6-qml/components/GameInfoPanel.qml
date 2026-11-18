@@ -50,10 +50,8 @@ ColumnLayout {
     // Overlay: 12 (the default), docked: 11 (set by the caller).
     property int messageFontSize: 12
 
-    // The game history (log) runs as continuous text like the chat and is set
-    // larger than the compact odds list – analogous to the ChatBox
-    // (messageFontSize there). +2 keeps the log and the chat at the same size:
-    // overlay 14, docked 13.
+    // The game history (log) runs as continuous text and is set larger than
+    // the compact odds list. +2 follows the panel size: overlay 14, docked 13.
     property int logFontSize: messageFontSize + 2
 
     // ── Datenanbindung ────────────────────────────────────────────────────────
@@ -111,7 +109,7 @@ ColumnLayout {
         currentIndex: tabs.currentIndex
 
         // ── Tab "history" (game history / log) ────────────────────────────────
-        // ONE contiguous rich text document (like the ChatBox), NOT a
+        // ONE contiguous rich text document, NOT a
         // ListView: with variably tall rich text delegates its contentHeight is
         // only estimated and fluctuates while scrolling (delegate
         // recycling) – that made the auto-scroll fire again and again and jam
@@ -175,12 +173,10 @@ ColumnLayout {
             // A resize (e.g. a changed number of players) – treat it the same way.
             onHeightChanged: followBottom()
 
-            // Derive the auto-scroll state ONLY from real user gestures (see the
-            // detailed reasoning in ChatBox.qml): `moving` also applies to
-            // the position correction that the Flickable performs itself on every
-            // height change – its intermediate values must not switch off the
-            // auto-scroll, otherwise the last line stays cut off.
-            // angeschnitten stehen.
+            // Derive the auto-scroll state ONLY from real user gestures: `moving`
+            // also applies to the position correction that the Flickable performs
+            // itself on every height change – its intermediate values must not
+            // switch off the auto-scroll, otherwise the last line stays cut off.
             function userScrollStarted() {
                 autoScroll = false
                 logAutoScrollTimer.stop()
@@ -258,7 +254,7 @@ ColumnLayout {
                         // The probability bar as the row background – it costs
                         // no horizontal width, so that the name gets the full room
                         // (instead of being cut off early with "…").
-                        // As in the chat: no bubbles/margins – the lines fill the
+                        // No bubbles/margins: the lines fill the
                         // full height without spacing and thereby form a continuous,
                         // uniform surface; only the fill bar stands out.
                         Rectangle {
@@ -323,7 +319,7 @@ ColumnLayout {
     }
 
     // ── Right click context menu for the history (copy / select all) ──
-    // Styled uniformly, it follows the table theme colours (like the ChatBox).
+    // Styled uniformly, it follows the table theme colours.
     component CtxItem: MenuItem {
         height: visible ? implicitHeight : 0
         contentItem: Text {

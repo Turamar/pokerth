@@ -31,29 +31,29 @@
 #ifndef GUIINTERFACE_H
 #define GUIINTERFACE_H
 
-#include <net/clientcallback.h>
-#include <net/servercallback.h>
 #include <game_defs.h>
 #include <string>
-#include <boost/shared_ptr.hpp>
 
-class guiLog;
-class Session;
-class gameTableImpl;
-
-class GuiInterface : public ClientCallback, public ServerCallback
+/* The GUI of a local game.
+ *
+ * This interface used to derive from the network client and server callback
+ * interfaces and carried
+ * the whole network client surface (getSession/setSession, the widget table and
+ * its log pointer). The client is local-only now: what is left is the chain the
+ * local engine drives - refreshing the table, dealing cards, the animation
+ * callbacks that advance the game loop, the action timer and the vote/kick
+ * screens - plus the log callbacks. Two implementations exist:
+ *
+ *  - QmlGuiInterface: the real client, forwards everything to the GameHandler;
+ *  - ServerGuiWrapper (and SilentGui on top): a no-op GUI for the tables nobody
+ *    watches (tournament runner, headless simulator).
+ */
+class GuiInterface
 {
 public:
 	virtual ~GuiInterface();
 
 	virtual void initGui(int speed) =0;
-
-	virtual boost::shared_ptr<Session> getSession() =0;
-	virtual void setSession(boost::shared_ptr<Session> session) =0;
-
-	virtual gameTableImpl *getMyW() const=0;
-	virtual guiLog* getMyGuiLog() const=0;
-
 
 	//refresh-Funktionen
 	virtual void refreshSet() const=0;

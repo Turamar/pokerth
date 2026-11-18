@@ -35,8 +35,6 @@
 #include "handinterface.h"
 #include <playerdata.h>
 
-class SessionData;
-
 /* Observation values about a player, collected over the hands played so far
  * in the same match. Basis of the opponent model of AI engine 4: whoever
  * rarely enters voluntarily holds better cards on average when entering.

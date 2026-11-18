@@ -5,9 +5,6 @@
 
 #include "gamehandler.h"
 #include "amountformat.h"
-#include "chattranslator.h"
-#include "chatemotes.h"
-#include "gui/chat_emote_shortcuts.h"
 #include <session.h>
 #include <game.h>
 #include <handinterface.h>
@@ -22,7 +19,6 @@
 #include <gamedata.h>
 #include <configfile.h>
 #include <soundevents.h>
-#include <net/socket_msg.h>
 #include <QString>
 #include <QTimer>
 #include <QDebug>
@@ -151,73 +147,6 @@ GameHandler::GameHandler(QObject *parent)
 	m_localActionTimer = new QTimer(this);
 	m_localActionTimer->setSingleShot(true);
 	connect(m_localActionTimer, &QTimer::timeout, this, &GameHandler::onLocalActionTimeout);
-
-	// The chat translator operates directly on m_chatLog; every line it changes
-	// triggers (in a bundle) chatLogChanged(), so that the QML binding renders anew.
-	m_chatTranslator = new ChatTranslator(&m_chatLog, this);
-	connect(m_chatTranslator, &ChatTranslator::chatLogMutated,
-			this, &GameHandler::notifyChatLogChanged);
-
-	// The AFK reset: real user activity (mouse/keyboard) holds the server side
-	// inactivity timeout back. IMPORTANT: game actions (fold/call/raise) do NOT
-	// count as activity on the server side (Type_MyActionRequestMessage is
-	// excluded from IsClientActivity, so that auto check/fold does not undermine the AFK
-	// timeout) – only a Type_ResetTimeoutMessage resets the in-game
-	// timer (21 min). Without this the QML client was kicked by the server after ~21 min
-	// despite active play (like the widgets client via an
-	// eventFilter). An app-wide filter, rate limited – which events count as
-	// activity is defined at isUserActivityEvent().
-	m_afkResetTimer.start();
-	if (qApp)
-		qApp->installEventFilter(this);
-}
-
-// Does an event count as real user activity (→ reset the AFK timer of the
-// server)?
-//
-// IMPORTANT – shortcuts: in a pure QGuiApplication (QML)
-// QGuiApplicationPrivate::processKeyEvent checks the key press AGAINST THE
-// QShortcutMap BEFORE the event is delivered to the window, and returns
-// early on a hit. A key press occupied by a QML shortcut
-// (F1–F8, Alt+…) thus never runs through QCoreApplication::notify –
-// and therefore not through this app-wide filter either. Only the QEvent::Shortcut delivered
-// to the shortcut object afterwards becomes visible. Without this branch a
-// player who acts exclusively via the F keys (fold/call/raise) stayed
-// "inactive" for the server for 21 min and got the timeout warning, although they
-// played continuously. The widget client is not affected by that: there
-// QApplication::notify resolves the shortcuts only AFTER the app filters.
-//
-// Touch: QQuickWindow gets real touch events; the mouse synthesis
-// only happens inside the item delivery, not via notify. Without
-// TouchBegin/TouchUpdate there would be no activity at all on Android/iOS.
-static bool isUserActivityEvent(QEvent::Type t)
-{
-	switch (t) {
-	case QEvent::MouseButtonPress:
-	case QEvent::KeyPress:
-	case QEvent::Shortcut:
-	case QEvent::ShortcutOverride:
-	case QEvent::Wheel:
-	case QEvent::TouchBegin:
-	case QEvent::TouchUpdate:
-		return true;
-	default:
-		return false;
-	}
-}
-
-bool GameHandler::eventFilter(QObject *watched, QEvent *event)
-{
-	if (isUserActivityEvent(event->type())) {
-		if (m_afkResetTimer.elapsed() >= kAfkResetIntervalMs
-				&& m_session && m_session->isNetworkClientRunning()) {
-			qDebug() << "[AFK] ResetTimeout gesendet, ausgelöst von Event-Typ"
-					 << event->type();
-			m_session->resetNetworkTimeout();
-			m_afkResetTimer.restart();
-		}
-	}
-	return QObject::eventFilter(watched, event);
 }
 
 GameHandler::~GameHandler() = default;
@@ -225,8 +154,6 @@ GameHandler::~GameHandler() = default;
 void GameHandler::setConfig(ConfigFile *config)
 {
 	m_config = config;
-	if (m_chatTranslator)
-		m_chatTranslator->setConfig(config);
 }
 
 void GameHandler::setSoundEvents(SoundEvents *soundEvents)
@@ -240,7 +167,7 @@ void GameHandler::setStyleProvider(StyleProvider *styleProvider)
 	if (!styleProvider)
 		return;
 	// A style change during a running game: adopt the palette and recolour the
-	// history/chat that is already there (the lines themselves stay raw).
+	// game history that is already there (the lines themselves stay raw).
 	connect(styleProvider, &StyleProvider::changed,
 			this, &GameHandler::refreshTableChatPalette);
 	refreshTableChatPalette();
@@ -261,16 +188,7 @@ void GameHandler::refreshTableChatPalette()
 	palette.color[TableChatColors::Winner]     = m_styleProvider->chatLogWinner();
 	palette.color[TableChatColors::WinnerSide] = m_styleProvider->chatLogWinnerSide();
 	palette.color[TableChatColors::Board]      = m_styleProvider->chatLogBoard();
-	m_tableChatPalette = palette;
 	m_gameLogModel.setPalette(palette);
-	// chatLog() delivers the new colours from now on – the boxes rebuild their
-	// rich text document.
-	emit chatLogChanged();
-}
-
-QObject* GameHandler::chatTranslator() const
-{
-	return m_chatTranslator;
 }
 
 void GameHandler::setSession(boost::shared_ptr<Session> session)
@@ -287,15 +205,6 @@ void GameHandler::setGame(boost::shared_ptr<Game> game)
 	m_localGameOver = false;
 	setWaitingForNextHand(false);
 	m_game = game;
-	// Adopt the spectator mode of the network client (always false in a local
-	// game). It is already settled when the engine reports the game: the
-	// JoinGameAck came before the game start.
-	const bool spectating = m_session && m_session->isNetworkClientRunning()
-							&& m_session->isClientSpectating();
-	if (spectating != m_spectating) {
-		m_spectating = spectating;
-		emit spectatingChanged();
-	}
 	m_leftPlayers.clear();
 	// Discard pending busted player timers from the previous game.
 	qDeleteAll(m_bustedLocalTimers);
@@ -322,8 +231,6 @@ void GameHandler::setGame(boost::shared_ptr<Game> game)
 	m_boardCardFade = QVariantList{false, false, false, false, false};
 	setShowdownActive(false);
 	m_gameLogModel.clear();
-	m_chatLog.clear();
-	notifyChatLogChanged();
 	for (int i = 0; i < 10; ++i) {
 		m_lastSeenAction[i] = 0;
 		m_actionToken[i] = -1;
@@ -349,52 +256,6 @@ void GameHandler::setGame(boost::shared_ptr<Game> game)
 	emit boardCardFadeChanged();
 }
 
-QString GameHandler::tableStatsUrl() const
-{
-	if (!m_game || !m_session)
-		return QString();
-
-	// The table name from the server game info (as in refreshSpectators): the GameHandler
-	// does not hold the name itself, but it does hold the current game ID of the session.
-	const unsigned gameId = m_session->getClientCurrentGameId();
-	if (gameId == 0)
-		return QString();
-	const GameInfo info = m_session->getClientGameInfo(gameId);
-
-	QString nickList;
-	const QStringList nicks = tableStatsNicks();
-	for (int i = 0; i < nicks.size(); ++i) {
-		nickList += QString("&nick%1=").arg(i + 1);
-		nickList += QString::fromUtf8(QUrl::toPercentEncoding(nicks.at(i)));
-	}
-
-	return QStringLiteral("https://www.pokerth.net/redirect_user_profile.php?tableview=1")
-		   + nickList
-		   + QStringLiteral("&table=")
-		   + QString::fromUtf8(QUrl::toPercentEncoding(QString::fromStdString(info.name)));
-}
-
-QStringList GameHandler::tableStatsNicks() const
-{
-	QStringList nicks;
-	if (!m_game || !m_session || m_session->getClientCurrentGameId() == 0)
-		return nicks;
-
-	// The nick list 1:1 like the Qt widgets client (MyNameLabel): active players only.
-	// In addition – as when building m_players – skip players who have already dropped
-	// out (m_leftPlayers), so that the list corresponds exactly to the visible
-	// player boxes and follows along when somebody leaves.
-	PlayerList seats = m_game->getSeatsList();
-	for (auto it = seats->begin(); it != seats->end(); ++it) {
-		if (m_leftPlayers.contains((*it)->getMyUniqueID()))
-			continue;
-		if (!(*it)->getMyActiveStatus())
-			continue;
-		nicks << QString::fromStdString((*it)->getMyName());
-	}
-	return nicks;
-}
-
 // ─── private helpers ────────────────────────────────────────────────────────
 
 void GameHandler::playYourTurnTimeoutSound()
@@ -415,124 +276,11 @@ void GameHandler::appendGameLog(const QString &message, int type)
 	m_gameLogModel.append(formatLogLine(message, type), kMaxLines);
 }
 
-void GameHandler::appendChat(const QString &playerName, const QString &message)
-{
-	if (message.isEmpty()) return;
-
-	// Discard messages of ignored players (before the reaction handling, so that
-	// their emoji reactions stay silent as well). Read the list freshly on every
-	// message as in the lobby chat (the chattools.cpp pattern, which applies to
-	// the game chat there as well).
-	if (m_config) {
-		const std::list<std::string> ignoreList = m_config->readConfigStringList("PlayerIgnoreList");
-		for (const auto &entry : ignoreList) {
-			if (playerName == QString::fromUtf8(entry.c_str()))
-				return;
-		}
-	}
-
-	// Emoji reactions (the convention of the web client): "/emoji 🎉" or the legacy
-	// "[R]🎉". Do not take them into the chat history but play them as a reaction
-	// animation at the seat of the sender. Check on the trimmed text
-	// (clients may append whitespace); the length limit is more generous
-	// than in the web client (22 instead of 18), so that ZWJ/variation selector
-	// sequences pass as well – normal messages still do not match.
-	const QString trimmedMsg = message.trimmed();
-	bool isReactionMsg = false;
-	QString reactionEmoji;
-	if (trimmedMsg.startsWith(QStringLiteral("/emoji ")) && trimmedMsg.size() < 22) {
-		isReactionMsg = true;
-		reactionEmoji = trimmedMsg.mid(7).trimmed();
-	} else if (trimmedMsg.startsWith(QStringLiteral("[R]")) && trimmedMsg.size() < 14) {
-		isReactionMsg = true;
-		reactionEmoji = trimmedMsg.mid(3).trimmed();
-	}
-	if (isReactionMsg) {
-		// Reaction messages never appear in the chat history. Only play real
-		// emojis – text disguised as a reaction is discarded.
-		if (isEmojiOnlyReaction(reactionEmoji)) {
-			qDebug() << "[REACT] incoming reaction from" << playerName << ":" << reactionEmoji;
-			emit reactionReceived(playerName, reactionEmoji);
-		} else {
-			qDebug() << "[REACT] discarding non-emoji reaction from" << playerName << ":" << reactionEmoji;
-		}
-		return;
-	}
-
-	// The formatting analogous to the lobby chat: a /me action, emojis, a mention.
-	const QString myNick = m_config ? QString::fromStdString(m_config->readConfigString("MyName")) : QString();
-	const bool isAction = message.startsWith(QStringLiteral("/me "));
-	const QString rawDisplay = isAction ? message.mid(4) : message;
-
-	// chatEscape: besides the HTML escaping it removes the control characters of the
-	// colour placeholders as well – otherwise a message could set its own colour.
-	QString escapedMsg = ChatColors::chatEscape(rawDisplay);
-	// Convert the ASCII shortcuts (":-)", "8-)", "<3", …) on the raw text before
-	// link/style markup is added – that way short shortcuts never collide with
-	// our own HTML (e.g. "color:#...").
-	escapedMsg = applyChatEmoteShortcuts(escapedMsg);
-	static const QRegularExpression urlRe(QStringLiteral("(https?://\\S+)"));
-	escapedMsg.replace(urlRe, QStringLiteral("<a href=\"\\1\">\\1</a>"));
-
-	const bool isMention = !myNick.isEmpty() && rawDisplay.contains(myNick, Qt::CaseInsensitive);
-	// A colour role instead of a hex value – the colour comes from the table theme (chatcolors.h).
-	const TableChatColors::Role role =
-		isMention ? TableChatColors::Accent : TableChatColors::Text;
-	QString styledMsg = QStringLiteral("<span style=\"") + TableChatColors::colorStyle(role)
-						+ (isMention ? QStringLiteral("; font-weight:bold") : QString())
-						+ QStringLiteral(";\">") + escapedMsg + QStringLiteral("</span>");
-	styledMsg = enlargeEmojis(styledMsg);
-
-	const QString tsPrefix = chatTimestampPrefix(m_config);
-	const QString name = ChatColors::chatEscape(playerName);
-	QString line;
-	if (isAction)
-		line = tsPrefix + QStringLiteral("<i>* ") + name + QStringLiteral(" ") + styledMsg + QStringLiteral(" *</i>");
-	else
-		line = tsPrefix + QStringLiteral("<b>") + name + QStringLiteral(":</b> ") + styledMsg;
-
-	// The translate symbol only on messages of others (rawDisplay = the source text without
-	// HTML/style markup; styledMsg = the message body, which is replaced by the
-	// translation when it is shown).
-	if (m_chatTranslator && playerName != myNick)
-		line = m_chatTranslator->decorate(line, rawDisplay, styledMsg);
-
-	m_chatLog.append(line);
-	const int kMaxLines = 400;
-	if (m_chatLog.size() > kMaxLines)
-		m_chatLog.erase(m_chatLog.begin(), m_chatLog.begin() + (m_chatLog.size() - kMaxLines));
-	notifyChatLogChanged();
-}
-
-void GameHandler::notifyChatLogChanged()
-{
-	// See gamehandler.h: several changes of one event loop pass
-	// result in a single rebuild of the chat document.
-	if (m_chatLogNotifyPending)
-		return;
-	m_chatLogNotifyPending = true;
-	QMetaObject::invokeMethod(this, [this]() {
-		m_chatLogNotifyPending = false;
-		emit chatLogChanged();
-	}, Qt::QueuedConnection);
-}
-
-void GameHandler::sendChat(const QString &message)
-{
-	if (!m_session || message.trimmed().isEmpty()) return;
-	// Limit it to 128 bytes of UTF-8 (as in the lobby chat).
-	QString text = message;
-	while (!text.isEmpty() && text.toUtf8().size() > 128)
-		text.chop(1);
-	if (text.isEmpty()) return;
-	m_session->sendGameChatMessage(text.toStdString());
-}
-
 bool GameHandler::localGameCallbacksBlocked() const
 {
-	if (!m_localGameExitRequested) return false;
-	if (!m_session) return true;
-	return !m_session->isNetworkClientRunning();
+	// After the local game was left the engine callbacks must not touch it any
+	// more. Network games used to keep their loop alive; there are none now.
+	return m_localGameExitRequested;
 }
 
 void GameHandler::refreshPlayerData()
@@ -591,10 +339,6 @@ void GameHandler::refreshPlayerData()
 		m_lastAggressorSeq = 0;
 	}
 
-	int humanCount = 0;
-	// Only in a network game is getMyUniqueID() the server-wide player id with
-	// which the PlayerInfo (the flag, the guest status) can be resolved.
-	const bool networkGame = m_session && m_session->isNetworkClientRunning();
 	if (m_game) {
 		PlayerList seats = m_game->getSeatsList();
 
@@ -647,8 +391,6 @@ void GameHandler::refreshPlayerData()
 				}
 				continue;
 			}
-			if (!(*it)->getMyName().empty() && (*it)->getMyType() == PLAYER_TYPE_HUMAN)
-				++humanCount;
 			if (id >= 0 && id < 10) {
 				int cards[2] = {-1, -1};
 				(*it)->getMyCards(cards);
@@ -735,23 +477,6 @@ void GameHandler::refreshPlayerData()
 				p["playerId"] = 0;
 				p["countryCode"] = QString("");
 				p["isGuest"] = false;
-				// A network game: the player id, the country flag and the guest status directly
-				// via the unique player id from the session – exactly like
-				// gameTableImpl::refreshPlayerAvatar() in the Qt widgets client. The
-				// detour via the player list of the game (gamePlayersInGame) is
-				// unreliable at the table: during the game the client is unsubscribed from
-				// the lobby messages, and a GamePlayerJoined does NOT add
-				// the player to the GameInfo player list. Whoever comes to the table only
-				// during the running game (a spectator whom the server seats for the next hand)
-				// is therefore missing there – their flag stayed away,
-				// although the waiting room still showed it.
-				if (networkGame) {
-					const unsigned uniqueId = (*it)->getMyUniqueID();
-					const PlayerInfo info = m_session->getClientPlayerInfo(uniqueId);
-					p["playerId"] = uniqueId;
-					p["countryCode"] = QString::fromStdString(info.countryCode).toLower();
-					p["isGuest"] = info.isGuest;
-				}
 				// The avatar (the player avatar that is set); seat 0 from the
 				// config if need be – but only if I sit there myself. As a spectator
 				// seat 0 is a foreign player who would otherwise get MY avatar.
@@ -773,13 +498,6 @@ void GameHandler::refreshPlayerData()
 				newPlayers[id] = p;
 			}
 		}
-	}
-
-	// The chat icon only if there is another human player besides me.
-	const bool newHasHumanOpponents = humanCount > 1;
-	if (newHasHumanOpponents != m_hasHumanOpponents) {
-		m_hasHumanOpponents = newHasHumanOpponents;
-		emit hasHumanOpponentsChanged();
 	}
 
 	m_players = newPlayers;
@@ -1065,45 +783,19 @@ bool GameHandler::humanCanAct() const
 bool GameHandler::isMyTurnToAct() const
 {
 	if (m_spectating) return false;
-	if (m_session && m_session->isNetworkClientRunning()) {
-		// Network: the turn window flag is authoritative. It replaces the earlier
-		// implicit "after the action both flags are cleared" and at the same time
-		// allows the authoritative engine source as a third opener.
-		return !m_myTurnWindowClosed
-			   && (m_myTurn || m_timeoutSeatId == 0 || engineAwaitsMyAction());
-	}
-	// A local game: unchanged. There is no turn pointer from a server there that
-	// could open a window again – m_myTurn/m_timeoutSeatId stay the
-	// only source (set by LocalBeRo via meInAction/startTimeoutAnimation).
+	// Local game: m_myTurn/m_timeoutSeatId are the only source. They are set by
+	// LocalBeRo via meInAction/startTimeoutAnimation; there is no server turn
+	// message that could open or close a window.
 	return m_myTurn || m_timeoutSeatId == 0;
 }
 
 bool GameHandler::engineTurnPointsAtMe() const
 {
-	// A PURE pointer comparison, deliberately without humanCanAct(): only that way is the
-	// value monotonic and usable as an edge for OPENING a turn window. If one took
-	// humanCanAct() into it, a mere state change of your own
-	// player (the action reset to NONE by ResetPlayerActions, the cash > 0 again after
-	// a won pot) could tear a window that has long been closed
-	// open again, although no new PlayersTurnMessage arrived at all.
-	//
-	// Only in a network game: there the server assigns the unique IDs and 0 is
-	// explicitly invalid (serverlobbythread.cpp), so that the initial value of a
-	// fresh BeRo (currentPlayersTurnId == 0) never accidentally matches me.
-	// In a local game, by contrast, your own unique ID is 0 – there
-	// the initial value could not be distinguished from a real turn marking.
-	if (m_spectating) return false;
-	if (!m_session || !m_session->isNetworkClientRunning()) return false;
-	if (!m_game) return false;
-	auto hand = m_game->getCurrentHand();
-	if (!hand) return false;
-	auto bero = hand->getCurrentBeRo();
-	if (!bero) return false;
-	auto seats = hand->getSeatsList();
-	if (!seats || seats->empty()) return false;
-	auto human = seats->front();
-	if (!human) return false;
-	return bero->getCurrentPlayersTurnId() == human->getMyUniqueID();
+	// A local game has no server turn pointer: there is no PlayersTurnMessage and
+	// the unique ids are only seat numbers, so this authoritative source that the
+	// network client used does not exist here. The m_myTurn/timeout path above
+	// is the whole truth.
+	return false;
 }
 
 bool GameHandler::engineAwaitsMyAction() const
@@ -1169,26 +861,19 @@ void GameHandler::doActionDone()
 		m_timeoutSeatId = -1;
 		emit timeoutChanged();
 	}
-	qDebug() << "[ACTDBG] doActionDone sent, net="
-			 << (m_session && m_session->isNetworkClientRunning());
-
 	// I have acted → switch the buttons inactive immediately. canAct derives that
 	// from getMyAction() (!= NONE); at this point the action is already
 	// set on the player (fold/call/raise), so the recompute delivers the
 	// correct value (inactive until the next round or until it is my turn again).
 	computeCallAndRaiseAmounts();
 
-	if (m_session->isNetworkClientRunning()) {
-		// Network game: send action to server
-		m_session->sendClientPlayerAction();
-	} else {
-		// Local game: advance game loop (equivalent to Qt5 nextPlayerAnimation -> switchRounds)
-		boost::shared_ptr<Game> game = m_game;
-		QTimer::singleShot(300, this, [game]() {
-			if (game && game->getCurrentHand())
-				game->getCurrentHand()->switchRounds();
-		});
-	}
+	// Advance the local game loop (equivalent to Qt5 nextPlayerAnimation ->
+	// switchRounds).
+	boost::shared_ptr<Game> game = m_game;
+	QTimer::singleShot(300, this, [game]() {
+		if (game && game->getCurrentHand())
+			game->getCurrentHand()->switchRounds();
+	});
 }
 
 void GameHandler::setShowdownActive(bool active)
@@ -1531,7 +1216,6 @@ void GameHandler::startLocalActionTimer()
 	// A page of our own lies above the table (the settings): no clock while it is
 	// open (settings audit, PLAN.md §7).
 	if (m_localActionClockSuspended) return;
-	if (!m_session || m_session->isNetworkClientRunning()) return;
 	if (!m_config) return;
 	const int seconds = m_config->readConfigInt("ActionTimer");
 	if (seconds < 5) return;              // 0 = the player switched the clock off
@@ -1585,123 +1269,8 @@ void GameHandler::onLocalActionTimeout()
 	stopLocalActionTimer();
 }
 
-void GameHandler::onNetworkGameEnded()
-{
-	// Removed from the network game (the end of the game, it was closed, a kick …):
-	// reset our own state cleanly. Without this m_myTurn and
-	// m_game stay stale; a later action (e.g. the auto mode of the ComboBox on the
-	// still visible GamePage) would call fold()/call() with a guard that looks
-	// valid and would dereference a null game shared_ptr on the engine
-	// side.
-	m_game.reset();
-	if (m_myTurn) {
-		m_myTurn = false;
-		emit myTurnChanged();
-	}
-	if (m_timeoutSeatId != -1) {
-		m_timeoutSeatId = -1;
-		emit timeoutChanged();
-	}
-	closeMyTurnWindow();   // no game any more → no open turn window
-	m_timeoutBeepTimer->stop();
-	if (m_pingState != 0 || m_pingAvg != -1) {
-		m_pingState = 0;  // no network connection any more → reset the status light
-		m_pingAvg = m_pingMin = m_pingMax = -1;
-		emit pingStateChanged();
-	}
-}
-
-void GameHandler::onPingUpdate(int minPing, int avgPing, int maxPing)
-{
-	// The status light thresholds as in the Qt widgets client (MyAvatarLabel::refreshPing):
-	// ≤1000 ms green, ≤2000 ms yellow, >2000 ms red; negative values = no data.
-	int state;
-	if (avgPing < 0)            state = 0;
-	else if (avgPing <= 1000)   state = 1;
-	else if (avgPing <= 2000)   state = 2;
-	else                        state = 3;
-	bool changed = false;
-	if (state != m_pingState)   {
-		m_pingState = state;
-		changed = true;
-	}
-	if (avgPing != m_pingAvg)   {
-		m_pingAvg   = avgPing;
-		changed = true;
-	}
-	if (minPing != m_pingMin)   {
-		m_pingMin   = minPing;
-		changed = true;
-	}
-	if (maxPing != m_pingMax)   {
-		m_pingMax   = maxPing;
-		changed = true;
-	}
-	if (changed)
-		emit pingStateChanged();
-}
-
-void GameHandler::onNetClientPlayerLeft(unsigned uniquePlayerId, const QString &playerName, int removeReason)
-{
-	// Note in the game history whether the player left voluntarily, was kicked
-	// or lost the connection (removeReason from clientstate.cpp).
-	if (!playerName.isEmpty()) {
-		QString line;
-		switch (removeReason) {
-		case NTF_NET_REMOVED_KICKED:
-			line = playerName + QStringLiteral(" was kicked from the game");
-			break;
-		case NTF_NET_INTERNAL:
-			line = playerName + QStringLiteral(" was disconnected");
-			break;
-		default: // NTF_NET_REMOVED_ON_REQUEST
-			line = playerName + QStringLiteral(" has left the game");
-			break;
-		}
-		appendGameLog(line, LogSitOut);
-	}
-
-	m_leftPlayers.insert(uniquePlayerId);
-	refreshPlayerData();
-	emit playersChanged();
-}
-
-void GameHandler::refreshSpectators()
-{
-	// Read the spectator list of the running game from the session – analogous to the
-	// Qt widgets client (gameTableImpl::refreshSpectatorsDisplay).
-	QStringList names;
-	if (m_session && m_session->isNetworkClientRunning()) {
-		const unsigned gameId = m_session->getClientCurrentGameId();
-		if (gameId != 0) {
-			const GameInfo info = m_session->getClientGameInfo(gameId);
-			for (unsigned id : info.spectatorsDuringGame) {
-				const PlayerInfo pi = m_session->getClientPlayerInfo(id);
-				names << QString::fromUtf8(pi.playerName.c_str());
-			}
-			// The server sends a spectator only the OTHER
-			// spectators (AcceptNewSession sends their own SpectatorJoined to
-			// all the other sessions). Without this addition the eye icon showed
-			// "0" to the only spectator of a table.
-			if (m_session->isClientSpectating()) {
-				const PlayerInfo me = m_session->getClientPlayerInfo(
-										  m_session->getClientUniquePlayerId());
-				const QString myName = QString::fromUtf8(me.playerName.c_str());
-				if (!myName.isEmpty())
-					names << myName;
-			}
-		}
-	}
-	if (names != m_spectatorNames) {
-		m_spectatorNames = names;
-		emit spectatorsChanged();
-	}
-}
-
 void GameHandler::checkBustedLocalPlayers()
 {
-	// Only in a local game (no network client).
-	if (!m_session || m_session->isNetworkClientRunning()) return;
 	if (!m_game) return;
 
 	PlayerList seats = m_game->getSeatsList();
@@ -1746,13 +1315,10 @@ void GameHandler::checkBustedLocalPlayers()
 
 bool GameHandler::checkLocalGameOver()
 {
-	// Only in a local game: in a network game the server decides about
-	// the end of the game and the hand start.
-	if (!m_session || m_session->isNetworkClientRunning()) return false;
 	if (m_localGameExitRequested) return true;   // The game has already been left
 	if (m_localGameOver) return true;            // The winner has already been reported
 
-	boost::shared_ptr<Game> game = m_session->getCurrentGame();
+	boost::shared_ptr<Game> game = m_game;
 	if (!game) return false;
 	boost::shared_ptr<HandInterface> hand = game->getCurrentHand();
 	if (!hand) return false;
@@ -1857,7 +1423,7 @@ void GameHandler::onLocalHandFinished()
 	// next hand has reset it yet. That is the moment to book the money: the
 	// stack of seat 0 is stored (so that a crash costs at most this hand) and
 	// the hand counters grow.
-	if (m_wallet && m_session && !m_session->isNetworkClientRunning()) {
+	if (m_wallet) {
 		bool won = false;
 		if (m_game) {
 			PlayerList seats = m_game->getSeatsList();
@@ -1917,8 +1483,7 @@ void GameHandler::continueToNextHand()
 void GameHandler::startNextLocalHand()
 {
 	onNextRoundCleanGui();
-	if (!m_session) return;
-	auto game = m_session->getCurrentGame();
+	boost::shared_ptr<Game> game = m_game;
 	if (game) {
 		game->initHand();
 		game->startHand();
@@ -2393,7 +1958,6 @@ void GameHandler::allIn()
 void GameHandler::showMyCards()
 {
 	if (!m_canShowCards) return;
-	if (m_session) m_session->showMyCards();
 	m_canShowCards = false;
 	emit canShowCardsChanged();
 	// A visual confirmation in the self box: "turn" your own cards (like the
@@ -2752,8 +2316,7 @@ bool GameHandler::seat(const std::vector<int> &ids, int button, std::string &err
 bool GameHandler::startHand(int blind, std::string &error)
 {
 	error.clear();
-	boost::shared_ptr<Game> game = m_session ? m_session->getCurrentGame()
-											 : boost::shared_ptr<Game>();
+	boost::shared_ptr<Game> game = m_game;
 	if (!game) {
 		error = "there is no table to play at";
 		return false;
@@ -3025,7 +2588,6 @@ int GameHandler::myStack() const
 void GameHandler::endLocalGame()
 {
 	if (!m_session) return;
-	if (m_session->isNetworkClientRunning()) return;
 
 	// Leaving the table also stops the clock on my seat.
 	stopLocalActionTimer();
@@ -3075,42 +2637,7 @@ void GameHandler::endLocalGame()
 bool GameHandler::isLocalGameRunning() const
 {
 	if (m_localGameExitRequested) return false;
-	if (!m_session) return false;
-	if (m_session->isNetworkClientRunning()) return false;
-	if (m_game) return true;
-	return static_cast<bool>(m_session->getCurrentGame());
-}
-
-bool GameHandler::isInternetGameRunning() const
-{
-	return m_session
-		   && m_session->isNetworkClientRunning()
-		   && m_session->getGameType() == Session::GAME_TYPE_INTERNET;
-}
-
-void GameHandler::reportAvatar(int seatId)
-{
-	// Only meaningful in an internet game (as in the Qt widgets client, MyAvatarLabel).
-	if (!isInternetGameRunning() || !m_game)
-		return;
-	// Guests are not allowed to report.
-	if (m_session->getClientPlayerInfo(m_session->getClientUniquePlayerId()).isGuest)
-		return;
-
-	PlayerList seats = m_game->getSeatsList();
-	for (auto it = seats->begin(); it != seats->end(); ++it) {
-		if ((*it)->getMyID() != seatId)
-			continue;
-		// The avatar hash = the base name of the avatar file (without the path/extension), exactly as
-		// MyAvatarLabel::reportBadAvatar passes the value to the server.
-		const std::string avatar = (*it)->getMyAvatar();
-		if (avatar.empty())
-			return;
-		const QFileInfo fi(QString::fromStdString(avatar));
-		m_session->reportBadAvatar((*it)->getMyUniqueID(),
-								   fi.baseName().toStdString());
-		return;
-	}
+	return static_cast<bool>(m_game);
 }
 
 // ─── Game-loop advance slots (called via QMetaObject from QmlGuiInterface) ───

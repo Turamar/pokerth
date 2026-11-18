@@ -41,20 +41,24 @@
 
 #include <playerdata.h>
 #include <core/crypthelper.h>
-#include <net/netpacket.h>
 
 #define MIN_AVATAR_FILE_SIZE	32
 #define MAX_AVATAR_FILE_SIZE	30720
 
 struct AvatarFileState;
-class UploaderThread;
 
+/* Local avatar files and their cache.
+ *
+ * It used to also upload avatars to the official server and to convert them
+ * into protocol packets; both are gone. What is left is the local side: reading
+ * the default avatars, validating an image before it is displayed, and keeping
+ * a cache directory of the files (checked by content hash).
+ */
 class AvatarManager
 {
 public:
 
-	AvatarManager(bool useExternalServer = false, const std::string &externalServerAddress = "",
-				  const std::string &externalServerUser = "", const std::string &externalServerPassword = "");
+	AvatarManager();
 	~AvatarManager();
 
 	bool Init(const std::string &dataDir, const std::string &cacheDir);
@@ -64,14 +68,13 @@ public:
 	static boost::shared_ptr<AvatarFileState> OpenAvatarFileForChunkRead(const std::string &fileName, unsigned &outFileSize, AvatarFileType &outFileType);
 	static unsigned ChunkReadAvatarFile(boost::shared_ptr<AvatarFileState> fileState, unsigned char *data, unsigned chunkSize);
 
-	static int AvatarFileToNetPackets(const std::string &fileName, unsigned requestId, NetPacketList &packets);
 	static AvatarFileType GetAvatarFileType(const std::string &fileName);
 	static std::string GetAvatarFileExtension(AvatarFileType fileType);
 
 	bool GetHashForAvatar(const std::string &fileName, MD5Buf &md5buf) const;
 	bool GetAvatarFileName(const MD5Buf &md5buf, std::string &fileName) const;
 	bool HasAvatar(const MD5Buf &md5buf) const;
-	bool StoreAvatarInCache(const MD5Buf &md5buf, AvatarFileType avatarFileType, const unsigned char *data, size_t size, bool upload);
+	bool StoreAvatarInCache(const MD5Buf &md5buf, AvatarFileType avatarFileType, const unsigned char *data, size_t size);
 
 	// Validate the encoded format and its dimensions before the GUI decodes it.
 	static bool IsValidAvatarFileType(AvatarFileType avatarFileType, const unsigned char *fileData, size_t fileSize);
@@ -96,13 +99,6 @@ private:
 
 	mutable boost::mutex	m_cacheDirMutex;
 	std::string				m_cacheDir;
-
-	const bool				m_useExternalServer;
-	const std::string		m_externalServerAddress;
-	const std::string		m_externalServerUser;
-	const std::string		m_externalServerPassword;
-
-	boost::shared_ptr<UploaderThread> m_uploader;
 };
 
 #endif

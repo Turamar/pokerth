@@ -140,12 +140,6 @@ SeatBox {
 
     // Knocked out (no money left) - a default of its own as opposed to the self box.
     readonly property bool isActive: seatData ? seatData.active : false
-    // Hide the avatars of ignored players (bind against the base property),
-    // unless DontHideAvatarsOfIgnored switches that off.
-    hideIgnoredAvatar:
-        playerIgnored
-        && ((typeof SettingsManager !== "undefined" && SettingsManager && SettingsManager.configRevision >= 0)
-                ? SettingsManager.readConfigInt("DontHideAvatarsOfIgnored") === 0 : true)
 
     // ── The action instead of the stack, for two seconds ─────────────────────
     // The action itself stays in the seat data until the end of the hand; what we
@@ -169,49 +163,25 @@ SeatBox {
 
     // ── Context actions ──────────────────────────────────────────────────────
     // A right click (desktop) or a long press (touch) on an opponent box opens
-    // a context menu with "ignore player", "unignore player", "show player
-    // stats" and the player note – as in the Qt widgets client (MyAvatarLabel)
-    // or the lobby player list (PlayerListItem). The actions only apply in a
-    // network game: only there does seatData carry a playerId (for local
-    // games/CPU opponents 0 → no menu).
+    // a context menu with the player note – as in the Qt widgets client
+    // (MyAvatarLabel). seatData carries a playerId only for a player of a
+    // network game: for local games/CPU opponents it is 0 → no menu.
     readonly property bool targetIsComputer:
         seatData && seatData.isComputer !== undefined ? seatData.isComputer : false
     readonly property int targetPlayerId:
         seatData && seatData.playerId !== undefined ? seatData.playerId : 0
     readonly property bool targetIsGuest:
         seatData && seatData.isGuest !== undefined ? seatData.isGuest : false
-    readonly property bool targetIsSelf:
-        targetPlayerId !== 0 && typeof Lobby !== "undefined" && Lobby && targetPlayerId === Lobby.myPlayerId
-    readonly property bool playerIgnored: {
-        var _rev = (typeof Lobby !== "undefined" && Lobby) ? Lobby.playerIgnoreListRevision : 0
-        return (typeof Lobby !== "undefined" && Lobby && targetPlayerId !== 0)
-            ? Lobby.isPlayerIgnored(targetPlayerId) : false
-    }
-    readonly property bool canIgnore: !targetIsGuest && !targetIsSelf && !playerIgnored
-    readonly property bool canUnignore: !targetIsGuest && !targetIsSelf && playerIgnored
-    readonly property bool canShowStats: !targetIsGuest
-    // Report an avatar: only in an internet game and only if the player has set an
-    // (existing) avatar – 1:1 as in the Qt widgets client
-    // (MyAvatarLabel). seatData.avatar is only set when a file is present.
-    // Guests are not allowed to report (the server rejects it as well).
-    readonly property bool canReportAvatar:
-        !targetIsSelf
-        && !(typeof Lobby !== "undefined" && Lobby && Lobby.isMyPlayerGuest)
-        && (typeof GameTable !== "undefined" && GameTable && GameTable.isInternetGameRunning())
-        && !!(seatData && seatData.avatar && seatData.avatar !== "")
     readonly property bool hasContextActions:
-        targetPlayerId !== 0 && !targetIsComputer
-        && (canIgnore || canUnignore || canShowStats || canReportAvatar || canEditNote)
+        targetPlayerId !== 0 && !targetIsComputer && canEditNote
 
     // ── Player note and rating ───────────────────────────────────────────────
     // Your own, purely local note (stars + text) about a fellow player, stored
     // in the same config entry as in the Qt widgets client (see
-    // SettingsManager::setPlayerNote). As there, only in an internet game: only there
-    // is there a permanently registered account behind the name that a
-    // name based note can stick to at all.
+    // SettingsManager::setPlayerNote). Only real fellow players get one – no
+    // guests and no computer opponents.
     readonly property bool canEditNote:
-        !targetIsGuest && !targetIsSelf && !targetIsComputer
-        && (typeof GameTable !== "undefined" && GameTable && GameTable.isInternetGameRunning())
+        !targetIsGuest && !targetIsComputer
     readonly property int playerRating: {
         var _rev = (typeof SettingsManager !== "undefined" && SettingsManager)
                    ? SettingsManager.playerNotesRevision : 0
@@ -607,7 +577,7 @@ SeatBox {
     // ── Right click context menu (desktop only) ──────────────────────────────
     // It only intercepts the right mouse button; left clicks/hover fall through to the
     // elements below. It only appears when the seat carries a
-    // real online fellow player (hasContextActions).
+    // real fellow player (hasContextActions).
     MouseArea {
         // Only above the box body – the base height reserved below it is
         // empty table, no context menu may open there.
@@ -669,26 +639,6 @@ SeatBox {
         }
 
         CtxItem {
-            text: qsTr("Ignore player")
-            visible: root.canIgnore
-            onTriggered: root.confirmIgnore()
-        }
-        CtxItem {
-            text: qsTr("Unignore player")
-            visible: root.canUnignore
-            onTriggered: root.confirmUnignore()
-        }
-        CtxItem {
-            text: qsTr("Show player stats")
-            visible: root.canShowStats
-            onTriggered: { if (typeof Lobby !== "undefined" && Lobby) Lobby.showPlayerStats(root.targetPlayerId) }
-        }
-        CtxItem {
-            text: qsTr("Report inappropriate avatar")
-            visible: root.canReportAvatar
-            onTriggered: root.confirmReportAvatar()
-        }
-        CtxItem {
             text: qsTr("Note about player ...")
             visible: root.canEditNote
             onTriggered: notePopup.openFor(root.targetPlayerName)
@@ -698,44 +648,4 @@ SeatBox {
     PlayerNoteDialog { id: notePopup }
 
     readonly property string targetPlayerName: root.seatData ? (root.seatData.name || "") : ""
-
-    // Confirmation before ignoring a player (an accidental click).
-    function confirmIgnore() {
-        ignorePopup.openWith(
-            qsTr("Ignore player"),
-            qsTr("Are you sure you want to ignore \"%1\"?").arg(root.targetPlayerName),
-            qsTr("Ignore player"))
-    }
-
-    // Confirmation before unignoring a player.
-    function confirmUnignore() {
-        unignorePopup.openWith(
-            qsTr("Unignore player"),
-            qsTr("Are you sure you want to unignore \"%1\"?").arg(root.targetPlayerName),
-            qsTr("Unignore player"))
-    }
-
-    // Confirmation before reporting an inappropriate avatar (a port of the
-    // confirmation from MyAvatarLabel::reportBadAvatar).
-    function confirmReportAvatar() {
-        reportAvatarPopup.openWith(
-            qsTr("Report inappropriate avatar"),
-            qsTr("Are you sure you want to report the avatar of \"%1\" as inappropriate?").arg(root.targetPlayerName),
-            qsTr("Report"))
-    }
-
-    ConfirmPopup {
-        id: ignorePopup
-        onConfirmed: { if (typeof Lobby !== "undefined" && Lobby) Lobby.ignorePlayer(root.targetPlayerId) }
-    }
-
-    ConfirmPopup {
-        id: unignorePopup
-        onConfirmed: { if (typeof Lobby !== "undefined" && Lobby) Lobby.unignorePlayer(root.targetPlayerId) }
-    }
-
-    ConfirmPopup {
-        id: reportAvatarPopup
-        onConfirmed: { if (typeof GameTable !== "undefined" && GameTable) GameTable.reportAvatar(root.seatIndex) }
-    }
 }

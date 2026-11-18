@@ -31,9 +31,9 @@ class HandInterface;
  * solves it the same way with singleShot timers) and makes a hand a plain
  * sequence of steps that can be counted, limited and timed.
  *
- * ServerGuiWrapper is the GUI-less implementation the dedicated server uses:
- * it already answers every other method of the interface with a no-op, so only
- * the steps of the game loop have to be replaced here.
+ * ServerGuiWrapper is the GUI-less base: it already answers every other method
+ * of the interface with a no-op, so only the steps of the game loop have to be
+ * replaced here.
  *
  * Used by the headless simulator and by the tournament runner, both of which
  * play tables nobody is sitting at (PLAN.md section 3, "Тихие столы").

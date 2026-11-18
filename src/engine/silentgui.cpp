@@ -12,7 +12,7 @@
 using namespace std;
 
 SilentGui::SilentGui(ConfigFile *config)
-	: ServerGuiWrapper(config, NULL, NULL)
+	: ServerGuiWrapper(config)
 {
 }
 

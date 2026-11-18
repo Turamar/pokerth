@@ -30,9 +30,6 @@
  *****************************************************************************/
 
 #include "avatarmanager.h"
-#include <net/net_helper.h>
-#include <net/socket_msg.h>
-#include <net/uploaderthread.h>
 #include <core/loghelper.h>
 #include <core/crypthelper.h>
 
@@ -46,8 +43,11 @@
 #include <set>
 #include <vector>
 
-#define MAX_NUMBER_OF_FILES			NetHelper::GetMaxNumberOfAvatarFiles()
-#define MAX_AVATAR_CACHE_AGE		NetHelper::GetMaxAvatarCacheAgeSec()
+// The cache limits used to live in the network layer (NetHelper). They are
+// purely local housekeeping, so they belong here now: at most 256 cached
+// avatars, and nothing older than a week is kept.
+#define MAX_NUMBER_OF_FILES			256
+#define MAX_AVATAR_CACHE_AGE		604800
 
 #define PNG_HEADER "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a"
 #define PNG_HEADER_SIZE (sizeof(PNG_HEADER) - 1)
@@ -129,18 +129,12 @@ bool IsJpegWithSafeDimensions(const unsigned char *data, size_t size)
 }
 }
 
-AvatarManager::AvatarManager(bool useExternalServer, const std::string &externalServerAddress,
-							 const string &externalServerUser, const string &externalServerPassword)
-	: m_useExternalServer(useExternalServer), m_externalServerAddress(externalServerAddress),
-	  m_externalServerUser(externalServerUser), m_externalServerPassword(externalServerPassword)
+AvatarManager::AvatarManager()
 {
-	m_uploader.reset(new UploaderThread());
 }
 
 AvatarManager::~AvatarManager()
 {
-	m_uploader->SignalTermination();
-	m_uploader->Join(UPLOADER_THREAD_TERMINATE_TIMEOUT);
 }
 
 bool
@@ -169,7 +163,6 @@ AvatarManager::Init(const string &dataDir, const string &cacheDir)
 		retVal = retVal && tmpRet;
 	}
 
-	m_uploader->Run();
 	return retVal;
 }
 
@@ -253,53 +246,6 @@ AvatarManager::ChunkReadAvatarFile(boost::shared_ptr<AvatarFileState> fileState,
 			}
 		} catch (...) {
 			LOG_ERROR("Exception caught when trying to read avatar.");
-		}
-	}
-	return retVal;
-}
-
-int
-AvatarManager::AvatarFileToNetPackets(const string &fileName, unsigned requestId, NetPacketList &packets)
-{
-	int retVal = ERR_NET_INVALID_AVATAR_FILE;
-	unsigned fileSize = 0;
-	AvatarFileType fileType;
-	boost::shared_ptr<AvatarFileState> tmpState = OpenAvatarFileForChunkRead(fileName, fileSize, fileType);
-	if (tmpState.get() && fileSize && fileType != AVATAR_FILE_TYPE_UNKNOWN) {
-		boost::shared_ptr<NetPacket> avatarHeader(new NetPacket);
-		avatarHeader->GetMsg()->set_messagetype(PokerTHMessage::Type_AvatarHeaderMessage);
-		AvatarHeaderMessage *netHeader = avatarHeader->GetMsg()->mutable_avatarheadermessage();
-		netHeader->set_requestid(requestId);
-		netHeader->set_avatartype(static_cast<NetAvatarType>(fileType));
-		netHeader->set_avatarsize(fileSize);
-		packets.push_back(avatarHeader);
-
-		unsigned numBytes = 0;
-		unsigned totalBytesRead = 0;
-		vector<unsigned char> tmpData(MAX_FILE_DATA_SIZE);
-		do {
-			numBytes = ChunkReadAvatarFile(tmpState, &tmpData[0], MAX_FILE_DATA_SIZE);
-			if (numBytes) {
-				totalBytesRead += numBytes;
-
-				boost::shared_ptr<NetPacket> avatarFile(new NetPacket);
-				avatarFile->GetMsg()->set_messagetype(PokerTHMessage::Type_AvatarDataMessage);
-				AvatarDataMessage *netFile = avatarFile->GetMsg()->mutable_avatardatamessage();
-				netFile->set_requestid(requestId);
-				netFile->set_avatarblock((const char *)&tmpData[0], numBytes);
-				packets.push_back(avatarFile);
-			}
-		} while (numBytes);
-
-		if (fileSize != totalBytesRead)
-			retVal = ERR_NET_WRONG_AVATAR_SIZE;
-		else {
-			boost::shared_ptr<NetPacket> avatarEnd(new NetPacket);
-			avatarEnd->GetMsg()->set_messagetype(PokerTHMessage::Type_AvatarEndMessage);
-			AvatarEndMessage *netEnd = avatarEnd->GetMsg()->mutable_avatarendmessage();
-			netEnd->set_requestid(requestId);
-			packets.push_back(avatarEnd);
-			retVal = 0;
 		}
 	}
 	return retVal;
@@ -418,7 +364,7 @@ AvatarManager::HasAvatar(const MD5Buf &md5buf) const
 }
 
 bool
-AvatarManager::StoreAvatarInCache(const MD5Buf &md5buf, AvatarFileType avatarFileType, const unsigned char *data, size_t size, bool upload)
+AvatarManager::StoreAvatarInCache(const MD5Buf &md5buf, AvatarFileType avatarFileType, const unsigned char *data, size_t size)
 {
 	bool retVal = false;
 	string cacheDir;
@@ -456,10 +402,6 @@ AvatarManager::StoreAvatarInCache(const MD5Buf &md5buf, AvatarFileType avatarFil
 							if (removeError)
 								LOG_ERROR("Failed to remove duplicate avatar cache entry.");
 						}
-					}
-
-					if (upload && m_useExternalServer) {
-						m_uploader->QueueUpload(m_externalServerAddress, m_externalServerUser, m_externalServerPassword, fileName, size);
 					}
 
 					m_cachedAvatars[md5buf] = fileName;

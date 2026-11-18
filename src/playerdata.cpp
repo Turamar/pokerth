@@ -35,12 +35,12 @@
 using namespace std;
 
 PlayerData::PlayerData(unsigned uniqueId, int number, PlayerType type, PlayerRights rights, bool isGameAdmin)
-	: m_uniqueId(uniqueId), m_dbId(DB_ID_INVALID), m_number(number), m_startCash(-1), m_type(type), m_rights(rights), m_isGameAdmin(isGameAdmin)
+	: m_uniqueId(uniqueId), m_number(number), m_startCash(-1), m_type(type), m_rights(rights), m_isGameAdmin(isGameAdmin)
 {
 }
 
 PlayerData::PlayerData(const PlayerData &other)
-	: m_uniqueId(other.GetUniqueId()), m_dbId(other.GetDBId()), m_number(other.GetNumber()), m_startCash(other.GetStartCash()),
+	: m_uniqueId(other.GetUniqueId()), m_number(other.GetNumber()), m_startCash(other.GetStartCash()),
 	  m_guid(other.GetGuid()), m_oldGuid(other.GetOldGuid()), m_name(other.GetName()), m_password(), m_country(other.GetCountry()),
 	  m_avatarFile(other.GetAvatarFile()), m_avatarMD5(other.GetAvatarMD5()),
 	  m_announcedAvatarMD5(other.GetAnnouncedAvatarMD5()), m_type(other.GetType()), m_rights(other.GetRights()),
@@ -221,20 +221,6 @@ PlayerData::SetOldGuid(const std::string &guid)
 {
 	boost::mutex::scoped_lock lock(m_dataMutex);
 	m_oldGuid = guid;
-}
-
-DB_id
-PlayerData::GetDBId() const
-{
-	boost::mutex::scoped_lock lock(m_dataMutex);
-	return m_dbId;
-}
-
-void
-PlayerData::SetDBId(DB_id id)
-{
-	boost::mutex::scoped_lock lock(m_dataMutex);
-	m_dbId = id;
 }
 
 int

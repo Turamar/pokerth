@@ -756,13 +756,11 @@ Item {
                         // activeFocus (e.g. from the last turn), the
                         // Connections binding below deliberately did not update it.
                         function focusAndSelectAll() {
-                            // Widget parity: if the user is currently typing in another
-                            // text field (the chat input), do NOT tear the focus away – in the
-                            // widgets client both call sites hang off
-                            // `!lineEdit_ChatInput->hasFocus()` or `text() == ""`.
-                            // Instead of passing both ChatBox instances in here,
-                            // we generically check the item that currently has the focus: only
-                            // text inputs have selectAll().
+                            // If the user is currently typing in another text field,
+                            // do NOT tear the focus away. Instead of tracking
+                            // specific inputs, we generically check the item that
+                            // currently has the focus: only text inputs have
+                            // selectAll().
                             var af = Window.activeFocusItem
                             if (af && af !== raiseAmountInput && af.selectAll !== undefined)
                                 return
@@ -841,17 +839,15 @@ Item {
                                 Qt.callLater(raiseAmountInput.selectAll)
                             } else {
                                 // Do NOT keep the scope focus: if the field loses the
-                                // activeFocus (e.g. because the user switches into the chat
-                                // field), a `focus == true` would stay stuck in the focus scope.
-                                // At the next re-layout or when a
-                                // chat overlay (a focus scope of its own) closes, the
-                                // scope would give the field the activeFocus back by itself – and
-                                // it would intercept an Enter that the user meant for the
-                                // chat (a player report: "typing in the chat, my
-                                // turn comes → Enter triggers BET"). Release the focus here,
-                                // then the field can never fetch the activeFocus back by itself;
-                                // the (deliberate) auto focus still comes
-                                // exclusively from focusAndSelectAll() on your own turn.
+                                // activeFocus (e.g. because the user taps somewhere
+                                // else), a `focus == true` would stay stuck in the focus
+                                // scope. At the next re-layout the scope would give the
+                                // field the activeFocus back by itself – and it would
+                                // intercept an Enter that the user did not mean for
+                                // the amount. Release the focus here, then the field can
+                                // never fetch the activeFocus back by itself; the
+                                // (deliberate) auto focus still comes exclusively from
+                                // focusAndSelectAll() on your own turn.
                                 focus = false
                                 text = actionBar.raiseAmount.toString()
                             }
